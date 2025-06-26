@@ -76,7 +76,8 @@ docker run -d --name dataflow-api -p 8000:8000 \
 Upcoming:  
 - Enhanced real-time data streaming  
 - AutoML integration for automated model tuning  
-- Cross-cloud synchronization  
+- Cross-cloud synchronization
+- Support more data sources
 
 ## 🤝 Contributing
 We welcome contributions! 
