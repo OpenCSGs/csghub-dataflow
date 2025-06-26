@@ -1,0 +1,32 @@
+services:
+  postgres_db:
+    restart: unless-stopped
+    # image: postgres:16
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/postgres
+    volumes:
+      - /postgres_db_data:/var/lib/postgresql/data
+    command: -p 5432
+    environment:
+      - POSTGRES_DB=${DATABASE_DB}
+      - POSTGRES_USER=${DATABASE_USERNAME}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+    env_file:
+      - .env-prd
+    expose: 
+      - ${DATABASE_PORT}
+    ports:
+      - "5433:5432"
+  api_server:
+    build: .
+    env_file:
+      - .env-prd
+    volumes:
+      # - .:/dataflow
+      - ${DATA_DIR}:${DATA_DIR}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres_db
+    # command: ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+volumes:
+  postgres_db:

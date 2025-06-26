@@ -1,0 +1,23 @@
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.10.14
+
+
+WORKDIR /app
+COPY docker/apiserver_requirements.txt .
+
+# Install deps
+RUN pip install -v  --use-deprecated=legacy-resolver --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple/  -r apiserver_requirements.txt
+
+COPY data_server /app/data_server
+COPY data_engine /app/data_engine
+COPY data_agents /app/data_agents
+COPY configs /app/configs
+COPY .env /app/.env
+
+RUN git config --global user.email "dataflow@opencsg.com"
+RUN git config --global user.name "dataflow"
+
+# Start fastapi API Server
+EXPOSE 8000
+# CMD ["df-server"]
+CMD ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
