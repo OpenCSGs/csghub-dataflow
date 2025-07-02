@@ -72,7 +72,7 @@ docker run -d --name dataflow-api -p 8000:8000 \
 
 ```
 
-## Local run
+## Run server in development mode locally
 
 ```bash
 # Create virtual python 3.10 environment
