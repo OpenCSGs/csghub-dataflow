@@ -45,7 +45,7 @@ docker run -d --name dataflow-pg \
    -e POSTGRES_DB=data_flow \
    -e POSTGRES_USER=postgres \
    -e POSTGRES_PASSWORD=postgres \
-   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/postgres
+   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/csghub/postgres:15.10
 ```
 
 ## Installation
