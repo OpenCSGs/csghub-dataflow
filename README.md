@@ -72,6 +72,22 @@ docker run -d --name dataflow-api -p 8000:8000 \
 
 ```
 
+## Local run
+
+```bash
+# Create virtual python 3.10 environment
+conda create -n  dataflow python=3.10
+
+# Install dependencies
+pip install '.[dist]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install '.[tools]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install '.[sci]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install -r docker/requirements.txt
+
+# Run the server locally
+uvicorn data_server.main:app --reload
+```
+
 ## 🛣️ Roadmap
 Upcoming:  
 - Enhanced real-time data streaming  
