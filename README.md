@@ -88,6 +88,8 @@ pip install -r docker/requirements.txt
 uvicorn data_server.main:app --reload
 ```
 
+Notes: `kenlm`, `simhash-pybind`, `opencc==1.1.8`, `imagededup` in file `environments/science_requires.txt` are only support X86 platform. Remove them if you are using ARM platform. 
+
 ## 🛣️ Roadmap
 Upcoming:  
 - Enhanced real-time data streaming  
