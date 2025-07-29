@@ -1,15 +1,34 @@
 from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from data_server.api.api_router import api_router
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from loguru import logger
 from data_server.agent.deps import init_managers, cleanup_managers
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from data_celery.main import celery_app
+from data_celery.redis_tools.tools import (celery_server_status_is_exists,get_celery_server_list,
+                                           del_celery_server_list)
+from data_celery.utils import get_project_root
 import threading
 import os
 
+from data_server.api.endpoints.op_pic_upload import op_pic_router
+
 _stop_event: threading.Event = None
 _workflow_thread: threading.Thread = None
+
+
+def celery_status_scheduled_task():
+    """
+    定时检测celery状态
+    """
+    try:
+        pass
+    except Exception as e:
+        logger.error(f"celery_status_scheduled_task 定时任务执行出错: {e}")
 
 
 @asynccontextmanager
@@ -24,9 +43,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # setup_s3_storage()
         # logger.info("S3 storage initialized successfully")
 
+        # 初始化雪花ID生成器
+        from data_server.utils.id_generator import register_id_generator_listeners
+        from data_server.database.bean.base import Base
+        register_id_generator_listeners(Base)
+        logger.info("Snowflake ID generator initialized successfully")
+
         # Initialize managers (DB, Connection, Team)
         await init_managers()
         logger.info("Managers initialized successfully")
+        # 初始化定时任务调度器
+        # _scheduler = BackgroundScheduler()
+        # _scheduler.add_job(
+        #     func=celery_status_scheduled_task,
+        #     trigger=IntervalTrigger(seconds=3),  # 每3秒执行一次
+        #     id='celery_status_scheduled_task',
+        #     name='celery_status_scheduled_task Task',
+        #     replace_existing=True
+        # )
+        # _scheduler.start()
+        # logger.info("APScheduler started with scheduled task (every 3 seconds)")
 
         if os.getenv("WORKFLOW_ENABLED", "False") == "True":
             from data_server.job.JobWorkflow import watch_dataflow_resources
@@ -102,6 +138,14 @@ async def log_requests(request: Request, call_next):
     return response
 
 app.include_router(api_router)
+
+# 添加静态文件服务，用于访问上传的文件
+from pathlib import Path
+uploads_dir = Path(os.path.join(get_project_root(), 'attach'))
+# logger.info(f"Uploads directory: {uploads_dir}")
+uploads_dir.mkdir(parents=True, exist_ok=True)
+# 以files开头的请求，去掉files后拼接到uploads_dir路径下访问文件
+app.mount("/files", StaticFiles(directory=str(uploads_dir)), name="files")
 
 # Sets all CORS enabled origins
 app.add_middleware(

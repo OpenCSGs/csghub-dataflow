@@ -16,6 +16,23 @@ services:
       - ${DATABASE_PORT}
     ports:
       - "5433:5432"
+  celery_redis:
+    restart: unless-stopped
+    image: redis:latest  # 使用最新的官方 Redis 镜像
+    volumes:
+      - celery_redis_data:/data  # 挂载数据卷以持久化 Redis 数据
+    ports:
+      - "6379:6379"  # 将主机的 6379 端口映射到容器的 6379 端口
+  celery_worker:
+    build: .
+    command: >
+      sh -c "
+        MILLISECOND_TIMESTAMP=$$(date +%s%3N);
+        NODENAME=worker_$$MILLISECOND_TIMESTAMP@$$(hostname -f);
+        celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet -n $$NODENAME
+      "
+    depends_on:
+      - celery_redis
   api_server:
     build: .
     env_file:
@@ -28,6 +45,9 @@ services:
       - "8000:8000"
     depends_on:
       - postgres_db
+      - celery_worker
     # command: ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
 volumes:
   postgres_db:
+  celery_redis_data:

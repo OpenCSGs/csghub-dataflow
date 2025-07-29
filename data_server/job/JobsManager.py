@@ -1,3 +1,4 @@
+from data_server.algo_templates.utils.parse_algo_dslText import convert_raw_to_processed
 from data_server.job.JobModels import Job
 from data_server.schemas import responses
 from sqlalchemy.orm import Session
@@ -9,6 +10,8 @@ import shutil
 import re
 from data_server.database.session import get_sync_session
 from multiprocessing import Process
+from data_server.logic.utils import greate_task_uid
+from data_server.job.JobTask import run_pipline_task, stop_celery_task
 
 
 def delete_directory_if_exists(directory_path):
@@ -68,7 +71,7 @@ def retreive_job(job_id: int, user_id, session: Session, isadmin=False):
     job_details: responses.JobDetails = item
     try:
         work_dir = job_details.work_dir
-        
+
 
         config_file = os.path.join(work_dir, 'config.yaml')
         # read config.yaml
@@ -164,27 +167,37 @@ def retreive_log(job_id: int, user_id, session: Session, isadmin=False):
     return {"session_log": file_content}
 
 
-def create_new_job(job_cfg, user_id, user_name, user_token):
+def create_new_job(job_cfg, user_id, user_name, user_token,yaml_config):
     # replace space to underscore in project name, as the space will lead to job run error
-    job = Job(job_name=job_cfg.project_name.replace(" ", "_"), data_source=job_cfg.dataset_path, data_target=job_cfg.export_path,
+    # create uuid
+    task_uuid = greate_task_uid()
+    job = Job(uuid=task_uuid,job_name=job_cfg.project_name.replace(" ", "_"), data_source=job_cfg.dataset_path, data_target=job_cfg.export_path,
               repo_id=job_cfg.repo_id, branch=job_cfg.branch,
               status=responses.JOB_STATUS.QUEUED.value, job_type=job_cfg.type, job_source=job_cfg.job_source,
-              owner_id=user_id)
+              owner_id=user_id,dslText=job_cfg.dslText, yaml_config=yaml_config)
 
     with get_sync_session() as session:
         with session.begin():
             session.add(job)
+    print(f"job.yaml_config is:{job.yaml_config}")
 
-    if os.getenv("WORKFLOW_ENABLED", "False") == "True":
-        from data_server.job.JobWorkflowExecutor import run_executor
-        p = Process(target=run_executor, args=(job_cfg, job.job_id,
-                                            job.job_name, user_id, user_name, user_token))
-        p.start()
-    else:
-        from data_server.job.JobExecutor import run_executor
-        p = Process(target=run_executor, args=(job_cfg, job.job_id,
-                                            job.job_name, user_id, user_name, user_token))
-        p.start()
+    # celery 执行
+    with get_sync_session() as session:
+        with session.begin():
+            job_celery_uid = run_pipline_task(task_uuid, user_id, user_name, user_token)
+            job.job_celery_uuid = job_celery_uid
+            session.commit()
+
+    # if os.getenv("WORKFLOW_ENABLED", "False") == "True":
+    #     from data_server.job.JobWorkflowExecutor import run_executor
+    #     p = Process(target=run_executor, args=(job_cfg, job.job_id,
+    #                                         job.job_name, user_id, user_name, user_token))
+    #     p.start()
+    # else:
+    #     from data_server.job.JobExecutor import run_executor
+    #     p = Process(target=run_executor, args=(job_cfg, job.job_id,
+    #                                         job.job_name, user_id, user_name, user_token))
+    # #     p.start()
     # from data_server.job.JobExecutor import run_executor
     # executor = setup_executor()
     # executor.submit(run_executor, job_cfg, job.job_id,
@@ -194,6 +207,22 @@ def create_new_job(job_cfg, user_id, user_name, user_token):
               "job_name": job.job_name, "status": job.status}
 
     return result
+
+# 解析并获取yaml_config
+def parse_yaml_config(yaml: str,config):
+    fields_to_insert = {
+        "project_name": config.project_name,
+        "np": '3',
+        "open_tracer": 'true',
+        "trace_num": '3',
+    }
+    # 解析YAML为字典
+    dsl_data = yaml.safe_load(config.dslText)
+    # 添加字段
+    dsl_data.update(fields_to_insert)
+    # 将字典重新生成YAML字符串
+    new_dsl_data = yaml.dump(dsl_data, sort_keys=False, default_flow_style=False, indent=2, width=float("inf"))
+    return convert_raw_to_processed(new_dsl_data)
 
 
 def delete_job_by_id(id: int, session: Session):

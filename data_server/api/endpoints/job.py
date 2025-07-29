@@ -1,4 +1,7 @@
-from data_server.schemas.responses import JobsResponse
+from data_server.logic.config import build_templates_with_filepath
+import yaml
+from data_server.algo_templates.utils.parse_algo_dslText import convert_raw_to_processed
+from data_server.schemas.responses import JobsResponse, response_fail
 from sqlalchemy import select
 from data_server.database.session import get_sync_session
 from sqlalchemy.orm import Session
@@ -9,7 +12,10 @@ from fastapi import APIRouter, HTTPException, status, Header, Depends
 from typing import List, Optional
 from data_server.logic.models import Recipe, Tool
 from data_server.schemas import responses
-from data_server.job.JobsManager import list_jobs, retreive_job, get_job_data, create_new_job, delete_job_by_id, search_job, retreive_log
+from data_server.job.JobsManager import list_jobs, retreive_job, get_job_data, create_new_job, delete_job_by_id, \
+    search_job, retreive_log, parse_yaml_config
+from data_server.utils.jwt_utils import parse_jwt_token
+from data_server.job.JobModels import Job
 
 router = APIRouter()
 
@@ -88,17 +94,18 @@ async def read_log(id: int,
             detail=str(e)
         )
 
-
 @router.post("", response_model=responses.JobCreate, description="Create the dataflow job")
 def create_job(
     config:  Union[Recipe, Tool],
     user_id: Annotated[str | None, Header(alias="user_id")] = None,
     user_name: Annotated[str | None, Header(alias="user_name")] = None,
-    user_token: Annotated[str | None, Header(alias="user_token")] = None,
+    user_token: Annotated[str | None, Header(alias="user_token")] = None
 ):
     try:
+        # 将前端yaml字符串转换为后端所需的yaml字符串
+        yaml_config = parse_yaml_config(config.dslText,config)
         result = create_new_job(
-            job_cfg=config, user_id=user_id, user_name=user_name, user_token=user_token)
+            job_cfg=config, user_id=user_id, user_name=user_name, user_token=user_token,yaml_config=yaml_config)
         return result
     except Exception as e:
         raise HTTPException(

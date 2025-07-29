@@ -1,4 +1,8 @@
 from typing import List
+
+from pycsghub.cmd.repo_types import RepoType
+from pycsghub.upload_large_folder.main import upload_large_folder_internal
+
 from data_engine.exporter.base_exporter import Exporter
 import os
 import uuid
@@ -85,11 +89,29 @@ class ExporterCSGHUB(Exporter):
             logger.info(f'The target dir is empty, no need to upload anything, abort.')
             return None
         self.upload_path = str(upload_path)
+        logger.info(f'Start to upload {upload_path} to repo: {self.repo_id} with branch: {self.branch}')
         self.repo_work_dir = os.path.join(self.work_dir, "_git")
         self._export_common()
         return self.output_branch_name
 
 
+    def export_large_folder(self):
+        if self.branch is None:
+            self.branch = 'main'
+            self.output_branch_name = self.get_avai_branch(self.branch)
+        upload_large_folder_internal(
+            repo_id=self.repo_id,
+            local_path=self.upload_path,
+            repo_type=RepoType.DATASET,
+            revision=self.output_branch_name,
+            endpoint=get_endpoint(endpoint=GetHubEndpoint()),
+            token=self.user_token,
+            num_workers=1,
+            print_report=False,
+            print_report_every=1,
+            allow_patterns=None,
+            ignore_patterns=None
+        )
 
     def export(self, dataset):
         """
@@ -117,19 +139,16 @@ class ExporterCSGHUB(Exporter):
                 os.makedirs(self.upload_path, exist_ok=True)
             if not os.path.exists(self.repo_work_dir):
                 os.makedirs(self.repo_work_dir, exist_ok=True)
-            
-            logger.info(f'Pushing {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}, SDK work dir: {self.repo_work_dir}')
-            
+            logger.info(f'Start to push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name},user_name: {self.user_name}, token: {self.user_token}')
             r = Repository(
                 repo_id=self.repo_id,
                 upload_path=self.upload_path,
                 branch_name=self.output_branch_name,
-                work_dir=self.repo_work_dir,
                 user_name=self.user_name,
                 token=self.user_token,
                 repo_type=REPO_TYPE_DATASET,
                 endpoint=get_endpoint(endpoint=GetHubEndpoint()),
-                copy_files=True
+                work_dir=self.work_dir
             )
             r.upload()
             logger.info(f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')

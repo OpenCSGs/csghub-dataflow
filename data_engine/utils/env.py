@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-
+from loguru import logger
 load_dotenv()
 
 DEFAULT_SRC_PATH = '/Users/lipeng/workspaces/git-devops/data-flow/demo'
@@ -10,7 +10,8 @@ def GetDataTopPath():
    return os.environ.get("DATA_DIR", DEFAULT_SRC_PATH)
 
 def GetHubEndpoint():
-   return os.environ.get("CSGHUB_ENDPOINT", "https://hub.opencsg.com")
+   # return os.environ.get("CSGHUB_ENDPOINT", "https://hub.opencsg.com")
+   return os.environ.get("CSGHUB_ENDPOINT", "http://home.sxcfx.cn:18120/")
 
 def RayEnable():
    enalbe = os.getenv("RAY_ENABLE")

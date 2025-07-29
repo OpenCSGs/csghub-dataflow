@@ -52,11 +52,12 @@ def build_templates(userid: str = None, isadmin: bool = False):
 
     templates: list[Recipe] = []
     for file in file_list:
-        with open(file) as stream:
+        with open(file,encoding="utf-8") as stream:
             try:
                 recipe_model: Recipe = Recipe.parse_yaml(stream)
-                if recipe_model.buildin or (isadmin or os.path.basename(file).split("_")[0] == userid):
-                    templates.append(recipe_model)
+                # if recipe_model.buildin or (isadmin or os.path.basename(file).split("_")[0] == userid):
+                #     templates.append(recipe_model)
+                templates.append(recipe_model)
             except yaml.YAMLError as exc:
                 print(exc)
     return templates
@@ -69,14 +70,24 @@ def build_templates_with_filepath(userid: str = None, isadmin: bool = False):
     file_list = sorted(glob.glob(os.path.join(template_path, '*.yaml')))
 
     templates: dict(str, Recipe) = {}
+    is_windows = os.name == 'nt'
     for file in file_list:
-        with open(file) as stream:
-            try:
-                recipe_model: Recipe = Recipe.parse_yaml(stream)
-                if recipe_model.buildin or (isadmin or os.path.basename(file).split("_")[0] == userid):
-                    templates[os.path.basename(file)] = recipe_model
-            except yaml.YAMLError as exc:
-                print(exc)
+        if is_windows:
+            with open(file, encoding="utf-8", errors="ignore") as stream:
+                try:
+                    recipe_model: Recipe = Recipe.parse_yaml(stream)
+                    if recipe_model.buildin or (isadmin or os.path.basename(file).split("_")[0] == userid):
+                        templates[os.path.basename(file)] = recipe_model
+                except yaml.YAMLError as exc:
+                    print(exc)
+        else:
+            with open(file) as stream:
+                try:
+                    recipe_model: Recipe = Recipe.parse_yaml(stream)
+                    if recipe_model.buildin or (isadmin or os.path.basename(file).split("_")[0] == userid):
+                        templates[os.path.basename(file)] = recipe_model
+                except yaml.YAMLError as exc:
+                    print(exc)
     return templates
 
 def build_tools(userid: str = None, isadmin: bool = False):

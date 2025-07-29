@@ -51,3 +51,12 @@ EXPOSE 8000
 # CMD ["df-server"]
 CMD ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+# # 复制并设置 entrypoint.sh 脚本的权限
+# COPY entrypoint.sh /entrypoint.sh
+# RUN chmod +x /entrypoint.sh
+#
+# # 使用 entrypoint.sh 脚本作为容器的入口点
+# ENTRYPOINT ["/entrypoint.sh"]
+#
+# # CMD 可以保持为空，因为所有需要的命令都将在 entrypoint.sh 脚本中执行
+# CMD []

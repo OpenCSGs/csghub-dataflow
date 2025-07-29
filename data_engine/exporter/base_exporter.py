@@ -209,6 +209,9 @@ class Exporter:
     def export_from_files(self, upload_path: Path):
         pass
 
+    def export_large_folder(self):
+        pass
+
     def export(self, dataset):
         """
         Export method for a dataset.

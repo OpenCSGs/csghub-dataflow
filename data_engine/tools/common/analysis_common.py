@@ -9,7 +9,7 @@ from data_engine.config import init_configs
 import os
 import pathlib
 import tempfile
-
+from loguru import logger
 
 TOOL_NAME = 'analysis_common_internal'
 
@@ -93,7 +93,6 @@ class Analysis(TOOL):
         templates: dict(str, Recipe) = build_templates_with_filepath(userid, isadmin)
         options = {value.name: key
                    for key, value in templates.items()}
-        
         default = options[next(iter(options))]
         return [
             Param("template_path", DataType.STRING, options, default),

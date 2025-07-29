@@ -45,7 +45,7 @@ docker run -d --name dataflow-pg \
    -e POSTGRES_DB=data_flow \
    -e POSTGRES_USER=postgres \
    -e POSTGRES_PASSWORD=postgres \
-   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/csghub/postgres:15.10
+   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/postgres
 ```
 
 ## Installation
@@ -71,24 +71,6 @@ docker run -d --name dataflow-api -p 8000:8000 \
    data_flow
 
 ```
-
-## Run server in development mode locally
-
-```bash
-# Create virtual python 3.10 environment
-conda create -n  dataflow python=3.10
-
-# Install dependencies
-pip install '.[dist]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install '.[tools]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install '.[sci]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install -r docker/requirements.txt
-
-# Run the server locally
-uvicorn data_server.main:app --reload
-```
-
-Notes: `kenlm`, `simhash-pybind`, `opencc==1.1.8`, `imagededup` in file `environments/science_requires.txt` are only support X86 platform. Remove them if you are using ARM platform. 
 
 ## 🛣️ Roadmap
 Upcoming:  

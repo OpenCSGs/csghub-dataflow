@@ -51,6 +51,8 @@ class ShowJob(JobBase):
     branch: Optional[str] = None
     export_repo_id: Optional[str] = None
     export_branch_name: Optional[str] = None
+    yaml_config: Optional[str] = None
+    dslText: Optional[str] = None
     class Config:
         from_attributes = True  # to convert non dict obj to json
         extra = "allow"
@@ -65,3 +67,27 @@ class JobDetails(ShowJob):
     class Config:
         from_attributes = True  # to convert non dict obj to json
         extra = "allow"
+
+
+def response_fail(msg: str = ""):
+    res = {
+        'msg': msg,
+        'code': 500,
+    }
+    return res
+
+
+def response_fail401(msg: str = ""):
+    res = {
+        'msg': msg,
+        'code': 401,
+    }
+    return res
+
+def response_success(data: Any = None, msg: str = ""):
+    res = {
+        'msg': msg,
+        'code': 200,
+        'data': data,
+    }
+    return res
