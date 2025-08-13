@@ -5,31 +5,28 @@ from enum import Enum
 from data_server.database.bean.base import Base
 
 
-# 数据源枚举
+
 class DataSourceTypeEnum(Enum):
     MYSQL = 1  # MYSQL
     MONGODB = 2  # MONGODB
-    FILE = 3  # FILE 文件导入
+    FILE = 3  # FILE
     HIVE = 4  # HIVE
 
 
-# 数据库连接状态枚举
 class DataSourceStatusEnum(Enum):
-    INACTIVE = 0  # 连接失败
-    ACTIVE = 1  # 正常
-    WAITING = 2  # 待执行
+    INACTIVE = 0  # Connection failed
+    ACTIVE = 1  # Connection is normal
+    WAITING = 2  # To be executed
 
 
-# 数据采集任务状态
 class DataSourceTaskStatusEnum(Enum):
-    WAITING = 0  # 等待中
-    EXECUTING = 1  # 执行中
-    COMPLETED = 2  # 已完成
-    ERROR = 3  # 错误
-    STOP = 4  # 手动停止
+    WAITING = 0
+    EXECUTING = 1
+    COMPLETED = 2
+    ERROR = 3
+    STOP = 4
 
 
-# 数据源表
 class DataSource(Base):
     __tablename__ = 'datasources'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
@@ -71,7 +68,7 @@ class DataSource(Base):
         }
 
 
-# 采集任务表
+
 class CollectionTask(Base):
     __tablename__ = 'collection_tasks'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

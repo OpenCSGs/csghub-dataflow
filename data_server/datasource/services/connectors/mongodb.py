@@ -9,7 +9,6 @@ class MongoDBConnector:
     def test_connection(self):
         try:
             host = self.datasource.host
-            # host 如果需要鉴权里面包含用户名和密码
             uri = host
             client = MongoClient(uri)
             client.server_info()
@@ -60,7 +59,6 @@ class MongoDBConnector:
             result = []
             for collection_name in collections:
                 collection = db[collection_name]
-                # 获取集合中的文档样例来推断字段
                 sample_doc = collection.find_one()
                 columns = []
                 if sample_doc:
@@ -75,9 +73,9 @@ class MongoDBConnector:
 
     def get_collection_document_count(self, collection_name):
         """
-        获取指定集合的文档数量。
-        :param collection_name: 集合名称
-        :return: 文档数量
+        Get the number of documents in the specified collection.
+        :param collection_name: Name of the collection
+        :return: Number of documents
         """
         host = self.datasource.host
         uri = host
@@ -94,24 +92,23 @@ class MongoDBConnector:
 
     def query_collection(self, collection_name: str, offset: int, limit: int) -> list:
         """
-        查询集合中的数据，支持分页。
+        Query data in the collection with pagination support.
 
         Args:
-            collection_name (str): 集合名
-            offset (int): 查询的起始偏移量
-            limit (int): 查询的限制文档数
+            collection_name (str): Name of the collection
+            offset (int): Starting offset for the query
+            limit (int): Maximum number of documents to return
 
         Returns:
-            list: 查询结果列表，每个元素是一个字典，包含集合中文档的所有字段和值
+            list: List of query results, where each element is a dictionary containing all fields and values of the documents in the collection
         """
         host = self.datasource.host
         uri = host
         client = MongoClient(uri)
         try:
-            # 选择数据库和集合
             db = client[self.datasource.database]
             collection = db[collection_name]
-            # MongoDB的分页使用skip和limit
+
             results = list(collection.find().skip(offset).limit(limit))
 
             return results
@@ -120,5 +117,4 @@ class MongoDBConnector:
         except Exception as e:
             raise e
         finally:
-            # 确保数据库连接被关闭
             client.close()

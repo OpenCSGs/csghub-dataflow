@@ -1,3 +1,4 @@
+from data_server.operator.mapper.operator_permission_mapper import get_permissions_by_path
 from data_server.operator.models.operator import OperatorInfo, OperatorConfig, OperatorConfigSelectOptions
 from data_server.operator.models.operator_permission import OperatorPermission
 from sqlalchemy.orm import Session
@@ -137,7 +138,6 @@ def update_operator(db: Session, operator_id: int, operator_data: dict) -> Optio
                 # 如果没有提供id，创建新配置
                 new_config_data = config_data.copy()
                 new_config_data["operator_id"] = operator_id
-                # 雪花ID会在模型中自动生成（如果模型配置了自动生成机制）
                 db_config = OperatorConfig(**new_config_data)
                 db.add(db_config)
                 db_configs.append(db_config)
@@ -197,24 +197,10 @@ def create_operator_config_select_option(db: Session, option_data):
     return OperatorConfigSelectOptionsResponse.model_validate(option)
 
 
-def get_operators_grouped_by_type(db: Session,uuid: str) -> List[Dict[str, Any]]:
+def get_operators_grouped_by_type(db: Session) -> List[Dict[str, Any]]:
     """获取所有算子并按类型分组"""
     # 获取所有算子
     operators = db.query(OperatorInfo).filter(OperatorInfo.is_enabled == True).all()
-
-    # # 获取用户有权限访问的算子ID列表
-    # permitted_operator_ids = db.query(OperatorPermission.operator_id).filter(
-    #     OperatorPermission.uuid == uuid
-    # ).all()
-    #
-    # # 将查询结果转换为ID列表
-    # permitted_operator_ids = [op[0] for op in permitted_operator_ids]
-    #
-    # # 获取所有用户有权限访问且启用的算子
-    # operators = db.query(OperatorInfo).filter(
-    #     OperatorInfo.is_enabled == True,
-    #     OperatorInfo.id.in_(permitted_operator_ids)
-    # ).all()
 
     # 定义算子类型列表
     operator_types = ["Mapper", "Filter", "Deduplicator", "Selector", "Formatter"]
@@ -228,6 +214,111 @@ def get_operators_grouped_by_type(db: Session,uuid: str) -> List[Dict[str, Any]]
     for operator in operators:
         # 查询该算子关联的所有配置
         configs = db.query(OperatorConfig).filter(OperatorConfig.operator_id == operator.id).all()
+
+        # 创建配置响应对象列表，并处理select_options和default_value格式
+        config_responses = []
+        for config in configs:
+            # 手动构建配置响应对象，排除created_at和updated_at字段
+            config_dict = {
+                "id": config.id,
+                "operator_id": config.operator_id,
+                "config_name": config.config_name,
+                "config_type": config.config_type,
+                "select_options": config.select_options,
+                "default_value": config.default_value,
+                "min_value": config.min_value,
+                "max_value": config.max_value,
+                "slider_step": config.slider_step,
+                "is_required": config.is_required,
+                "is_spinner": config.is_spinner,
+                "spinner_step": config.spinner_step,
+                "final_value": config.final_value
+            }
+
+            # 如果存在select_options，将ID列表转换为{value, label}格式
+            if config_dict["select_options"]:
+                formatted_options = []
+                for option_id in config_dict["select_options"]:
+                    # 调用现有函数获取选项详情
+                    option_detail = get_operator_config_select_option_by_id(db, option_id)
+                    if option_detail:
+                        formatted_options.append({
+                            "value": str(option_id),
+                            "label": option_detail.name
+                        })
+                config_dict["select_options"] = formatted_options
+
+            # 过滤掉值为空的字段（None、空字符串、空列表等），但final_value字段无论是否为空都要返回
+            filtered_config_dict = {}
+            for key, value in config_dict.items():
+                if key == "final_value" or (value is not None and value != "" and value != [] and value != {}):
+                    filtered_config_dict[key] = value
+
+            config_responses.append(filtered_config_dict)
+
+        # 手动构建算子响应对象，排除指定字段
+        operator_dict = {
+            "id": operator.id,
+            "operator_name": operator.operator_name,
+            "operator_type": operator.operator_type,
+            "icon": operator.icon,
+            "configs": config_responses
+        }
+
+        # 根据operator_type分组
+        if operator.operator_type in grouped_operators:
+            grouped_operators[operator.operator_type].append(operator_dict)
+        else:
+            # 如果是未知类型，添加到其他分类或忽略
+            pass
+
+    # 转换为所需的格式
+    result = []
+    for type_name, operators_list in grouped_operators.items():
+        result.append({
+            "typeName": type_name,
+            "list": operators_list
+        })
+
+    return result
+
+def get_operators_grouped_by_condition(db: Session, uuid: str, paths: List[str]) -> List[Dict[str, Any]]:
+    # 1. 获取个人权限的算子ID
+    personal_operator_ids = {
+        op_id for op_id, in db.query(OperatorPermission.operator_id).filter(OperatorPermission.uuid == uuid)
+    }
+
+    # 2. 如果提供了组织信息，获取组织权限的算子ID
+    org_operator_ids = set()
+    if paths:
+        # 一次性查询所有相关组织的权限
+        permission_list = get_permissions_by_path(db, paths)
+        org_operator_ids = {permission.operator_id for permission in permission_list}
+
+    # 3. 合并个人和组织的算子ID，并去重
+    all_permitted_ids = personal_operator_ids.union(org_operator_ids)
+
+    # 4. 根据合并后的ID列表获取算子
+    if not all_permitted_ids:
+        operators = []
+    else:
+        operators = db.query(OperatorInfo).filter(
+            OperatorInfo.is_enabled == True,
+            OperatorInfo.id.in_(list(all_permitted_ids))
+        ).order_by(OperatorInfo.id).all()
+
+    # 定义算子类型列表
+    operator_types = ["Mapper", "Filter", "Deduplicator", "Selector", "Formatter"]
+
+    # 初始化结果字典
+    grouped_operators = {}
+    for op_type in operator_types:
+        grouped_operators[op_type] = []
+
+    # 按类型分组算子
+    for operator in operators:
+        # 查询该算子关联的所有配置
+        configs = db.query(OperatorConfig).filter(OperatorConfig.operator_id == operator.id).order_by(OperatorConfig.id).all()
 
         # 创建配置响应对象列表，并处理select_options和default_value格式
         config_responses = []

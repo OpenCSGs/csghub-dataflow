@@ -14,7 +14,6 @@ from jsonargparse.typehints import ActionTypeHint
 from jsonargparse.typing import ClosedUnitInterval, NonNegativeInt, PositiveInt
 from loguru import logger
 
-from data_engine.ops.base_op import OPERATORS
 from data_engine.utils.logger_utils import setup_logger
 from data_engine.utils.mm_utils import SpecialTokens
 
@@ -22,7 +21,8 @@ global_cfg = None
 global_parser = None
 default_suffixes=["jsonl", "json", "parquet", "csv", "txt", "tsv", "jsonl.zst"]
 
-def init_configs(args=None):
+def init_configs(args=None,redirect=True):
+    from data_engine.ops.base_op import OPERATORS
     """
     initialize the jsonargparse parser and parse configs from one of:
         1. POSIX-style commands line args;
@@ -330,22 +330,17 @@ def init_configs(args=None):
     # and these op parameters can be modified through the command line,
     ops_sorted_by_types = sort_op_by_types_and_names(OPERATORS.modules.items())
     _collect_config_info_from_class_docs(ops_sorted_by_types, parser)
-
     try:
         cfg = parser.parse_args(args=args)
-        cfg = init_setup_from_cfg(cfg)
+        cfg = init_setup_from_cfg(cfg,redirect=redirect)
         cfg = update_op_process(cfg, parser)
-
         # copy the config file into the work directory
         config_backup(cfg)
-
         # show the final config tables before the process started
         display_config(cfg)
-
         global global_cfg, global_parser
         global_cfg = cfg
         global_parser = parser
-
         if cfg.debug:
             logger.debug('In DEBUG mode.')
 
@@ -374,7 +369,7 @@ def update_ds_cache_dir_and_related_vars(new_ds_cache_path):
         config.DEFAULT_EXTRACTED_DATASETS_PATH)
 
 
-def init_setup_from_cfg(cfg):
+def init_setup_from_cfg(cfg,redirect=True):
     """
     Do some extra setup tasks after parsing config file or command line.
 
@@ -385,7 +380,6 @@ def init_setup_from_cfg(cfg):
     :param cfg: an original cfg
     :param cfg: an updated cfg
     """
-
     cfg.export_path = os.path.abspath(cfg.export_path)
     cfg.work_dir = os.path.dirname(cfg.export_path)
     export_rel_path = os.path.relpath(cfg.export_path, start=cfg.work_dir)
@@ -394,11 +388,12 @@ def init_setup_from_cfg(cfg):
         os.makedirs(log_dir, exist_ok=True)
     timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime(time.time()))
     cfg.timestamp = timestamp
-    logfile_name = f'export_{export_rel_path}_time_{timestamp}.txt'
-    setup_logger(save_dir=log_dir,
-                 filename=logfile_name,
-                 level='DEBUG' if cfg.debug else 'INFO',
-                 redirect=True)
+    if redirect:
+        logfile_name = f'export_{export_rel_path}_time_{timestamp}.txt'
+        setup_logger(save_dir=log_dir,
+                     filename=logfile_name,
+                     level='DEBUG' if cfg.debug else 'INFO',
+                     redirect=True)
 
     # check and get dataset dir
     if cfg.get('dataset_path', None) and os.path.exists(cfg.dataset_path):
@@ -577,6 +572,7 @@ def sort_op_by_types_and_names(op_name_classes):
 
 
 def update_op_process(cfg, parser):
+    from data_engine.ops.base_op import OPERATORS
     op_keys = list(OPERATORS.modules.keys())
     args = [
         arg.split('--')[1] for arg in parser.args
@@ -675,6 +671,7 @@ def config_backup(cfg):
 
 
 def display_config(cfg):
+    from data_engine.ops.base_op import OPERATORS
     import pprint
 
     from tabulate import tabulate
@@ -714,6 +711,7 @@ def export_config(cfg,
 
     :return:
     """
+    from data_engine.ops.base_op import OPERATORS
     # remove ops outside the process list for better displaying
     cfg_to_export = cfg.clone()
     for op in OPERATORS.modules.keys():

@@ -12,4 +12,4 @@ def get_datasource_connector(datasource: DataSourceCreate):
     elif datasource.source_type == DataSourceTypeEnum.HIVE.value:  # Hive
         return HiveConnector(datasource)
     else:
-        raise ValueError(f"不支持的数据源类型: {datasource.source_type}")
+        raise ValueError(f"Unsupported data source type: {datasource.source_type}")

@@ -55,10 +55,9 @@ class HiveConnector:
 
     def get_tables_and_columns(self):
         """
-        查询所有表和字段信息。
-
+        Query information about all tables and fields.
         Returns:
-            list: 包含表和字段信息的列表，每个元素是一个字典，包含表名和字段列表。
+        list: A list containing table and field information, where each element is a dictionary including the table name and a list of fields.
         """
         conn = self.get_connection()
         try:
@@ -85,35 +84,29 @@ class HiveConnector:
 
     def get_table_columns(self, table_name: str):
         """
-        查询指定表的所有字段信息。
-
+        Query all field information of the specified table.
         Args:
-            table_name (str): 表名
-
+        table_name (str): Name of the table
         Returns:
-            list: 包含字段名的列表
+        list: A list containing field names
         """
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                # 查询指定表的所有字段信息
                 query = f'DESCRIBE {table_name}'
-                cursor.execute(query, (self.datasource.database, table_name))
+                cursor.execute(query)
                 results = cursor.fetchall()
-                # 提取字段名并返回
                 return [row[0] for row in results]
         finally:
             conn.close()
 
     def get_table_total_count_hive(self, table_name):
         """
-        获取指定表的总行数。
-
+        Get the total number of rows in the specified table.
         Args:
-            table_name (str): 表名
-
+        table_name (str): Name of the table
         Returns:
-            int: 表的总行数
+        int: Total number of rows in the table
         """
         conn = self.get_connection()
         try:
@@ -124,71 +117,61 @@ class HiveConnector:
                 """
                 cursor.execute(query)
                 result = cursor.fetchone()
-                return result['total_count']
+                loguru.logger.info(f'count:{result[0]}')
+                if result:
+                    return result[0]
+                else:
+                    return 0
         finally:
             conn.close()
 
     def query_table_hive(self, table_name: str, columns: list, offset: int, limit: int) -> list:
         """
-        查询表中的数据，支持列过滤和分页。
-
+        Query data in the table with column filtering and pagination support.
         Args:
-            table_name (str): 表名
-            columns (list): 要查询的列名列表
-            offset (int): 查询的起始偏移量
-            limit (int): 查询的限制行数
-
+        table_name (str): Name of the table
+        columns (list): List of column names to query
+        offset (int): Starting offset for the query
+        limit (int): Maximum number of rows to return
         Returns:
-            list: 查询结果列表，每个元素是一个元组，包含指定的列名和值
+        list: List of query results, where each element is a tuple containing the specified column names and their values
         """
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                # 构建查询列名的字符串
                 column_names = ', '.join(columns)
-                # 构建查询语句
                 query = f"""
                 SELECT {column_names}
                 FROM {table_name}
                 LIMIT {limit} OFFSET {offset}
                 """
-
-                # 执行查询
                 cursor.execute(query)
-
-                # 获取查询结果
                 rows = cursor.fetchall()
-
                 return rows
         except Exception as e:
             raise e
         finally:
-            # 确保数据库连接被关闭
+
             conn.close()
 
     def execute_custom_query_hive(self, query: str) -> list:
         """
-        执行一个自定义的HiveQL查询，并返回查询结果。
-
+        Execute a custom HiveQL query and return the query results.
         Args:
-            query (str): 要执行的HiveQL查询字符串
-
+        query (str): The HiveQL query string to be executed
         Returns:
-            list: 查询结果列表，每个元素是一个元组，包含列名和值
+        list: List of query results, where each element is a tuple containing column names and values
         """
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
-                # 执行查询
+
                 cursor.execute(query)
 
-                # 获取查询结果
                 rows = cursor.fetchall()
 
                 return rows
         except Exception as e:
-            # 处理异常，例如HiveQL错误或连接问题
             raise e
         finally:
-            # 确保数据库连接被关闭
             conn.close()

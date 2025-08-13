@@ -66,6 +66,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
             branch=format_task.to_csg_hub_dataset_default_branch,
             user_name=user_name,
             user_token=user_token,
+            path_is_dir=True,
             work_dir=str(work_dir)
         )
         exporter.export_large_folder()

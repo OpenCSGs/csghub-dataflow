@@ -1,4 +1,7 @@
-from fastapi import FastAPI, APIRouter, HTTPException, status, Header, Depends
+import datetime
+
+from fastapi import FastAPI, APIRouter, HTTPException, status, Header, Depends,Body
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List
 from typing import Annotated, Union
@@ -65,6 +68,22 @@ async def get_data_source_type_list():
         }
     ]
     return response_success(data=data_source_types)
+
+
+@router.get("/get_task_statistics", response_model=dict)
+async def get_task_statistics(db: Session = Depends(get_sync_session)):
+    status_counts = db.query(
+        CollectionTask.task_status,
+        func.count(CollectionTask.id).label('count')
+    ).group_by(CollectionTask.task_status).all()
+    statistics = {}
+    for status, count in status_counts:
+        status_name = DataSourceTaskStatusEnum(status).name
+        statistics[status_name] = count
+    for status_enum in DataSourceTaskStatusEnum:
+        if status_enum.name not in statistics:
+            statistics[status_enum.name] = 0
+    return response_success(data=statistics)
 
 
 @router.post("/datasource/create", response_model=dict)
@@ -202,7 +221,9 @@ async def delete_datasource(datasource_id: int, db: Session = Depends(get_sync_s
 
 
 @router.post("/datasource/execute/{datasource_id}", description="数据源执行新采集任务", response_model=dict)
-async def datasource_run_task(datasource_id: int, db: Session = Depends(get_sync_session),
+async def datasource_run_task(datasource_id: int,
+                              data: dict = Body(...),
+                              db: Session = Depends(get_sync_session),
                               user_name: Annotated[str | None, Header(alias="user_name")] = None,
                               user_token: Annotated[str | None, Header(alias="user_token")] = None
                               ):
@@ -223,6 +244,12 @@ async def datasource_run_task(datasource_id: int, db: Session = Depends(get_sync
     # 判断是否存在执行的任务
     if has_execting_tasks(db, datasource_id):
         return response_fail(msg="存在执行中的任务，无法执行")
+    # task_run_time转日期时间
+    task_run_time = data.get("task_run_time")
+    if task_run_time:
+        datasource.task_run_time = datetime.datetime.strptime(task_run_time, "%Y-%m-%d %H:%M:%S")
+    else:
+        datasource.task_run_time = None
     result, msg = execute_new_collection_task(db, datasource, user_name, user_token)
     if result:
         return response_success(data="任务执行成功")

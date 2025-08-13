@@ -4,17 +4,17 @@ import time
 
 @celery_app.task(name="test_01")
 def test_01(name):
-    for i in range(1000):
-        logger.info(f"test:{name} 开启执行")
+    for i in range(10000):
+        logger.info(f"test:{name} Start execution")
         time.sleep(10)
-    logger.info(f"test:{name} 执行结束")
+    logger.info(f"test:{name} Execution completed")
     return True
 
 
 @celery_app.task(name="test_02")
 def test_02(name):
     for i in range(1000):
-        logger.info(f"test:{name} 开启执行")
+        logger.info(f"test_02:{name} Start execution")
         time.sleep(10)
-    logger.info(f"test_02:{name} 执行结束")
+    logger.info(f"test_02:{name} Execution completed")
     return True

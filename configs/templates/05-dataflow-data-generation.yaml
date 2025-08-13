@@ -1,0 +1,17 @@
+name: 数据处理-我的测试
+description: 该配置文件用于定义数据流处理的各个步骤，包括字符过滤、重复数据去除和中文转换等操作。
+type: data_generation
+buildin: false
+project_name: dataflow-demo-process
+repo_id: root/ds19
+text_keys: text
+np: 3
+open_tracer: true
+trace_num: 3
+process:
+  - chinese_convert_mapper:
+      mode: t2s
+  - clean_email_mapper:
+  - document_deduplicator:
+      lowercase: true
+      ignore_non_character: true

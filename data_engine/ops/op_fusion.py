@@ -4,7 +4,7 @@ from loguru import logger
 
 from data_engine.utils.constant import Fields, InterVars
 from data_engine.utils.registry import Registry
-
+from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
 from .base_op import Filter
 
 # Type of intermediate vars
@@ -26,7 +26,7 @@ INTER_SAMPLED_FRAMES = Registry(InterVars.sampled_frames)
 ALL_INTER_VARS = [INTER_LINES, INTER_WORDS, LOADED_IMAGES, LOADED_VIDEOS]
 
 
-def fuse_operators(process_list, ops):
+def fuse_operators(process_list, ops,job_uid=""):
     """
     Fuse the input ops list and return the fused ops list.
 
@@ -60,13 +60,13 @@ def fuse_operators(process_list, ops):
             fused_ops.append(op)
     if in_group and len(filter_group) > 0:
         # the final filter group, try to fuse them
-        fused_group_def, fused_group = fuse_filter_group(filter_group)
+        fused_group_def, fused_group = fuse_filter_group(filter_group,job_uid=job_uid)
         fused_op_def.extend(fused_group_def)
         fused_ops.extend(fused_group)
     return fused_op_def, fused_ops
 
 
-def fuse_filter_group(original_filter_group):
+def fuse_filter_group(original_filter_group,job_uid=""):
     """
     Fuse single filter group and return the fused filter group.
 
@@ -112,6 +112,8 @@ def fuse_filter_group(original_filter_group):
             }
             logger.info(f'Ops are fused into one op '
                         f'{list(fused_filter_def.keys())[0]}.')
+            insert_pipline_job_run_task_log_info(job_uid,f'Ops are fused into one op '
+                                                         f'{list(fused_filter_def.keys())[0]}.')
             # use these ops to create a FusedFilter object, and add the fused
             # definition and op into the fused group
             fused_filter = FusedFilter(ops)

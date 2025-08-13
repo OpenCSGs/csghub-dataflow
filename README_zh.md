@@ -17,7 +17,9 @@ eventlet 可以提高并发性能
 
 直接启动，启动多个celery进程不推荐，会存在重复的worker name
 ```cmd
-celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet --concurrency=5
+
+[//]: # (celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet --concurrency=5)
+celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent --concurrency=5
 ```
 
 ### celery任务配置

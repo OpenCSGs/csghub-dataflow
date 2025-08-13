@@ -7,7 +7,7 @@ import psutil
 from loguru import logger
 
 from data_engine import cuda_device_count
-
+from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_warning
 
 def setup_mp(method=None):
     if mp.current_process().name != 'MainProcess':
@@ -53,7 +53,9 @@ def calculate_np(name,
                  mem_required,
                  cpu_required,
                  num_proc=None,
-                 use_cuda=False):
+                 use_cuda=False,
+                 job_uid='',
+                 run_op_index=0):
     """Calculate the optimum number of processes for the given OP"""
     eps = 1e-9  # about 1 byte
 
@@ -74,12 +76,26 @@ def calculate_np(name,
                            f'out of memory error. You can reference '
                            f'the mem_required field in the '
                            f'config_all.yaml file.')
+            insert_pipline_job_run_task_log_warning(job_uid,
+                                                    f'The required cuda memory of Op[{name}] '
+                                                    f'has not been specified. '
+                                                    f'Please specify the mem_required field in the '
+                                                    f'config file, or you might encounter CUDA '
+                                                    f'out of memory error. You can reference '
+                                                    f'the mem_required field in the '
+                                                    f'config_all.yaml file.',operator_name=name,operator_index=run_op_index)
         if op_proc < 1.0:
             logger.warning(f'The required cuda memory:{mem_required}GB might '
                            f'be more than the available cuda memory:'
                            f'{cuda_mem_available}GB.'
                            f'This Op[{name}] might '
                            f'require more resource to run.')
+            insert_pipline_job_run_task_log_warning(job_uid,
+                                                    f'The required cuda memory:{mem_required}GB might '
+                                                    f'be more than the available cuda memory:'
+                                                    f'{cuda_mem_available}GB.'
+                                                    f'This Op[{name}] might '
+                                                    f'require more resource to run.',operator_name=name,operator_index=run_op_index)
         op_proc = max(op_proc, 1)
         return op_proc
     else:
@@ -97,5 +113,12 @@ def calculate_np(name,
                            f'and memory :{mem_available}GB.'
                            f'This Op [{name}] might '
                            f'require more resource to run.')
+            insert_pipline_job_run_task_log_warning(job_uid,
+                                                    f'The required CPU number:{cpu_required} '
+                                                    f'and memory:{mem_required}GB might '
+                                                    f'be more than the available CPU:{cpu_available} '
+                                                    f'and memory :{mem_available}GB.'
+                                                    f'This Op [{name}] might '
+                                                    f'require more resource to run.',operator_name=name,operator_index=run_op_index)
         op_proc = max(op_proc, 1)
         return op_proc

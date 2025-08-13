@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from typing import Optional
 from datetime import datetime
 
@@ -35,11 +35,16 @@ class AlgoTemplateResponse(AlgoTemplateBase):
     """算法模板响应模型"""
     id: int = Field(..., description="主键id")
     created_at: Optional[datetime] = Field(None, description="创建时间")
-    updated_dat: Optional[datetime] = Field(None, description="修改时间")
+    updated_at: Optional[datetime] = Field(None, description="修改时间")
+
+    @field_serializer('created_at', 'updated_at')
+    def serialize_dt(self, dt: Optional[datetime], _info):
+        if dt is None:
+            return None
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
 
     class Config:
         from_attributes = True
-        orm_mode = True
 
 
 class AlgoTemplateQuery(BaseModel):
@@ -56,7 +61,7 @@ class AlgoTemplateQuery(BaseModel):
 __all__ = [
     "AlgoTemplateBase",
     "AlgoTemplateCreate",
-    "AlgoTemplateUpdate", 
+    "AlgoTemplateUpdate",
     "AlgoTemplateResponse",
     "AlgoTemplateQuery"
 ]

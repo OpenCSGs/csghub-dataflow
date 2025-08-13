@@ -31,6 +31,7 @@ class Exporter:
         user_name: str=None,
         user_token: str=None,
         work_dir: str=None,
+        path_is_dir: bool=False,
     ):
         """
         Initialization method.
@@ -47,7 +48,7 @@ class Exporter:
             dataset.
         :param export_stats: whether to export the stats of dataset.
         """
-        if Path(export_path).is_dir():
+        if Path(export_path).is_dir() and not path_is_dir:
             export_path = os.path.join(export_path, "x.jsonl")
             
         self.export_path = export_path
@@ -57,7 +58,8 @@ class Exporter:
         self.keep_stats_in_res_ds = keep_stats_in_res_ds
         self.keep_hashes_in_res_ds = keep_hashes_in_res_ds
         self.export_stats = export_stats
-        self.suffix = self._get_suffix(export_path)
+        if not path_is_dir:
+            self.suffix = self._get_suffix(export_path)
         self.num_proc = num_proc
         self.max_shard_size_str = ''
         self.repo_id=repo_id

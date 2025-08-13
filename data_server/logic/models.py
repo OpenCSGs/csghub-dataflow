@@ -4,11 +4,22 @@ from data_server.schemas import responses
 import yaml
 from yaml.dumper import SafeDumper
 from data_engine.config.config import default_suffixes
+from datetime import datetime
 
 def represent_none(self, _):
     return self.represent_scalar('tag:yaml.org,2002:null', '')
 
 SafeDumper.add_representer(type(None), represent_none)
+
+class OperatorIdentifierItem(BaseModel):
+    name: str
+    index: int
+
+class OperatorIdentifier(BaseModel):
+    job_id: int
+    operators:list[OperatorIdentifierItem]
+
+
 
 class BaseModelExtended(BaseModel):
     @classmethod
@@ -133,6 +144,9 @@ class Recipe(BaseModelExtended):
     process: list[Op]
 
     dslText: Optional[str] = None
+
+    is_run: Optional[bool]= False
+    task_run_time: Optional[datetime] = None
 
     # @field_validator("process")
     # def process_non_empty(cls, process):

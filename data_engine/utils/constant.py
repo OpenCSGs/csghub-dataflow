@@ -132,6 +132,7 @@ class StatsKeysConstant(object):
     num_words = 'num_words'
     word_rep_ratio = 'word_rep_ratio'
     bloom = 'bloom'
+    high_score = 'high_score'
 
     # image
     aspect_ratios = 'aspect_ratios'

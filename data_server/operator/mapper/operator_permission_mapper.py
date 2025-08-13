@@ -21,10 +21,31 @@ def get_operator_permissions(db: Session, skip: int = 0, limit: int = 100) -> Li
     return [OperatorPermissionResponse.model_validate(permission) for permission in permissions]
 
 
-def get_permissions_by_operator(db: Session, operator_id: int) -> List[OperatorPermissionResponse]:
-    """获取指定算子的所有权限"""
+def get_permissions_by_operator(db: Session, operator_id: int) -> Dict[str, List[Dict[str, Any]]]:
+    """获取指定算子的所有权限，并按用户和组织分类"""
     permissions = db.query(OperatorPermission).filter(OperatorPermission.operator_id == operator_id).all()
-    return [OperatorPermissionResponse.model_validate(permission) for permission in permissions]
+    
+    response_data = {
+        "users": [],
+        "orgs": []
+    }
+
+    if not permissions:
+        return response_data
+
+    for permission in permissions:
+        if permission.role_type == 1:  # 用户
+            response_data["users"].append({
+                "uuid": permission.uuid,
+                "username": permission.username
+            })
+        elif permission.role_type == 2:  # 组织
+            response_data["orgs"].append({
+                "name": permission.name,
+                "path": permission.path
+            })
+            
+    return response_data
 
 
 
@@ -105,9 +126,25 @@ def delete_permissions_by_operator(db: Session, operator_id: int) -> int:
     return result
 
 
-def delete_permissions_by_user(db: Session, uuid: str) -> int:
+def delete_permissions_by_user(db: Session,operator_id: int, uuid: List[str]) -> int:
     """删除指定用户的所有权限，返回删除数量"""
-    result = db.query(OperatorPermission).filter(OperatorPermission.uuid == uuid).delete()
+    result = db.query(OperatorPermission).filter(
+        OperatorPermission.uuid.in_(uuid),
+        OperatorPermission.operator_id == operator_id).delete()
     db.commit()
+    return result
+
+def delete_permissions_by_path(db: Session,operator_id: int, path: List[str]) -> int:
+    """删除指定组织的所有权限，返回删除数量"""
+    result = db.query(OperatorPermission).filter(
+        OperatorPermission.path.in_(path),
+        OperatorPermission.operator_id == operator_id).delete()
+    db.commit()
+    return result
+
+def get_permissions_by_path(db: Session, path: List[str]) -> List[OperatorPermissionResponse]:
+    """删除指定组织的所有权限，返回删除数量"""
+    result = db.query(OperatorPermission).filter(
+        OperatorPermission.path.in_(path)).all()
     return result
 

@@ -19,13 +19,13 @@ from loguru import logger
 @celery_app.task(name="collection_mongo_task")
 def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
     """
-    采集任务
+    Collection task
     Args:
-        task_uid (str): 任务UID
-        user_name (str): 用户名称
-        user_token (str): 用户token
+        task_uid (str): Task UID
+        user_name (str): User name
+        user_token (str): User token
     Returns:
-        bool: 执行操作是否成功
+        bool: Whether the execution operation is successful
     """
     collection_task: CollectionTask = None
     db_session: Session = None
@@ -36,7 +36,7 @@ def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
         datasource_csg_hub_server_dir = get_datasource_csg_hub_server_dir(task_uid)
         db_session: Session = get_sync_session()
         insert_datasource_run_task_log_info(task_uid, f"ready the task[{task_uid}]...")
-        # 根据 task_uid 查询出任务信息
+        # Query task information by task_uid
         collection_task: CollectionTask = get_collection_task_by_uid(db_session=db_session, task_uid=task_uid)
         if not collection_task:
             insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} not found.")
@@ -56,20 +56,20 @@ def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
             collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
             insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} is not a MySQL task.")
             return False
-        # 修改任务执行的服务器
+        # Modify the server for task execution
         current_host_ip = get_current_ip()
         if not current_host_ip:
             current_host_ip = "127.0.0.1"
         collection_task.task_run_host = current_host_ip
         collection_task.start_run_at = get_current_time()
         db_session.commit()
-        # 读取数据源
+        # Read data source
         extra_config = collection_task.datasource.extra_config
         if not extra_config:
             collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
             insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} has no extra configuration.")
             return False
-        # 读取配置
+        # Read configuration
         if "mongo" not in extra_config:
             collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
             insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} has no mongo configuration.")
@@ -99,7 +99,6 @@ def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
             insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} failed to connect to the database.")
             return False
 
-        # 先统计总数量
         total_count = 0
         for collection_name in mongo_config:
             try:
@@ -107,7 +106,6 @@ def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
                 total_count += collection_total
                 collection_task.total_count = total_count
                 db_session.commit()
-                # 循环获取数据
                 table_dir = os.path.join(datasource_temp_parquet_dir, collection_name)
                 ensure_directory_exists(table_dir)
                 page_size = 10000
@@ -115,15 +113,16 @@ def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
                 current_file_row_count = 0
                 records_count = collection_task.records_count
                 file_index = 1
-                rows_buffer = []  # 用于缓冲行的列表
+                rows_buffer = []  # List for buffering rows
                 while True:
-                    # 执行分页查询（具体实现取决于connector的实现细节）
+                    # Execute pagination query (specific implementation depends on connector details)
                     rows = connector.query_collection(collection_name, offset=(page - 1) * page_size,
                                                  limit=page_size)
 
                     if not rows:
-                        break  # 如果没有更多数据，则退出循环
-                    # 如果缓冲列表中的行数达到或超过最大行数，则写入文件并清空缓冲列表
+                        break  # If there is no more data, exit the loop
+
+                    # If the number of rows in the buffer list reaches or exceeds the maximum number of rows, write to the file and clear the buffer list
                     if len(rows_buffer) >= max_line:
                         file_path = os.path.join(table_dir, f"data_{file_index:04d}.parquet")
                         df = pd.DataFrame(rows_buffer)
@@ -134,9 +133,9 @@ def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
                         insert_datasource_run_task_log_info(task_uid, f"Task with UID {task_uid} get data count {records_count}...")
                         db_session.commit()
                         file_index += 1
-                        rows_buffer = []  # 清空缓冲列表
+                        rows_buffer = []  # Clear the buffer list
                     page += 1
-                # 处理剩余的缓冲数据（如果有）
+                # Process the remaining buffered data (if any)
                 if rows_buffer:
                     file_path = os.path.join(table_dir, f"data_{file_index:04d}.parquet")
                     df = pd.DataFrame(rows_buffer)
@@ -183,20 +182,20 @@ def upload_to_csg_hub_server(csg_hub_dataset_id: int,
                              collection_task: CollectionTask,datasource_temp_json_dir: str,
                              datasource_csg_hub_server_dir: str):
     """
-    上传到CSG Hub服务器
+    Upload to CSG Hub server
     Args:
-        csg_hub_dataset_id (int): CSG Hub数据集ID
-        csg_hub_dataset_default_branch (str): CSG Hub数据集默认分支
-        user_name (str): 用户名称
-        user_token (str): 用户token
-        db_session (Session): 数据库会话
-        collection_task (CollectionTask): 采集任务
-        datasource_temp_json_dir (str): 数据源临时json文件目录
+        csg_hub_dataset_id (int): CSG Hub dataset ID
+        csg_hub_dataset_default_branch (str): CSG Hub dataset default branch
+        user_name (str): User name
+        user_token (str): User token
+        db_session (Session): Database session
+        collection_task (CollectionTask): Collection task
+        datasource_temp_json_dir (str): Data source temporary json file directory
     Returns:
         None
     """
     try:
-        # 上传到CSG Hub服务器
+        # Upload to CSG Hub server
 
         ensure_directory_exists_remove(datasource_csg_hub_server_dir)
         insert_datasource_run_task_log_info(collection_task.task_uid, f"Starting upload csg hub-server the task[{collection_task.task_uid}]...")

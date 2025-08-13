@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, status, Request
 from typing import Dict, Any
+import os
 from loguru import logger
 from data_server.utils.file_storage import file_storage_manager
 from data_server.schemas.responses import response_success, response_fail
@@ -28,7 +29,7 @@ async def upload_image(
     ```json
     {
         "code": "operator/f41dd59d-b462-412b-88e9-9c4da481a9d4",
-        "url": "http://localhost:8002/uploads/operator/f41dd59d-b462-412b-88e9-9c4da481a9d4.jpg"
+        "url": "/files/operator/f41dd59d-b462-412b-88e9-9c4da481a9d4.jpg"
     }
     ```
 
@@ -42,7 +43,8 @@ async def upload_image(
         if not file or not file.filename:
             return response_fail(msg="请选择要上传的文件")
         
-        # 检查文件大小（限制为100MB）
+        # 检查文件大小（从环境变量读取限制）
+        max_file_size = int(os.getenv("UPLOAD_MAX_FILE_SIZE", "104857600"))  # 默认100MB
         file_size = 0
         content = await file.read()
         file_size = len(content)
@@ -50,11 +52,13 @@ async def upload_image(
         if file_size == 0:
             return response_fail(msg="文件内容为空")
         
-        if file_size > 100 * 1024 * 1024:  # 100MB
-            return response_fail(msg="文件大小不能超过100MB")
+        if file_size > max_file_size:
+            max_size_mb = max_file_size // (1024 * 1024)
+            return response_fail(msg=f"文件大小不能超过{max_size_mb}MB")
         
-        # 支持文件类型
-        allowed_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'}
+        # 支持文件类型（从环境变量读取）
+        allowed_extensions_str = os.getenv("UPLOAD_ALLOWED_EXTENSIONS", ".jpg,.jpeg,.png,.gif,.bmp,.webp,.svg")
+        allowed_extensions = set(ext.strip() for ext in allowed_extensions_str.split(','))
         # 获取文件扩展名
         file_extension = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
         

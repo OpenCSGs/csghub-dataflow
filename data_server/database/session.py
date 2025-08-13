@@ -26,15 +26,15 @@ def sqlalchemy_database_uri() -> URL:
         drivername="postgresql",
         username=os.getenv('DATABASE_USERNAME', "admin"),
         password=os.getenv('DATABASE_PASSWORD', "admin123456"),
-        host=os.getenv('DATABASE_HOSTNAME', "home.sxcfx.cn"),
+        host=os.getenv('DATABASE_HOSTNAME', "net-power.9free.com.cn"),
         port=os.getenv('DATABASE_PORT', 18119),
         database=os.getenv('DATABASE_DB', "data_flow")
     )
 
 
 def get_radis_database_uri() -> str:
-    return os.getenv("REDIS_HOST_URL", "redis://:redis123456@home.sxcfx.cn:18122")
-    # return os.getenv("REDIS_HOST_URL", "redis://127.0.0.1:6379")
+    # return os.getenv("REDIS_HOST_URL", "redis://:redis123456@net-power.9free.com.cn:18122")
+    return os.getenv("REDIS_HOST_URL", "redis://127.0.0.1:6379")
 
 
 def get_redis_client_by_db_number(number: int) -> str:
@@ -62,6 +62,44 @@ def get_celery_worker_key():
     """
     return 'celery-worker-server-list'
 
+def get_celery_process_list_key(work_name,current_ip):
+    """
+    获取Celery工作进程的Redis process list key。
+    Args:
+        work_name: 工作名称
+        current_ip: 当前IP地址
+
+    Returns:
+        返回字符串，表示Celery工作进程使用的Redis process list key。
+    """
+    return f"{work_name}_{current_ip}_processes"
+
+
+def get_celery_kill_process_list_key(work_name,current_ip):
+    """
+    获取Celery工作进程的Redis kill process list key。
+    Args:
+        work_name: 工作名称
+        current_ip: 当前IP地址
+
+    Returns:
+        返回字符串，表示Celery工作进程使用的Redis kill process list key。
+    """
+    return f"{work_name}_{current_ip}_kill_processes"
+
+
+
+def get_celery_task_process_real_key(task_uid):
+    """
+    获取Celery任务详细信息的Redis key。
+
+    Returns:
+        返回字符串，表示Celery任务详细信息的Redis key。
+    """
+    return f"celery-pipline-task:{task_uid}"
+
+def get_celery_task_process_resource_key(task_uid):
+    return f"celery-pipline-task-resource:{task_uid}"
 
 def get_celery_info_details_key(work_name):
     """
@@ -102,7 +140,7 @@ def create_sync_engine(uri: URL) -> Engine:
         max_overflow=100,
         pool_timeout=30.0,
         pool_recycle=600,
-        echo=True
+        # echo=True
     )
 
 
@@ -115,7 +153,7 @@ def get_sync_session() -> Session:  # pragma: no cover
 
 
 # MONG 相关
-MONGO_URI = os.getenv('MONG_HOST_URL', 'mongodb://root:example@home.sxcfx.cn:18123')
+MONGO_URI = os.getenv('MONG_HOST_URL', 'mongodb://root:example@net-power.9free.com.cn:18123')
 
 
 def add_first_op_column():
@@ -147,6 +185,8 @@ def create_tables():
     global _initialized
     if _initialized:
         return
+    
+    logger.info("Starting database table creation...")
     Worker.metadata.create_all(_SYNC_ENGINE)
     Job.metadata.create_all(_SYNC_ENGINE)
     DataSource.metadata.create_all(_SYNC_ENGINE)
@@ -157,10 +197,17 @@ def create_tables():
     OperatorConfig.metadata.create_all(_SYNC_ENGINE)
     OperatorConfigSelectOptions.metadata.create_all(_SYNC_ENGINE)
     OperatorPermission.metadata.create_all(_SYNC_ENGINE)
+    logger.info("Database tables created successfully")
 
     _initialized = True
 
     add_first_op_column()
+
+    # Execute the data initialization script
+    logger.info("Starting database data initialization...")
+    from .initializer import execute_initialization_scripts
+    execute_initialization_scripts()
+    logger.info("Database initialization process completed")
 
 
 create_tables()

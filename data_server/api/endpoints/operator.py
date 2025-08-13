@@ -1,25 +1,27 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query,Path,Header
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Path
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any, Optional,Annotated
+from typing import List, Dict, Any, Optional, Annotated
 
 from data_server.database.session import get_sync_session
 # 导入你的模型和数据访问函数
 from data_server.operator.mapper.operator_mapper import (
-    get_operator, get_operators, create_operator, update_operator, delete_operator, get_operator_config_select_options_list, get_operator_config_select_option_by_id, create_operator_config_select_option, get_operators_grouped_by_type
+    get_operator, get_operators, create_operator, update_operator, delete_operator,
+    get_operator_config_select_options_list, get_operator_config_select_option_by_id,
+    create_operator_config_select_option, get_operators_grouped_by_type, get_operators_grouped_by_condition
 )
 from data_server.operator.schemas import (
     OperatorCreateRequest, OperatorUpdateRequest, OperatorConfigSelectOptionsCreate,
     OperatorResponse, OperatorConfigSelectOptionsResponse
 )
 from ...schemas.responses import response_success, response_fail
-from ...utils.jwt_utils import parse_jwt_token
+from ...api.dependencies import get_validated_token_payload
 
-app = FastAPI(title="算子管理API")
+app = FastAPI(title="operator-API")
 router = APIRouter()
 
 # 算子相关API
 # 创建算子
-@router.post("/",summary="创建算子")
+@router.post("/", summary="create_operator")
 def create_operator_api(
     operator_data: OperatorCreateRequest,
     db: Session = Depends(get_sync_session)
@@ -52,10 +54,10 @@ def create_operator_api(
         db.close()
 
 # 获取算子列表
-@router.get("/",summary="获取算子列表")
+@router.get("/", summary="GET_LIST_OF_OPERATORS")
 def read_operators_api(
-    skip: int = 0, 
-    limit: int = 100, 
+    skip: int = 0,
+    limit: int = 100,
     db: Session = Depends(get_sync_session)
 ):
     """
@@ -78,7 +80,7 @@ def read_operators_api(
         db.close()
 
 # 获取单个算子
-@router.get("/{operator_id}",summary="根据id获取算子")
+@router.get("/{operator_id}", summary="obtain the operator based on the id")
 def read_operator_api(
     operator_id: int = Path(description="算子ID"),
     db: Session = Depends(get_sync_session)
@@ -105,7 +107,7 @@ def read_operator_api(
         db.close()
 
 # 更新算子
-@router.put("/{operator_id}",summary="更新算子")
+@router.put("/{operator_id}", summary="updateOperator")
 def update_operator_api(
     operator_id: int,
     operator_data: OperatorUpdateRequest,
@@ -115,29 +117,20 @@ def update_operator_api(
     更新指定ID的算子信息
     
     ## 参数说明
-    - **operator_id**: 算子的唯一标识ID
-    - **operator_data**: 算子更新数据，可包含以下字段:
-      - operator_name: 算子名称 (可选)
-      - operator_type: 算子类型 (可选)
-      - execution_order: 执行顺序 (可选)
-      - is_enabled: 是否启用 (可选)
-      - description: 描述信息 (可选)
-      - before_cleaning: 清洗前数据说明 (可选)
-      - after_cleaning: 清洗后数据说明 (可选)
-      - icon: 图标 (可选)
-      - configs: 算子配置列表 (可选)
-    - **user_id**: 执行更新操作的用户ID
-
-    ## 返回值
-    - 更新成功：返回更新后的算子信息
-    - 算子不存在：返回"算子不存在"错误
-    - 更新失败：返回错误信息
+    - **operator_id**:
+    - **operator_data**:
+      - operator_name:
+      - operator_type:
+      - execution_order:
+      - is_enabled:
+      - description:
+      - before_cleaning:
+      - after_cleaning:
+      - icon:
+      - configs:
+    - **user_id**:
     """
     try:
-        # 检查更新权限
-        # if not check_update_permission(db, user_id, operator_id):
-        #     return response_fail(msg="没有修改该算子的权限")
-            
         db_operator = update_operator(db, operator_id, operator_data.model_dump(exclude_unset=True))
         if db_operator is None:
             return response_fail(msg="算子不存在")
@@ -148,7 +141,7 @@ def update_operator_api(
         db.close()
 
 # 删除算子
-@router.delete("/{operator_id}",summary="删除算子")
+@router.delete("/{operator_id}", summary="deletionOperator")
 def delete_operator_api(
     operator_id: int,
     user_id: int = Query(None, description="用户ID"),
@@ -181,7 +174,7 @@ def delete_operator_api(
         db.close()
 
 # 根据id获取operator_config_select_options单条记录
-@router.get("/config_select_options/{option_id}",summary="根据主键id获取记录")
+@router.get("/config_select_options/{option_id}", summary="obtain_the_record_based_on_the_primary_key_id")
 def get_operator_config_select_option_by_id_api(
     option_id: int,
     db: Session = Depends(get_sync_session)
@@ -200,7 +193,7 @@ def get_operator_config_select_option_by_id_api(
         db.close()
 
 # 新增：添加operator_config_select_options表记录
-@router.post("/config_select_options/",summary="添加下拉框选项")
+@router.post("/config_select_options/", summary="添加下拉框选项")
 def create_operator_config_select_option_api(
     option: OperatorConfigSelectOptionsCreate,
     db: Session = Depends(get_sync_session)
@@ -216,10 +209,9 @@ def create_operator_config_select_option_api(
     finally:
         db.close()
 
-# 新增：根据operator_type分类返回算子数据
-@router.get("/types/grouped-by-type",summary="根据算子分类返回算子数据")
+
+@router.get("/types/grouped-by-type", summary="根据算子分类返回算子数据")
 def get_operators_grouped_by_type_api(
-    authorization: Annotated[str, Header(alias="Authorization")],
     db: Session = Depends(get_sync_session)
 ):
     """
@@ -256,15 +248,65 @@ def get_operators_grouped_by_type_api(
     - 查询失败：返回错误信息
     """
     try:
-        # 从JWT token中提取user_id
-        token_info = parse_jwt_token(authorization)
+        grouped_operators = get_operators_grouped_by_type(db)
+        return response_success(data=grouped_operators, msg="获取分组算子列表成功")
+    except Exception as e:
+        return response_fail(msg=f"获取分组算子列表失败: {str(e)}")
+    finally:
+        db.close()
 
-        # 检查token是否过期
-        if token_info["is_expired"]:
-            return response_fail("Token已经过期")
-        # 获取用户user_id
-        uuid = token_info["payload"].get("uuid")
-        grouped_operators = get_operators_grouped_by_type(db,uuid)
+# find_operator_by_uuid_orgs
+@router.get("/types/grouped-by-condition/", summary="根据算子分类和权限返回算子数据")
+def get_operators_grouped_by_condition_api(
+    payload: Dict = Depends(get_validated_token_payload),
+    db: Session = Depends(get_sync_session),
+    full_path: Optional[str] = Query(default=None, description="当前用户对应的组织名称, 多个用逗号隔开")
+):
+    """
+    根据operator_type分类返回算子数据
+
+    ## 返回值格式
+    ```json
+    [
+        {
+            "typeName": "Mapper",
+            "list": [对应mapper的operator_info的列表]
+        },
+        {
+            "typeName": "Filter",
+            "list": []
+        },
+        {
+            "typeName": "Deduplicator",
+            "list": []
+        },
+        {
+            "typeName": "Selector",
+            "list": []
+        },
+        {
+            "typeName": "Formatter",
+            "list": []
+        }
+    ]
+    ```
+
+    ## 返回值
+    - 查询成功：返回按类型分组的算子列表
+    - 查询失败：返回错误信息
+    """
+    try:
+        # 获取所有path信息
+        if full_path:
+            paths: List[str] = full_path.split(',')
+        else:
+            paths = []
+
+        user_id = payload.get("uuid")
+        if not user_id:
+            return response_fail("Token中缺少用户信息 (uuid)")
+
+        grouped_operators = get_operators_grouped_by_condition(db, user_id, paths)
         return response_success(data=grouped_operators, msg="获取分组算子列表成功")
     except Exception as e:
         return response_fail(msg=f"获取分组算子列表失败: {str(e)}")

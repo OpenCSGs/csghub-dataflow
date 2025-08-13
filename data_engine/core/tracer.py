@@ -6,6 +6,10 @@ from loguru import logger
 
 from data_engine.utils.availability_utils import AvailabilityChecking
 from typing import Dict, List, Tuple, Union, Any
+from data_celery.mongo_tools.tools import (insert_pipline_job_run_task_log_error,
+                                           insert_pipline_job_run_task_log_info,
+                                           insert_pipline_job_run_task_log_debug,
+                                           insert_pipline_job_run_task_log_warning)
 
 with AvailabilityChecking(['ray'], requires_type='dist'):
     from ray.data import Dataset as rayDataset
@@ -67,7 +71,7 @@ class Tracer:
 
     @generate_count
     def trace_mapper(self, op_name: str, previous_ds: Union[Dataset, List[Dict[str, Any]]],
-                     processed_ds: Union[Dataset, List[Dict[str, Any]]], text_key: str):
+                     processed_ds: Union[Dataset, List[Dict[str, Any]]], text_key: str,job_uid: str = "",pipeline_index: int = 0):
         """
         Compare datasets before and after a Mapper.
 
@@ -102,11 +106,17 @@ class Tracer:
             logger.warning(f'Datasets before and after op [{op_name}] are all '
                            f'the same. Thus no comparison results would be '
                            f'generated.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'Datasets before and after op [{op_name}] are all '
+                           f'the same. Thus no comparison results would be '
+                           f'generated.', operator_name=op_name,operator_index=pipeline_index)
             return
         elif len(dif_dict) < self.show_num:
             logger.warning(f'There are {len(dif_dict)} different samples '
                            f'before and after op [{op_name}] -- less than '
                            f'expected {self.show_num} samples.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'There are {len(dif_dict)} different samples '
+                           f'before and after op [{op_name}] -- less than '
+                           f'expected {self.show_num} samples.', operator_name=op_name,operator_index=pipeline_index)
 
         # export the tracer results.
         res_name = f'mapper-{op_name}.jsonl'
@@ -159,7 +169,7 @@ class Tracer:
 
     @generate_count
     def trace_filter(self, op_name: str, previous_ds: Union[Dataset, List[Dict[str, Any]]],
-                     processed_ds: Union[Dataset, List[Dict[str, Any]]]):
+                     processed_ds: Union[Dataset, List[Dict[str, Any]]],job_uid: str = "",pipeline_index: int = 0):
         """
         Compare datasets before and after a Filter.
 
@@ -175,6 +185,9 @@ class Tracer:
             logger.warning(f'Datasets before and after op [{op_name}] are all '
                            f'the same. Thus no comparison results would be '
                            f'generated.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'Datasets before and after op [{op_name}] are all '
+                           f'the same. Thus no comparison results would be '
+                           f'generated.', operator_name=op_name,operator_index=pipeline_index)
             return
 
         # get the number of filtered samples.
@@ -205,11 +218,17 @@ class Tracer:
             logger.warning(f'Datasets before and after op [{op_name}] are all '
                            f'the same. Thus no comparison results would be '
                            f'generated.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'Datasets before and after op [{op_name}] are all '
+                           f'the same. Thus no comparison results would be '
+                           f'generated.', operator_name=op_name,operator_index=pipeline_index)
             return
         elif len(filter_dict) < self.show_num:
             logger.warning(f'There are {len(filter_dict)} filtered samples '
                            f'before and after op [{op_name}] -- less than '
                            f'expected {self.show_num} samples.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'There are {len(filter_dict)} filtered samples '
+                           f'before and after op [{op_name}] -- less than '
+                           f'expected {self.show_num} samples.', operator_name=op_name,operator_index=pipeline_index)
 
         # export the tracer results.
         res_name = f'filter-{op_name}.jsonl'
@@ -220,7 +239,7 @@ class Tracer:
                           force_ascii=False)
 
     @generate_count
-    def trace_deduplicator(self, op_name: str, previous_ds: Union[Dataset, List[Dict[str, Any]]], dup_pairs: list):
+    def trace_deduplicator(self, op_name: str, previous_ds: Union[Dataset, List[Dict[str, Any]]], dup_pairs: list,job_uid: str = "",pipeline_index: int = 0):
         """
         Compare datasets before and after a Deduplicator.
 
@@ -239,16 +258,25 @@ class Tracer:
             logger.warning(f'Op [{op_name}] does not generate dup_pairs '
                            f'correctly, thus no comparison results can be '
                            f'obtained from this op.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'Op [{op_name}] does not generate dup_pairs '
+                           f'correctly, thus no comparison results can be '
+                           f'obtained from this op.', operator_name=op_name,operator_index=pipeline_index)
             return
         if len(dup_pairs) == 0:
             logger.warning(f'Datasets before and after op [{op_name}] are all '
                            f'the same. Thus no comparison results would be '
                            f'generated.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'Datasets before and after op [{op_name}] are all '
+                           f'the same. Thus no comparison results would be '
+                           f'generated.', operator_name=op_name,operator_index=pipeline_index)
             return
         elif len(dup_pairs) < self.show_num:
             logger.warning(f'There are {len(dup_pairs)} filtered samples '
                            f'before and after op [{op_name}] -- less than '
                            f'expected {self.show_num} samples.')
+            insert_pipline_job_run_task_log_warning(job_uid,f'There are {len(dup_pairs)} filtered samples '
+                           f'before and after op [{op_name}] -- less than '
+                           f'expected {self.show_num} samples.', operator_name=op_name,operator_index=pipeline_index)
 
         # reorganize the duplicate pairs
         dup_dict = []

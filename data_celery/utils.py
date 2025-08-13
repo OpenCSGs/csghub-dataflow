@@ -14,12 +14,9 @@ def ensure_directory_exists(directory: str) -> None:
 def ensure_directory_exists_remove(directory: str) -> None:
     """
     确保指定的目录存在，如果不存在则创建它
-
     Args:
         directory (str): 目录路径
     """
-
-
     if os.path.exists(directory):
         shutil.rmtree(directory)
     os.makedirs(directory)
@@ -95,6 +92,18 @@ def get_datasource_temp_parquet_dir(task_uid: str) -> str:
     project_root_path = get_project_root()
     temp_json_dir_path = f"{project_root_path}/datasource/parquet/{task_uid}"
     return temp_json_dir_path
+
+def get_pipline_temp_job_dir(job_uid: str) -> str:
+    """
+    获取任务yaml文件夹路径
+    Args:
+        job_uid (str): 任务UID
+    Returns:
+        str: 任务yaml文件夹路径
+    """
+    project_root_path = get_project_root()
+    temp_dir_path = f"{project_root_path}/temp_pipline/yaml/{job_uid}"
+    return temp_dir_path
 
 
 def get_datasource_csg_hub_server_dir(task_uid: str) -> str:

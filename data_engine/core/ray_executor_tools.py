@@ -32,7 +32,7 @@ class ToolExecutorRay:
         
         # setup logger
         log_dir = os.path.join(self.executed_params.work_dir, 'log')
-        # log_dir = os.path.join("/Users/lipeng/workspaces/git-devops/data-flow/demo/output", 'log')
+        # log_dir = os.path.join("/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/output", 'log')
         
         if not os.path.exists(log_dir):
             os.makedirs(log_dir, exist_ok=True)
@@ -91,9 +91,9 @@ if __name__ == "__main__":
         type="Internal",
         repo_id="depenglee/testdepeng",
         branch="main",
-        # dataset_path="/Users/lipeng/workspaces/git-devops/data-flow/demo/input",
+        # dataset_path="/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/input",
         dataset_path="/home/yons/demo/input",
-        # export_path="/Users/lipeng/workspaces/git-devops/data-flow/demo/output",
+        # export_path="/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/output",
         export_path="/home/yons/demo/output",
         params=params,
     )
@@ -102,7 +102,7 @@ if __name__ == "__main__":
         user_id="123",
         user_name="depenglee",
         user_token="ab0033c38611468f8807f2f26013d5d1",
-        # work_dir="/Users/lipeng/workspaces/git-devops/data-flow/demo/output",
+        # work_dir="/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/output",
         work_dir="/home/yons/demo/output",
     )
 

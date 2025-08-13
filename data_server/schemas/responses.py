@@ -1,5 +1,5 @@
 from typing import Any
-from pydantic import BaseModel
+from pydantic import BaseModel, field_serializer
 from datetime import datetime
 from typing import Optional
 from enum import Enum
@@ -21,12 +21,25 @@ class JobsResponse(BaseModel):
         from_attributes = True
 
 
+class JobListResponse(BaseModel):
+    """Job列表分页响应模型"""
+    data: List["ShowJob"] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+    total_pages: int = 0
+
+    class Config:
+        from_attributes = True
+
+
 class JOB_STATUS(Enum):
     QUEUED = "Queued"
     PROCESSING = "Processing"
     FINISHED = "Finished"
     FAILED = "Failed"
     TIMEOUT = "Timeout"
+    CANCELED = "Canceled"
 
 # shared properties
 class JobBase(BaseModel):
@@ -45,7 +58,7 @@ class ShowJob(JobBase):
     job_type: Optional[str] = None
     data_source: Optional[str] = None
     data_target: Optional[str] = None
-    date_posted: datetime
+    date_posted: Optional[datetime] = None
     status: str
     repo_id: Optional[str] = None
     branch: Optional[str] = None
@@ -53,6 +66,13 @@ class ShowJob(JobBase):
     export_branch_name: Optional[str] = None
     yaml_config: Optional[str] = None
     dslText: Optional[str] = None
+    
+    @field_serializer('date_posted')
+    def serialize_dt(self, dt: datetime, _info):
+        if dt is None:
+            return None
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+
     class Config:
         from_attributes = True  # to convert non dict obj to json
         extra = "allow"
@@ -61,9 +81,16 @@ class JobDetails(ShowJob):
     work_dir: str
     data_count: int
     process_count: int
-    date_finish: datetime
+    date_finish: Optional[datetime] = None
     owner_id: int
     is_active: bool
+    
+    @field_serializer('date_finish')
+    def serialize_dt_finish(self, dt: datetime, _info):
+        if dt is None:
+            return None
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    
     class Config:
         from_attributes = True  # to convert non dict obj to json
         extra = "allow"

@@ -1,10 +1,10 @@
 # Process config example for dataset
 # global parameters
 project_name: 'demo-process'
-dataset_path: '/Users/lipeng/workspaces/git-devops/data-flow/demo/input'  # path to your dataset directory or file
+dataset_path: '/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/input'  # path to your dataset directory or file
 np: 2  # number of subprocess to process your dataset
 open_tracer: True
-export_path: '/Users/lipeng/workspaces/git-devops/data-flow/demo/output/_df_dataset.jsonl'
+export_path: '/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/output/_df_dataset.jsonl'
 user_name: depenglee
 user_token: ab0033c38611468f8807f2f26013d5d1
 repo_id: depenglee/testdepeng

@@ -23,8 +23,8 @@ async def get_celery_server_list_api(isadmin: Annotated[bool | None, Header(alia
         Dict: 包含两个键值对的字典，分别为：
     """
     try:
-        if isadmin is None or isadmin == False:
-            return response_fail(msg="没有权限访问该接口")
+        # if isadmin is None or isadmin == False:
+        #     return response_fail(msg="没有权限访问该接口")
 
         server_list = get_celery_server_list()
         ret_list = []
@@ -49,12 +49,12 @@ async def get_celery_server_list_api(isadmin: Annotated[bool | None, Header(alia
                     current_time = dict_result["current_time"]
                     if get_timestamp() - current_time > 12:
                         ret_list.append(
-                            {'worker_name': server_key, 'task_count': 0, 'current_ip': "", "status": "offline"})
+                            {'worker_name': server_key, 'task_count': 0, 'current_ip': "", "status": "offline", "ack_time": current_time})
                     else:
                         ret_list.append({'worker_name': server_key, 'task_count': dict_result['task_count'],
-                                         'current_ip': dict_result['current_ip'], "status": "online"})
+                                         'current_ip': dict_result['current_ip'], "status": "online", "ack_time": current_time})
             else:
-                ret_list.append({'worker_name': server_key, 'task_count': 0, 'current_ip': "", "status": "offline"})
+                ret_list.append({'worker_name': server_key, 'task_count': 0, 'current_ip': "", "status": "offline", "ack_time": 0})
 
         return response_success(data=ret_list)
     except Exception as e:

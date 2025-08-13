@@ -3,20 +3,20 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime
 
 
-# 数据源相关模型
+
 class DataSourceBase(BaseModel):
     name: str
     des: str
-    source_type: int  # 源类型不可修改
+    source_type: int
     host: str
-    auth_type: Optional[str] = None  # HIVE鉴权类型
+    auth_type: Optional[str] = None
     port: Optional[int] = None
     username: Optional[str] = None
     password: Optional[str] = None
     database: str
     extra_config: Optional[Dict] = None
     source_status: Optional[int] = None
-    # 是否执行 默认为不执行
+    # Whether to execute (default is not to execute)
     is_run: Optional[bool] = False
     task_run_time: Optional[datetime] = None
 
@@ -35,12 +35,12 @@ class DataSourceUpdate(DataSourceBase):
     extra_config: Optional[Dict] = None
 
 
-# 数据源响应模型
+
 class DataSourceResponse(BaseModel):
     id: int
     name: str
     des: Optional[str] = None
-    source_type: int  # 源类型不可修改
+    source_type: int
     host: str
     port: Optional[int] = None
     username: Optional[str] = None
@@ -55,7 +55,7 @@ class DataSourceResponse(BaseModel):
         orm_mode = True
 
 
-# 采集任务相关模型
+
 class CollectionTaskBase(BaseModel):
     name: str
     datasource_id: int
@@ -78,7 +78,7 @@ class CollectionTaskUpdate(CollectionTaskBase):
     next_run_at: Optional[datetime] = None
 
 
-# 响应模型
+
 class TableListResponse(BaseModel):
     tables: List[str]
 
@@ -103,7 +103,7 @@ class CollectionTaskResponse(BaseModel):
     start_run_at: Optional[datetime] = None
     csg_hub_server_branch: Optional[str] = None
     end_run_at: Optional[datetime] = None
-    datasource: Optional[Dict] = None  # 关联的数据源信息
+    datasource: Optional[Dict] = None
 
     class Config:
         from_attributes = True

@@ -56,16 +56,11 @@ class FileStorageManager:
             with open(file_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
             
-            # 生成文件代码和URL
+            # 生成文件代码和相对URL（不包含IP和端口）
             file_code = f"{category}/{file_id}"
-
-            # 动态获取基础URL
-            if request:
-                base_url = f"{request.url.scheme}://{request.url.netloc}" # scheme:http or https；netloc:host:port
-            else:
-                base_url = self.base_url
-
-            file_url = f"{base_url}/files/{category}/{file_name}"
+            
+            # 返回相对路径，让前端动态拼接完整URL
+            file_url = f"files/{category}/{file_name}"
             
             logger.info(f"文件保存成功: {file_path}, 代码: {file_code}")
             

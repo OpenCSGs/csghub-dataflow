@@ -2,7 +2,7 @@ import json
 from concurrent.futures import ProcessPoolExecutor
 import os, uuid
 
-exclude_fields_config=['buildin', 'name', 'template_id', 'description', 'type', 'job_source']
+exclude_fields_config=['buildin', 'name', 'template_id', 'description', 'type', 'job_source', 'dslText', 'is_run', 'task_run_time']
 executor = None
 
 

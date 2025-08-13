@@ -70,7 +70,6 @@ class MySQLConnector:
         )
         try:
             with conn.cursor() as cursor:
-                # 查询表和字段信息
                 query = """
                 SELECT TABLE_NAME, COLUMN_NAME 
                 FROM INFORMATION_SCHEMA.COLUMNS 
@@ -80,7 +79,6 @@ class MySQLConnector:
                 cursor.execute(query, (self.datasource.database,))
                 results = cursor.fetchall()
 
-                # 按表名分组整理字段信息
                 tables_dict = {}
                 for row in results:
                     table_name = row['TABLE_NAME']
@@ -89,20 +87,17 @@ class MySQLConnector:
                         tables_dict[table_name] = []
                     tables_dict[table_name].append({'column_name': column_name})
 
-                # 转换为要求的列表格式
                 return [{'table_name': table, 'columns': columns} for table, columns in tables_dict.items()]
         finally:
             conn.close()
 
     def get_table_columns(self, table_name: str):
         """
-        查询指定MySQL表的所有字段信息。
-
+        Query all field information of the specified MySQL table.
         Args:
-            table_name (str): 表名
-
+        table_name (str): Name of the table
         Returns:
-            list: 包含字段信息的列表，每个元素是一个字典，包含字段名。
+        list: A list containing field information, where each element is a dictionary including the field name.
         """
         conn = pymysql.connect(
             host=self.datasource.host,
@@ -114,7 +109,6 @@ class MySQLConnector:
         )
         try:
             with conn.cursor() as cursor:
-                # 查询指定表的所有字段信息
                 query = """
                 SELECT COLUMN_NAME 
                 FROM INFORMATION_SCHEMA.COLUMNS 
@@ -123,7 +117,6 @@ class MySQLConnector:
                 cursor.execute(query, (self.datasource.database, table_name))
                 results = cursor.fetchall()
 
-                # 提取字段名并返回
                 return [{'column_name': row['COLUMN_NAME']} for row in results]
         finally:
             conn.close()
@@ -148,16 +141,14 @@ class MySQLConnector:
 
     def query_table(self, table_name: str, columns: list, offset: int, limit: int) -> list:
         """
-        查询表中的数据，支持列过滤和分页。
-
+        Query data in the table with support for column filtering and pagination.
         Args:
-            table_name (str): 表名
-            columns (list): 要查询的列名列表
-            offset (int): 查询的起始偏移量
-            limit (int): 查询的限制行数
-
+        table_name (str): Name of the table
+        columns (list): List of column names to query
+        offset (int): Starting offset for the query
+        limit (int): Maximum number of rows to return
         Returns:
-            list: 查询结果列表，每个元素是一个字典，包含指定的列名和值
+        list: List of query results, where each element is a dictionary containing the specified column names and their values
         """
         conn = pymysql.connect(
             host=self.datasource.host,
@@ -169,37 +160,32 @@ class MySQLConnector:
         )
         try:
             with conn.cursor() as cursor:
-                # 构建查询列名的字符串
+
                 column_names = ', '.join(columns)
-                # 构建查询语句
+
                 query = f"""
                 SELECT {column_names}
                 FROM {table_name}
                 LIMIT %s OFFSET %s
                 """
 
-                # 执行查询
                 cursor.execute(query, (limit, offset))
 
-                # 获取查询结果
                 rows = cursor.fetchall()
 
                 return rows
         except Exception as e:
             raise e
         finally:
-            # 确保数据库连接被关闭
             conn.close()
 
     def execute_custom_query(self, query: str) -> list:
         """
-        执行一个自定义的SQL查询，并返回查询结果。
-
+        Execute a custom SQL query and return the query results.
         Args:
-            query (str): 要执行的SQL查询字符串
-
+        query (str): The SQL query string to be executed
         Returns:
-            list: 查询结果列表，每个元素是一个字典，包含列名和值
+        list: List of query results, where each element is a dictionary containing column names and their values
         """
         conn = pymysql.connect(
             host=self.datasource.host,
@@ -211,16 +197,15 @@ class MySQLConnector:
         )
         try:
             with conn.cursor() as cursor:
-                # 执行查询
+
                 cursor.execute(query)
 
-                # 获取查询结果
                 rows = cursor.fetchall()
 
                 return rows
         except Exception as e:
-            # 处理异常，例如SQL错误或连接问题
+
             raise e
         finally:
-            # 确保数据库连接被关闭
+
             conn.close()

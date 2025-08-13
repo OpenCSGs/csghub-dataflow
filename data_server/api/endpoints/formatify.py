@@ -1,15 +1,16 @@
 from fastapi import FastAPI, APIRouter, HTTPException, status, Header, Depends
+from oauthlib.uri_validate import query
 from sqlalchemy.orm import Session
 from typing import Annotated, Union
 from loguru import logger
 from data_server.database.session import get_sync_session
 from data_server.schemas.responses import response_success, response_fail
-from data_server.formatify.FormatifyModels import DataFormatTypeEnum, DataFormatTaskStatusEnum
+from data_server.formatify.FormatifyModels import DataFormatTypeEnum, DataFormatTaskStatusEnum, DataFormatTask
 from data_server.formatify.schemas import DataFormatTaskRequest
 from data_server.formatify.FormatifyManager import (create_formatify_task, search_formatify_task,
                                                     update_formatify_task, delete_formatify_task,
                                                     get_formatify_task, stop_formatify_task)
-
+from sqlalchemy import func
 router = APIRouter()
 
 
@@ -46,6 +47,21 @@ async def get_format_type_list():
     return response_success(data=data_format_types)
 
 
+@router.get("/get_task_statistics", response_model=dict)
+async def get_task_statistics(db: Session = Depends(get_sync_session)):
+    status_counts = db.query(
+        DataFormatTask.task_status,
+        func.count(DataFormatTask.id).label('count')
+    ).group_by(DataFormatTask.task_status).all()
+    statistics = {}
+    for status, count in status_counts:
+        status_name = DataFormatTaskStatusEnum(status).name
+        statistics[status_name] = count
+    for status_enum in DataFormatTaskStatusEnum:
+        if status_enum.name not in statistics:
+            statistics[status_enum.name] = 0
+    return response_success(data=statistics)
+
 @router.post("/formatify/create", response_model=dict)
 async def create_formatify_task_api(dataFormatTask: DataFormatTaskRequest,
                                     user_id: Annotated[str | None, Header(alias="user_id")] = None,
@@ -75,6 +91,7 @@ async def create_formatify_task_api(dataFormatTask: DataFormatTaskRequest,
 @router.get("/formatify/list", response_model=dict)
 async def formatify_list(user_id: Annotated[str | None, Header(alias="user_id")] = None,
                          isadmin: Annotated[bool | None, Header(alias="isadmin")] = None,
+                         name: str = None,
                          page: int = 1, pageSize: int = 20,
                          db: Session = Depends(get_sync_session)):
     """
@@ -93,7 +110,10 @@ async def formatify_list(user_id: Annotated[str | None, Header(alias="user_id")]
             user_id_int = 0
         else:
             user_id_int = int(user_id)
-        data_sources, total = search_formatify_task(user_id_int, db, isadmin, page, pageSize)
+        query_dict = {}
+        if name is not None:
+            query_dict["name"] = name
+        data_sources, total = search_formatify_task(user_id_int, db, isadmin,query_dict, page, pageSize)
         return response_success(data={
             "list": data_sources,
             "total": total

@@ -59,6 +59,7 @@ def search_formatify_task(
         user_id: int,
         session: Session,
         isadmin: bool = False,
+        query_dict = None,
         page: int = 1,
         per_page: int = 10
 ) -> Tuple[List[DataFormatTask], int]:
@@ -79,6 +80,9 @@ def search_formatify_task(
     query = session.query(DataFormatTask)
     if not isadmin:
         query = query.filter(DataFormatTask.owner_id == user_id)
+    if query_dict:
+        if query_dict['name']:
+            query = query.filter(DataFormatTask.name.like(f"%{query_dict['name']}%"))
     # 计算总记录数
     total_count = query.count()
     # 执行分页查询
@@ -159,7 +163,7 @@ def stop_formatify_task(db_session: Session, formatify_task: DataFormatTask):
         bool: 执行操作是否成功
     """
     try:
-        result = stop_celery_task(formatify_task.task_uid)
+        result = stop_celery_task(formatify_task.task_celery_uid)
         if result:
             formatify_task.task_status = DataFormatTaskStatusEnum.STOP.value
             db_session.commit()

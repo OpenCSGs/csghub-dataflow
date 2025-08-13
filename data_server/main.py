@@ -43,12 +43,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # setup_s3_storage()
         # logger.info("S3 storage initialized successfully")
 
-        # 初始化雪花ID生成器
-        from data_server.utils.id_generator import register_id_generator_listeners
-        from data_server.database.bean.base import Base
-        register_id_generator_listeners(Base)
-        logger.info("Snowflake ID generator initialized successfully")
-
         # Initialize managers (DB, Connection, Team)
         await init_managers()
         logger.info("Managers initialized successfully")
@@ -139,12 +133,12 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(api_router)
 
-# 添加静态文件服务，用于访问上传的文件
+# Add a static file service to access uploaded files
 from pathlib import Path
 uploads_dir = Path(os.path.join(get_project_root(), 'attach'))
 # logger.info(f"Uploads directory: {uploads_dir}")
 uploads_dir.mkdir(parents=True, exist_ok=True)
-# 以files开头的请求，去掉files后拼接到uploads_dir路径下访问文件
+# For requests starting with "files", remove "files" and concatenate them to the "uploads_dir" path to access the files
 app.mount("/files", StaticFiles(directory=str(uploads_dir)), name="files")
 
 # Sets all CORS enabled origins

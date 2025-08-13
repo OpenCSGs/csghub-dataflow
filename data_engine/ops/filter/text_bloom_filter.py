@@ -48,17 +48,17 @@ class TextBloomFilter(Filter):
             return sample
         text = sample[self.text_key]
 
-        # 计算hash值
+        # Calculate the hash value
         text_bytes = text.encode('utf-8')
         hash_value = self.hash_func(text_bytes)
 
-        # 检查是否已存在（使用in操作符）
+        # Check if it already exists (using the in operator)
         is_duplicate = hash_value in self.bf
 
-        # 添加到Bloom Filter（add方法返回是否已存在）
+        # Add to Bloom Filter (the add method returns whether it already exists)
         self.bf.add(hash_value)
 
-        # 记录是否为重复项
+        # Record whether it is a duplicate
         sample[Fields.stats][StatsKeys.bloom] = is_duplicate
         self.flags.add(is_duplicate)
         return sample
@@ -87,6 +87,7 @@ class TextBloomFilter(Filter):
     @property
     def init_params(cls):
         return [
+
             Param("error_rate", DataType.FLOAT, {}, 1e-6),
             Param("hash_func", DataType.STRING, {
                 'sha256': 'sha256',

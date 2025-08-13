@@ -78,6 +78,6 @@ class DataFormatTask(Base):
             "owner_id": self.owner_id,
             "start_run_at": self.start_run_at,
             "end_run_at": self.end_run_at,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
+            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S") if self.updated_at else None,
         }

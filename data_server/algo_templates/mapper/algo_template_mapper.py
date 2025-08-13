@@ -37,10 +37,21 @@ def get_template_by_id(db: Session, template_id: int, user_id: str) -> Optional[
     Returns:
         Optional[AlgoTemplate]: 算法模板对象或None
     """
-    return db.query(AlgoTemplate).filter(
-        AlgoTemplate.id == template_id, 
-        AlgoTemplate.user_id == user_id
-    ).first()
+    # 先根据模板ID查询
+    template = db.query(AlgoTemplate).filter(AlgoTemplate.id == template_id).first()
+    
+    if not template:
+        return None
+    
+    # 如果是内置模板，直接返回
+    if template.buildin:
+        return template
+    
+    # 如果不是内置模板，需要验证用户权限
+    if template.user_id == user_id:
+        return template
+    
+    return None
 
 
 def create_template(db: Session, template_data: dict) -> AlgoTemplate:
@@ -154,8 +165,8 @@ def delete_template_by_id(db: Session, template_id: int, user_id: str) -> bool:
 
 
 def get_templates_by_query(db: Session, user_id: str,
-                          page: int = 1, page_size: int = 10, 
-                          buildin: Optional[bool] = None) -> Tuple[List[AlgoTemplate], int]:
+                           page: int = 1, page_size: int = 10, 
+                           buildin: Optional[bool] = None) -> Tuple[List[AlgoTemplate], int]:
     """
     根据查询条件分页查询算法模板
     
@@ -164,16 +175,28 @@ def get_templates_by_query(db: Session, user_id: str,
         user_id: 用户ID
         page: 页码
         page_size: 每页数量
-        buildin: 是否为内置模版过滤
+        buildin: 是否为内置模版过滤。如果为True，则查询所有内置模板，忽略user_id。
         
     Returns:
         Tuple[List[AlgoTemplate], int]: (模板列表, 总数量)
     """
-    query = db.query(AlgoTemplate).filter(AlgoTemplate.user_id == user_id)
-    
-    # 添加 buildin 过滤条件
-    if buildin is not None:
-        query = query.filter(AlgoTemplate.buildin == buildin)
+    query = db.query(AlgoTemplate)
+
+    if buildin is True:
+        # 如果 buildin 为 True, 查询所有 buildin 为 True 的模板, 忽略 user_id
+        query = query.filter(AlgoTemplate.buildin == True)
+    elif buildin is False:
+        # 如果 buildin 为 False, 只查询当前用户的非内置模板
+        query = query.filter(AlgoTemplate.user_id == user_id, AlgoTemplate.buildin == False)
+    else:
+        # 如果 buildin 为 None, 查询所有内置模板 + 当前用户的非内置模板
+        from sqlalchemy import or_, and_
+        query = query.filter(
+            or_(
+                AlgoTemplate.buildin == True,
+                and_(AlgoTemplate.buildin == False, AlgoTemplate.user_id == user_id)
+            )
+        )
     
     # 获取总数量
     total = query.count()
