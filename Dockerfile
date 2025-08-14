@@ -27,9 +27,8 @@ RUN apt install git-lfs && git lfs install && apt clean && rm -rf /var/lib/apt/l
 COPY . .
 
 ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-ENV PIP_EXTRA_INDEX_URL=https://wheels.myhloli.com
 # Install deps
-RUN pip install --no-cache-dir -v \
+RUN pip install --use-deprecated=legacy-resolver --no-cache-dir -v \
     '.[dist]' \
     '.[sci]' \
     '.[tools]' \
