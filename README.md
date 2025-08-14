@@ -58,11 +58,10 @@ Launch mongoDB container
 
 ```bash
 docker run -d --name dataflow-mongo \
-   -p 5433:5432 \
+   -p 27017:27017 \
    -v /home/mongodata:/data/db \
-   -e POSTGRES_DB=data_flow \
-   -e POSTGRES_USER=postgres \
-   -e POSTGRES_PASSWORD=postgres \
+   -e MONGO_INITDB_ROOT_USERNAME=root \
+   -e MONGO_INITDB_ROOT_PASSWORD=example \
    opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
 ```
 
@@ -72,8 +71,6 @@ Launch redis container
 docker run -d --name dataflow-redis \
    -p 6379:6379 \
    -v /home/redisdata:/data \
-   -e MONGO_INITDB_ROOT_USERNAME=root \
-   -e MONGO_INITDB_ROOT_PASSWORD=example \
    opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
 ```
 
