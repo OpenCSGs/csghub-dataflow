@@ -4,7 +4,7 @@ from datetime import datetime
 
 
 class AlgoTemplateBase(BaseModel):
-    """算法模板基础模型"""
+
     user_id: Optional[str] = Field(None, max_length=255, description="用户id")
     name: Optional[str] = Field(None, max_length=255, description="算法模块名称")
     description: Optional[str] = Field(None, max_length=255, description="算法模版描述")
@@ -21,18 +21,18 @@ class AlgoTemplateBase(BaseModel):
 
 
 class AlgoTemplateCreate(AlgoTemplateBase):
-    """创建算法模板的请求模型"""
+
     name: str = Field(..., max_length=255, description="算法模块名称")
     type: str = Field(..., max_length=255, description="算法模版类型")
 
 
 class AlgoTemplateUpdate(AlgoTemplateBase):
-    """更新算法模板的请求模型"""
+
     id: int = Field(..., description="模板ID")
 
 
 class AlgoTemplateResponse(AlgoTemplateBase):
-    """算法模板响应模型"""
+
     id: int = Field(..., description="主键id")
     created_at: Optional[datetime] = Field(None, description="创建时间")
     updated_at: Optional[datetime] = Field(None, description="修改时间")
@@ -48,7 +48,7 @@ class AlgoTemplateResponse(AlgoTemplateBase):
 
 
 class AlgoTemplateQuery(BaseModel):
-    """算法模板查询参数模型"""
+
     name: Optional[str] = Field(None, description="算法模块名称（模糊查询）")
     type: Optional[str] = Field(None, description="算法模版类型过滤")
     buildin: Optional[bool] = Field(None, description="是否为内置模版过滤")
@@ -57,7 +57,7 @@ class AlgoTemplateQuery(BaseModel):
     page_size: int = Field(10, ge=1, le=100, description="每页数量")
 
 
-# 导出所有schemas
+
 __all__ = [
     "AlgoTemplateBase",
     "AlgoTemplateCreate",

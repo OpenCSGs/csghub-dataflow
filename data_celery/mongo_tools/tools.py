@@ -5,14 +5,10 @@ from enum import Enum
 from typing import List, Optional
 from data_server.logic.models import OperatorIdentifier, OperatorIdentifierItem
 from bson import ObjectId
-# mongo 相关
+
 
 def get_client():
-    """
-    获取mongodb客户端
-    Returns:
-        MongoClient: mongodb客户端
-    """
+
     return MongoClient(MONGO_URI)
 
 def get_log_List(
@@ -28,23 +24,23 @@ def get_log_List(
         raise "param task_uid is not exist"
     client = get_client()
     collection = client[type][f"{task_uid}_run_task"]
-    # 构建查询条件
+
     query = {}
     if level:
         query["level"] = level
-    # 计算总数
+
     total_count = collection.count_documents(query)
-    # 计算跳过的文档数量
+
     skip_count = (page - 1) * page_size
-    # 执行分页查询
+
     logs = collection.find(query).skip(skip_count).limit(page_size)
-    # 将结果转换为字典列表
+
     result = [
         {key: str(value) if key == "_id" else value for key, value in log.items()}
         for log in logs
     ]
     client.close()
-    # 返回包含分页信息的字典
+
     return {
         "data": result,
         "total": total_count,
@@ -65,25 +61,25 @@ def get_pipline_job_log_List(
         raise "param task_uid is not exist"
     client = get_client()
     collection = get_pipline_job_collection(client, task_uid)
-    # 构建查询条件
+
     query = {}
     if level and len(level) > 0:
         query["level"] = level
     if ops_name and len(ops_name) > 0:
         query["operator_name"] = ops_name
-    # 计算总数
+
     total_count = collection.count_documents(query)
-    # 计算跳过的文档数量
+
     skip_count = (page - 1) * page_size
-    # 执行分页查询
+
     logs = collection.find(query).skip(skip_count).limit(page_size)
-    # 将结果转换为字典列表
+
     result = [
         {key: str(value) if key == "_id" else value for key, value in log.items()}
         for log in logs
     ]
     client.close()
-    # 返回包含分页信息的字典
+
     return {
         "data": result,
         "total": total_count,
@@ -98,13 +94,7 @@ class LogLevelEnum(Enum):
     DEBUG = "debug"
 
 def insert_datasource_run_task_log(task_uid: str, content: str, level: str):
-    """
-    插入数据源运行任务日志
-    Args:
-        task_uid (str): 任务UID
-        content (str): 内容
-        level (str): 级别 info error
-    """
+
     client = get_client()
     try:
         collection = get_datasource_collection(client,task_uid)
@@ -116,14 +106,7 @@ def insert_datasource_run_task_log(task_uid: str, content: str, level: str):
         client.close()
 
 def get_datasource_collection(client,task_uid: str):
-    """
-    获取数据源运行任务对应的collection
-    Args:
-        client (MongoClient): mongodb客户端
-        task_uid (str): 任务UID
-    Returns:
-        采集任务对应的collection
-    """
+
     return client['datasource'][f"{task_uid}_run_task"]
 
 def insert_datasource_run_task_log_info(task_uid: str, content: str):

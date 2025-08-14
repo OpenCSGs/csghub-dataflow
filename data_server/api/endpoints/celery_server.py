@@ -15,16 +15,10 @@ router = APIRouter()
 
 @router.get("/get_celery_server_list", response_model=dict)
 async def get_celery_server_list_api(isadmin: Annotated[bool | None, Header(alias="isadmin")] = None):
-    """
-    获取所有可用的Celery服务器列表
-    Args:
-        isadmin (bool, optional): 是否是管理员身份，默认False。
-    Returns:
-        Dict: 包含两个键值对的字典，分别为：
-    """
+
     try:
         # if isadmin is None or isadmin == False:
-        #     return response_fail(msg="没有权限访问该接口")
+
 
         server_list = get_celery_server_list()
         ret_list = []

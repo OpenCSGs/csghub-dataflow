@@ -24,10 +24,10 @@ api_router.include_router(datasource.router, prefix="/datasource", tags=["Dataso
 api_router.include_router(formatify.router, prefix="/formatify", tags=["Formatify"])
 api_router.include_router(celery_server.router, prefix="/celery", tags=["Celery 相关接口"])
 api_router.include_router(jump_to_studio.router, prefix="/studio", tags=["Studio"])
-# 注册operator路由（包含config_select_options接口）
+
 api_router.include_router(operator.router, prefix="/operator", tags=["算子相关接口"])
 api_router.include_router(operator_permission.router, prefix="/operator_permission", tags=["算子权限相关接口"])
-# 注册文件上传路由
+
 api_router.include_router(op_pic_upload.op_pic_router, prefix="/internal_api", tags=["文件上传接口"])
-# 注册算法模板路由
+
 api_router.include_router(algo_templates.router, prefix="/algo_templates", tags=["算法模板相关接口"])

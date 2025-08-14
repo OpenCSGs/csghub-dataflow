@@ -42,14 +42,14 @@ def list_jobs(user_id, session: Session, isadmin=False, page: int = None, page_s
         query = session.query(Job).filter(
             Job.owner_id == user_id).order_by(Job.job_id.desc())
 
-    # 如果提供了分页参数，则返回分页结果
+
     if page is not None and page_size is not None:
         total = query.count()
         jobs = query.offset((page - 1) * page_size).limit(page_size).all()
         total_pages = (total + page_size - 1) // page_size
         return jobs, total, total_pages
     else:
-        # 保持向后兼容，不分页时返回所有结果
+
         jobs = query.all()
         if jobs is None:
             jobs = []  # ensure not return None
@@ -225,7 +225,7 @@ def create_pipline_new_job(job_cfg, user_id, user_name, user_token,yaml_config):
             session.commit()
     print(f"job.yaml_config is:{job.yaml_config}")
     if job_cfg.is_run:
-        # celery 执行
+
         with get_sync_session() as session:
             with session.begin():
                 job_obj = session.query(Job).filter(Job.uuid == task_uuid).one_or_none()
@@ -268,7 +268,7 @@ def stop_pipline_task(db_session: Session,job:Job):
         return False, str(e)
 
 
-# 解析并获取yaml_config
+
 def parse_yaml_config(yaml_string: str,config):
     fields_to_insert = {
         "project_name": config.project_name,
@@ -279,11 +279,11 @@ def parse_yaml_config(yaml_string: str,config):
         "open_tracer": 'true',
         "trace_num": '1',
     }
-    # 解析YAML为字典
+
     dsl_data = yaml.safe_load(yaml_string)
-    # 添加字段
+
     dsl_data.update(fields_to_insert)
-    # 将字典重新生成YAML字符串
+
     new_dsl_data = yaml.dump(dsl_data, sort_keys=False, default_flow_style=False, indent=2, width=float("inf"))
     return convert_raw_to_processed(new_dsl_data)
 
@@ -321,13 +321,13 @@ def search_job(query: str, user_id, session: Session, isadmin=False, page: int =
         query_obj = session.query(Job).filter(
             Job.owner_id == user_id).filter(Job.job_name.contains(query)).order_by(Job.job_id.desc())
 
-    # 如果提供了分页参数，则返回分页结果
+
     if page is not None and page_size is not None:
         total = query_obj.count()
         jobs = query_obj.offset((page - 1) * page_size).limit(page_size).all()
         total_pages = (total + page_size - 1) // page_size
         return jobs, total, total_pages
     else:
-        # 保持向后兼容，不分页时返回所有结果
+
         jobs = query_obj.all()
         return jobs

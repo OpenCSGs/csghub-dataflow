@@ -26,7 +26,7 @@ def stop_celery_task(task_uid: str,task_celery_uid:str,run_celery_host:str,celer
     process_id = redis_celery.get(celery_task_process_real_key)
     if process_id is None and process_id != "":
         try:
-            # 添加到 kill redis 列表
+
             celery_task_kill_list_key = get_celery_kill_process_list_key(celery_worker_name,run_celery_host)
             redis_celery.rpush(celery_task_kill_list_key, process_id)
         except:

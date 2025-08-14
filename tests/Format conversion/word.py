@@ -2,7 +2,7 @@ import mammoth
 import logging
 from pathlib import Path
 
-# 配置日志
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -15,19 +15,13 @@ logger = logging.getLogger('WordConverter')
 
 
 def docx_to_md_with_images(input_path, output_dir, **kwargs):
-    """
-    将Word文件转换为Markdown格式
-    :param input_path: Word文件路径
-    :param output_dir: 输出目录
-    :param kwargs: 额外参数
-    :return: 转换结果字典
-    """
+
     try:
         docx_path = Path(input_path)
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 设置输出Markdown路径和图片目录
+
         output_md_path = output_dir / f"{docx_path.stem}.md"
         image_dir = output_dir / "images"
         image_dir.mkdir(parents=True, exist_ok=True)
@@ -35,7 +29,7 @@ def docx_to_md_with_images(input_path, output_dir, **kwargs):
         logger.info(f"开始处理Word文件: {docx_path}")
 
         def convert_image(image):
-            # 正确用法 ↓↓↓
+
             with image.open() as image_bytes:
                 data = image_bytes.read()
             image_name = f"image{convert_image.counter}.png"
@@ -70,7 +64,7 @@ def docx_to_md_with_images(input_path, output_dir, **kwargs):
         raise
 
 
-# 示例调用
+
 if __name__ == "__main__":
     try:
         docx_to_md_with_images(

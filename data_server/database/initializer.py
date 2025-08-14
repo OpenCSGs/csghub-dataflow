@@ -1,7 +1,4 @@
-"""
-数据库初始化模块
-负责执行SQL初始化脚本，处理数据插入和SQL语法修复
-"""
+
 
 import os
 import glob
@@ -54,7 +51,7 @@ def execute_initialization_scripts():
                         with get_sync_session() as session:
                             try:
                                 with session.begin():
-                                    # 预处理SQL语句以处理引号问题
+
                                     processed_statement = preprocess_sql_statement(statement)
                                     session.execute(text(processed_statement))
                                 successful_count += 1
@@ -95,32 +92,30 @@ def execute_initialization_scripts():
 
 
 def preprocess_sql_statement(statement):
-    """
-    预处理SQL语句，修复引号转义问题
-    """
+
     try:
-        # 使用PostgreSQL的美元引用来处理复杂字符串
-        # 这可以避免引号转义问题
+
+
         
-        # 检查是否是INSERT语句
+
         if not statement.upper().strip().startswith('INSERT INTO'):
             return statement
         
-        # 分析INSERT语句结构
+
         # INSERT INTO "table" VALUES (val1, val2, 'complex_string', val4, ...);
         
-        # 使用正则表达式找到VALUES部分
+
         values_match = re.search(r'VALUES\s*\((.*)\);?\s*$', statement, re.IGNORECASE | re.DOTALL)
         if not values_match:
             return statement
         
         values_part = values_match.group(1)
         
-        # 替换有问题的字符串值
-        # 找到所有用单引号包围的字符串
+
+
         fixed_values = fix_quoted_strings(values_part)
         
-        # 重构SQL语句
+
         table_part = statement[:values_match.start()]
         fixed_statement = f"{table_part}VALUES ({fixed_values});"
         
@@ -132,12 +127,10 @@ def preprocess_sql_statement(statement):
 
 
 def fix_quoted_strings(values_part):
-    """
-    修复VALUES部分中的引号字符串
-    """
+
     try:
-        # 这是一个复杂的解析任务，我们使用一个简化的方法
-        # 将有问题的字符串转换为美元引用格式
+
+
         
         result = []
         i = 0
@@ -156,28 +149,28 @@ def fix_quoted_strings(values_part):
                 paren_depth -= 1
                 current_token += char
             elif char == "'" and not in_string:
-                # 开始字符串
+
                 in_string = True
                 string_content = ""
             elif char == "'" and in_string:
-                # 检查是否是转义的引号
+
                 if i + 1 < len(values_part) and values_part[i + 1] == "'":
-                    # 这是转义的引号，添加到字符串内容
+
                     string_content += "''"
-                    i += 1  # 跳过下一个引号
+                    i += 1
                 else:
-                    # 字符串结束
+
                     in_string = False
-                    # 使用美元引用来包装复杂字符串
+
                     if ("''" in string_content or 
                         "href=" in string_content or 
                         len(string_content) > 100 or
                         any(c in string_content for c in ['<', '>', '"', '\\'])):
-                        # 使用美元引用
+
                         dollar_tag = f"$tag{len(result)}$"
                         current_token += f"{dollar_tag}{string_content}{dollar_tag}"
                     else:
-                        # 普通字符串，保持原样
+
                         current_token += f"'{string_content}'"
                     string_content = ""
             elif in_string:
@@ -190,7 +183,7 @@ def fix_quoted_strings(values_part):
             
             i += 1
         
-        # 添加最后一个token
+
         if current_token.strip():
             result.append(current_token.strip())
         
@@ -202,14 +195,12 @@ def fix_quoted_strings(values_part):
 
 
 def extract_insert_statements(sql_content):
-    """
-    从SQL内容中提取INSERT语句
-    """
-    # 移除注释
+
+
     sql_content = re.sub(r'--.*?\n', '\n', sql_content)
     sql_content = re.sub(r'/\*.*?\*/', '', sql_content, flags=re.DOTALL)
     
-    # 更精确的INSERT语句提取
+
     insert_statements = []
     lines = sql_content.split('\n')
     current_statement = ""
@@ -222,32 +213,32 @@ def extract_insert_statements(sql_content):
         if not line:
             continue
             
-        # 检测INSERT语句开始
+
         if line.upper().startswith('INSERT INTO'):
             in_insert = True
             current_statement = line
-            # 计算括号和引号
+
             paren_count = line.count('(') - line.count(')')
             quote_count = line.count("'") % 2
             
-            # 如果这一行就结束了（以分号结尾且括号平衡）
+
             if line.endswith(';') and paren_count == 0 and quote_count == 0:
                 insert_statements.append(current_statement)
                 current_statement = ""
                 in_insert = False
         elif in_insert:
-            # 继续构建INSERT语句
+
             current_statement += " " + line
             paren_count += line.count('(') - line.count(')')
             quote_count = (quote_count + line.count("'")) % 2
             
-            # 检查是否语句结束
+
             if line.endswith(';') and paren_count == 0 and quote_count == 0:
                 insert_statements.append(current_statement)
                 current_statement = ""
                 in_insert = False
     
-    # 如果还有未完成的语句，也添加进去
+
     if current_statement and in_insert:
         insert_statements.append(current_statement)
     

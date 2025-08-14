@@ -76,7 +76,7 @@ class CollectionTask(Base):
     task_run_host = Column(String(30), comment="任务执行的服务器")
     task_celery_uid = Column(String(100), comment="celery任务调度唯一标识")
     datasource_id = Column(Integer, ForeignKey('datasources.id'), nullable=False)
-    task_status = Column(Integer, nullable=False, comment="任务状态")  # DataSourceTaskStatusEnum 枚举
+    task_status = Column(Integer, nullable=False, comment="任务状态")
     created_at = Column(DateTime, default=datetime.datetime.now, comment='任务创建时间')
     total_count = Column(Integer, comment='总条数')
     records_count = Column(Integer, comment='已处理条数')

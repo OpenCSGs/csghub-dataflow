@@ -84,7 +84,7 @@ class TextGatherFilterTest(DataJuicerTestCaseBase):
                                          ['text', 'first_prompt', 'first_answer', 'conversation'])
 
     def test_gather_and_filter_case_chinese(self):
-        # 测试数据包含指令和响应字段，符合过滤器要求
+
         ds_list = [{
             'text': '什么是Python？',
             'instruction': '什么是Python？||',
@@ -107,7 +107,7 @@ class TextGatherFilterTest(DataJuicerTestCaseBase):
             'response': '内容'
         }]
 
-        # 过滤后的预期结果（去除重复内容，过滤掉内容过短的条目）
+
         tgt_list = [{
             'text': '什么是Python？',
             'first_prompt': '什么是Python？',

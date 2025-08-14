@@ -6,7 +6,7 @@ from enum import Enum
 Base = declarative_base()
 
 
-# 数据格式枚举
+
 class DataFormatTypeEnum(Enum):
     PPT = 0  # ppt
     Word = 1  # word
@@ -23,16 +23,16 @@ def getFormatTypeName(type):
             return item.name
 
 
-# 数据格式任务状态
+
 class DataFormatTaskStatusEnum(Enum):
-    WAITING = 0  # 等待中
-    EXECUTING = 1  # 执行中
-    COMPLETED = 2  # 已完成
-    ERROR = 3  # 错误
-    STOP = 4  # 手动停止
+    WAITING = 0
+    EXECUTING = 1
+    COMPLETED = 2
+    ERROR = 3
+    STOP = 4
 
 
-# 格式转换任务表
+
 class DataFormatTask(Base):
     __tablename__ = 'data_format_tasks'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)

@@ -8,7 +8,7 @@ from data_server.schemas.responses import response_success
 
 router = APIRouter()
 
-# 从环境变量读取Studio跳转URL基础地址
+
 BASE_STUDIO_URL = os.getenv("STUDIO_JUMP_URL", "https://opencsg.com/user/login1/")
 
 
@@ -19,11 +19,11 @@ async def jump_to_studio(
     user_name: Optional[str] = Header(None, alias="user_name"),
 ):
     """Jump to studio with credentials from headers."""
-    # 动态构建目标URL，使用user_name参数构建email
+
     if user_name:
         target_url = f"{BASE_STUDIO_URL}?email={user_name}@qq.com"
     else:
-        # 如果没有提供user_name，使用默认email
+
         target_url = f"{BASE_STUDIO_URL}?email=z275748353@qq.com"
     
     # Prepare the JSON payload with credentials from headers

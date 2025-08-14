@@ -7,11 +7,7 @@ executor = None
 
 
 def greate_task_uid():
-    """
-    生成任务UID
-    Returns:
-        str: 生成的任务UID
-    """
+
     return str(uuid.uuid4())
 
 def read_jsonl_to_list(filepath):

@@ -15,18 +15,18 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import logging,platform,psutil
 
-# 禁用 APScheduler 的日志（只显示错误）
+
 logging.getLogger('apscheduler').setLevel(logging.ERROR)
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-# 2、指定briker，用于存放提交的异步任务
+
 broker = f'{get_radis_database_uri()}/0'
-# 3、指定backend，用于存放函数执行结束的结果
+
 backend = f'{get_radis_database_uri()}/1'
 
 celery_scheduler = BackgroundScheduler()
 
-# 存30分钟
+
 celery_app = Celery('data-flow-celery', broker=broker, backend=backend,result_expires=60 * 1 * 12)
 
 print(f"启动路径:{os.getcwd()}")
@@ -40,22 +40,22 @@ celery_app.autodiscover_tasks([
                                 'data_celery.job',
                                ])
 
-# Beat 配置
+
 celery_app.conf.beat_schedule = {
     'celery_pipline_status': {
-        'task': 'celery_pipline_status_task',  # 监控pipline 运行状态
-        'schedule': 10.0,  # 定时任务的间隔时间（秒）
+        'task': 'celery_pipline_status_task',
+        'schedule': 10.0,
         'args': (),
     },
     'celery_server_status': {
-        'task': 'celery_server_status_task',  # 监控celery 负载均衡部署设备运行状态
-        'schedule': 1.5,  # 定时任务的间隔时间（秒）
+        'task': 'celery_server_status_task',
+        'schedule': 1.5,
         'args': (),
     },
 }
 
 celery_app.conf.timezone = 'Asia/Shanghai'
-celery_app.conf.enable_utc = False  # 禁用UTC
+celery_app.conf.enable_utc = False
 @worker_ready.connect
 def on_celery_worker_ready(sender,**kwargs):
     try:
@@ -63,7 +63,7 @@ def on_celery_worker_ready(sender,**kwargs):
         if worker_name:
             redis_celery = get_celery_worker_redis_db()
             redis_key = get_celery_worker_key()
-            all_elements = redis_celery.lrange(redis_key, 0, -1)  # 0 到 -1 表示所有元素
+            all_elements = redis_celery.lrange(redis_key, 0, -1)
             real_key = worker_name
             if real_key not in [str(element) for element in all_elements]:
                 redis_celery.rpush(redis_key, real_key)
@@ -120,7 +120,7 @@ def on_celery_worker_shutdown(sender,**kwargs):
 
 def celery_server_status_task(worker_name,current_ip):
     try:
-        # logger.info("定时检测celery服务的状态 start")
+
         current_time = get_timestamp()
         task_count = get_current_task_count(worker_name,current_ip)
 
@@ -147,7 +147,7 @@ def get_current_task_count(worker_name:str,current_ip:str):
     # return task_count
     redis_process_key = get_celery_process_list_key(worker_name, current_ip)
     redis_celery = get_celery_worker_redis_db()
-    all_elements = redis_celery.lrange(redis_process_key, 0, -1)  # 0 到 -1 表示所有元素
+    all_elements = redis_celery.lrange(redis_process_key, 0, -1)
     if all_elements:
         return len(all_elements)
     return 0
@@ -155,10 +155,10 @@ def get_current_task_count(worker_name:str,current_ip:str):
 
 def celery_pipline_kill_process_task(worker_name:str,current_ip:str):
     try:
-        # 读取redis kill process list 队列，每次kill 一个
+
         redis_celery = get_celery_worker_redis_db()
         redis_key = get_celery_kill_process_list_key(worker_name,current_ip)
-        # 读取队列方式去获取每一个processid ,直到获取不到了
+
         while redis_celery.llen(redis_key) > 0:
             process_id = redis_celery.lpop(redis_key)
             if process_id and process_id != "":
@@ -185,7 +185,7 @@ def get_process_resource_usage_task(worker_name:str,current_ip:str):
     try:
         redis_process_key = get_celery_process_list_key(worker_name, current_ip)
         redis_celery = get_celery_worker_redis_db()
-        all_elements = redis_celery.lrange(redis_process_key, 0, -1)  # 0 到 -1 表示所有元素
+        all_elements = redis_celery.lrange(redis_process_key, 0, -1)
         for element in all_elements:
             process_id = element.split(":")[-1]
             job_uuid = element.split(":")[0]
@@ -195,12 +195,12 @@ def get_process_resource_usage_task(worker_name:str,current_ip:str):
 
 def get_process_resource_usage(redis_celery,job_uuid,process_id):
     try:
-        # 获取进程对象
+
         process = psutil.Process(int(process_id))
         cpu_usage = process.cpu_percent(interval=1)
-        # 获取内存使用率
+
         memory_info = process.memory_info()
-        memory_usage = memory_info.rss / (1024 * 1024)  # 转换为MB
+        memory_usage = memory_info.rss / (1024 * 1024)
         process_resource_key = get_celery_task_process_resource_key(job_uuid)
         status_json = {
             "job_uuid": job_uuid,

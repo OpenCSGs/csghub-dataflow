@@ -18,11 +18,11 @@ services:
       - "5433:5432"
   celery_redis:
     restart: unless-stopped
-    image: redis:latest  # 使用最新的官方 Redis 镜像
+    image: redis:latest
     volumes:
-      - celery_redis_data:/data  # 挂载数据卷以持久化 Redis 数据
+      - celery_redis_data:/data
     ports:
-      - "6379:6379"  # 将主机的 6379 端口映射到容器的 6379 端口
+      - "6379:6379"
   celery_worker:
     build: .
     command: >

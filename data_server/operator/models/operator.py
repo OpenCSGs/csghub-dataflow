@@ -26,7 +26,7 @@ class OperatorConfig(Base):
     operator_id = Column(BigInteger)
     config_name = Column(String(255))
     config_type = Column(String(255))
-    select_options = Column(JSONB)  # 存储id列表
+    select_options = Column(JSONB)
     default_value = Column(String(255))
     min_value = Column(String(255))
     max_value = Column(String(255))

@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from pptx2md import convert, ConversionConfig
 
-# 配置日志
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -19,21 +19,19 @@ logger = logging.getLogger('PPTConverter')
 
 
 def clean_pptx(input_pptx: Path, output_pptx: Path):
-    """
-    检查并删除损坏的文件，生成一个干净的pptx
-    """
+
     temp_dir = Path("temp_pptx")
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
     temp_dir.mkdir()
 
-    # 解压
+
     try:
         with zipfile.ZipFile(input_pptx, 'r') as zf:
             for name in zf.namelist():
                 try:
                     zf.read(name)
-                    # 保存到临时目录
+
                     target_path = temp_dir / name
                     target_path.parent.mkdir(parents=True, exist_ok=True)
                     with open(target_path, "wb") as f:
@@ -41,7 +39,7 @@ def clean_pptx(input_pptx: Path, output_pptx: Path):
                 except Exception as e:
                     logger.warning(f"⚠️ 跳过损坏文件: {name} ({e})")
 
-        # 重新打包
+
         with zipfile.ZipFile(output_pptx, 'w') as zf_out:
             for root, dirs, files in os.walk(temp_dir):
                 for file in files:
@@ -60,13 +58,7 @@ def clean_pptx(input_pptx: Path, output_pptx: Path):
 
 
 def pptx_to_md(input_path, output_dir, **kwargs):
-    """
-    将PPTX文件转换为Markdown
-    :param input_path: PPTX文件路径
-    :param output_dir: 输出目录
-    :param kwargs: 额外参数
-    :return: 转换结果字典
-    """
+
     try:
         input_path = Path(input_path)
         output_dir = Path(output_dir)
@@ -74,18 +66,18 @@ def pptx_to_md(input_path, output_dir, **kwargs):
 
         logger.info(f"开始处理PPT文件: {input_path}")
 
-        # 准备输出路径
+
         output_md = output_dir / f"{input_path.stem}.md"
         image_dir = output_dir / "img"
         image_dir.mkdir(exist_ok=True)
 
-        # 清理坏文件
+
         cleaned_pptx_path = output_dir / f"{input_path.stem}_cleaned.pptx"
         if not clean_pptx(input_path, cleaned_pptx_path):
             logger.warning(f"使用原始PPT文件继续转换: {input_path}")
             cleaned_pptx_path = input_path
 
-        # 执行转换
+
         convert(
             ConversionConfig(
                 pptx_path=cleaned_pptx_path,
@@ -95,7 +87,6 @@ def pptx_to_md(input_path, output_dir, **kwargs):
             )
         )
 
-        # 如果生成了清理后的文件且与原文件不同，则删除临时文件
         if cleaned_pptx_path != input_path and cleaned_pptx_path.exists():
             cleaned_pptx_path.unlink()
 

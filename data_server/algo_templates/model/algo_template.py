@@ -4,10 +4,7 @@ from datetime import datetime
 
 
 class AlgoTemplate(Base):
-    """
-    算法模板模型
-    对应数据库表：algo_templates
-    """
+
     __tablename__ = "algo_templates"
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)

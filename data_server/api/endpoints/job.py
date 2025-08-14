@@ -240,7 +240,7 @@ def create_pipline_job(
     try:
         if config.job_source == "tool":
             return response_fail(msg="tool can't run pipline")
-        # 将前端yaml字符串转换为后端所需的yaml字符串
+
         yaml_config = parse_yaml_config(config.dslText,config)
         result = create_pipline_new_job(
             job_cfg=config, user_id=user_id, user_name=user_name, user_token=user_token,yaml_config=yaml_config)

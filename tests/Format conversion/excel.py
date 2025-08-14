@@ -4,7 +4,7 @@ import logging
 import pandas as pd
 from pathlib import Path
 
-# 配置日志
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -17,19 +17,13 @@ logger = logging.getLogger('ExcelConverter')
 
 
 def excel_to_formats(input_path, output_dir, **kwargs):
-    """
-    将Excel文件转换为多种格式
-    :param input_path: Excel文件路径
-    :param output_dir: 输出目录
-    :param kwargs: 额外参数
-    :return: 转换结果字典
-    """
+
     try:
         input_path = Path(input_path)
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # 错误日志文件
+
         error_log_path = output_dir / "conversion_errors.log"
 
         def log_error(msg):
@@ -52,7 +46,7 @@ def excel_to_formats(input_path, output_dir, **kwargs):
             sanitized_sheet_name = sheet_name.replace(" ", "_").replace("/", "_")
             file_prefix = f"output_data_from_excel_{sanitized_sheet_name}"
 
-            # 保存JSON
+
             try:
                 json_path = output_dir / f"{file_prefix}.json"
                 df.to_json(json_path, orient='records', force_ascii=False, indent=4)
@@ -63,7 +57,7 @@ def excel_to_formats(input_path, output_dir, **kwargs):
                 log_error(err_msg)
                 results[f"json_{sanitized_sheet_name}"] = f"失败: {str(e)}"
 
-            # 保存CSV
+
             try:
                 csv_path = output_dir / f"{file_prefix}.csv"
                 df.to_csv(csv_path, index=False)
@@ -74,7 +68,6 @@ def excel_to_formats(input_path, output_dir, **kwargs):
                 log_error(err_msg)
                 results[f"csv_{sanitized_sheet_name}"] = f"失败: {str(e)}"
 
-            # 保存Parquet
             try:
                 parquet_path = output_dir / f"{file_prefix}.parquet"
                 df.to_parquet(parquet_path, engine='pyarrow', index=False)

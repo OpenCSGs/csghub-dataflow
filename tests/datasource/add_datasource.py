@@ -6,12 +6,7 @@ from sqlalchemy.orm import Session
 
 def add_datasource():
 
-    '''
-    MYSQL5.6:
-    host: home.sxcfx.cn  端口 18125   root  密码：nC9@xZ4f!G7jM^2p
-    MYSQL8:
-    host: home.sxcfx.cn  端口 18126   root  密码：zQ5*yH2m!B8pD^3x
-    '''
+
     extra_config = {
       "mysql": {
         "source": {
@@ -45,5 +40,5 @@ def add_datasource():
 
 
 if __name__ == '__main__':
-    # 需要的时候执行添加数据采集源信息
+
     add_datasource()

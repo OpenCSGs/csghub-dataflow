@@ -35,10 +35,10 @@ def format_task(task_id: int, user_name: str, user_token: str):
         db_session: Session = get_sync_session()
         format_task: DataFormatTask = FormatifyManager.get_formatify_task(db_session, task_id)
         tmp_path = get_format_folder_path(format_task.task_uid)
-        insert_formatity_task_log_info(format_task.task_uid, f"创建临时目录：{tmp_path}")
+        insert_formatity_task_log_info(format_task.task_uid, f"Create a temporary directory：{tmp_path}")
         ensure_directory_exists(tmp_path)
-        # 下载源目录
-        insert_formatity_task_log_info(format_task.task_uid, f"开始下载源目录...")
+
+        insert_formatity_task_log_info(format_task.task_uid, f"Start downloading the source directory...")
         ingesterCSGHUB = load_ingester(
             dataset_path=tmp_path,
             repo_id=format_task.from_csg_hub_repo_id,
@@ -47,19 +47,19 @@ def format_task(task_id: int, user_name: str, user_token: str):
             user_token=user_token,
         )
         ingester_result = ingesterCSGHUB.ingest()
-        insert_formatity_task_log_info(format_task.task_uid, f"下载源目录完成...目录地址：{ingester_result}")
+        insert_formatity_task_log_info(format_task.task_uid, f"Download of the source directory completed... Directory address：{ingester_result}")
         work_dir = Path(tmp_path).joinpath('work')
-        insert_formatity_task_log_info(format_task.task_uid, f"开始转换文件...")
-        # 转换
+        insert_formatity_task_log_info(format_task.task_uid, f"Start converting files...")
+
         format_task_func(
             tmp_path=ingester_result,
             from_type=format_task.from_data_type,
             to_type=format_task.to_data_type,
             task_uid=format_task.task_uid,
         )
-        insert_formatity_task_log_info(format_task.task_uid, f"转换文件完成...")
-        insert_formatity_task_log_info(format_task.task_uid, f"开始上传目标目录...")
-        # 上传目标目录
+        insert_formatity_task_log_info(format_task.task_uid, f"File conversion completed...")
+        insert_formatity_task_log_info(format_task.task_uid, f"Start uploading the target directory...")
+
         exporter = load_exporter(
             export_path=ingester_result,
             repo_id=format_task.to_csg_hub_repo_id,
@@ -70,7 +70,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
             work_dir=str(work_dir)
         )
         exporter.export_large_folder()
-        insert_formatity_task_log_info(format_task.task_uid, '上传完成...')
+        insert_formatity_task_log_info(format_task.task_uid, 'Upload completed...')
         format_task.task_status = DataFormatTaskStatusEnum.COMPLETED.value
         db_session.commit()
         pass
@@ -78,13 +78,13 @@ def format_task(task_id: int, user_name: str, user_token: str):
         traceback.print_exc()
         format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
         db_session.commit()
-        insert_formatity_task_log_error(format_task.task_uid, f"转换任务失败: {str(e)}")
+        insert_formatity_task_log_error(format_task.task_uid, f"The conversion task failed.: {str(e)}")
     finally:
         pass
-        # 删除tmp_path
+
         if tmp_path:
             shutil.rmtree(tmp_path)
-            insert_formatity_task_log_info(format_task.task_uid, f"删除临时目录：{tmp_path}")
+            insert_formatity_task_log_info(format_task.task_uid, f"Delete the temporary directory：{tmp_path}")
 
 
 def format_task_func(
@@ -94,7 +94,7 @@ def format_task_func(
         task_uid: str
 ):
     insert_formatity_task_log_info(task_uid,
-                                   f"转换目录：{tmp_path}，源文件类型：{getFormatTypeName(from_type)}，目标文件类型：{getFormatTypeName(to_type)}")
+                                   f"Convert directory：{tmp_path}，Source file type：{getFormatTypeName(from_type)}，Target file type：{getFormatTypeName(to_type)}")
     match from_type:
         case DataFormatTypeEnum.Excel.value:
             match to_type:
@@ -126,17 +126,16 @@ def traverse_files(file_path: str, func, task_uid):
 
 def convert_excel_to_csv(file_path: str, task_uid):
     if file_path.lower().endswith(('.xlsx', '.xls')):
-        insert_formatity_task_log_info(task_uid, f'源文件地址：{file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
         try:
             df = pd.read_excel(file_path)
             new_file = os.path.splitext(file_path)[0] + '.csv'
             df.to_csv(new_file, index=False)
-            insert_formatity_task_log_info(task_uid, f'转换文件 {new_file} 成功')
+            insert_formatity_task_log_info(task_uid, f'The conversion of the file {new_file} was successful.')
             os.remove(file_path)
             return True
         except Exception as e:
-            print(f"转换文件 {file_path} 时出错: {e}")
-            insert_formatity_task_log_error(task_uid, f"转换文件 {file_path} 时出错: {e}")
+            insert_formatity_task_log_error(task_uid, f"An error occurred while converting the file {file_path}: {e}")
             return False
     else:
         return True
@@ -144,37 +143,35 @@ def convert_excel_to_csv(file_path: str, task_uid):
 
 def convert_excel_to_json(file_path: str, task_uid):
     if file_path.lower().endswith(('.xlsx', '.xls')):
-        insert_formatity_task_log_info(task_uid, f'源文件地址：{file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
         try:
             df = pd.read_excel(file_path)
             new_file = os.path.splitext(file_path)[0] + '.json'
             df.to_json(new_file, orient='records', force_ascii=False)
-            insert_formatity_task_log_info(task_uid, f'转换文件 {new_file} 成功')
+            insert_formatity_task_log_info(task_uid, f'The file {new_file} has been converted successfully.')
             os.remove(file_path)
             return True
         except Exception as e:
-            print(f"转换文件 {file_path} 时出错: {e}")
-            insert_formatity_task_log_error(task_uid, f"转换文件 {file_path} 时出错: {e}")
+            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
 
             return False
     else:
-        # 非 Excel 文件，跳过
+
         return True
 
 
 def convert_excel_to_parquet(file_path: str, task_uid):
     if file_path.lower().endswith(('.xlsx', '.xls')):
-        insert_formatity_task_log_info(task_uid, f'源文件地址：{file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
         try:
             df = pd.read_excel(file_path)
             new_file = os.path.splitext(file_path)[0] + '.parquet'
             df.to_parquet(new_file + '.parquet', index=False)
-            insert_formatity_task_log_info(task_uid, f'转换文件 {new_file} 成功')
+            insert_formatity_task_log_info(task_uid, f'The file {new_file} has been converted successfully.')
             os.remove(file_path)
             return True
         except Exception as e:
-            print(f"转换文件 {file_path} 时出错: {e}")
-            insert_formatity_task_log_error(task_uid, f"转换文件 {file_path} 时出错: {e}")
+            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
             return False
     else:
         return True
@@ -182,7 +179,7 @@ def convert_excel_to_parquet(file_path: str, task_uid):
 
 def convert_word_to_markdown(file_path: str, task_uid):
     if file_path.lower().endswith(('.docx', '.doc')):
-        insert_formatity_task_log_info(task_uid, f'源文件地址：{file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
         try:
             with open(file_path, "rb") as docx_file:
                 result = mammoth.convert_to_html(docx_file)
@@ -191,26 +188,25 @@ def convert_word_to_markdown(file_path: str, task_uid):
             markdown_file_path = os.path.splitext(file_path)[0] + '.md'
             with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
                 md_file.write(markdown_content)
-            insert_formatity_task_log_info(task_uid, f'转换文件 {markdown_file_path} 成功')
+            insert_formatity_task_log_info(task_uid, f'The file {markdown_file_path} has been converted successfully.')
             os.remove(file_path)
             return True
         except Exception as e:
-            print(f"转换文件 {file_path} 时出错: {e}")
-            insert_formatity_task_log_error(task_uid, f"转换文件 {file_path} 时出错: {e}")
+            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
             return False
     else:
-        # 非 Word 文件，跳过
+
         return True
 
 
 def convert_ppt_to_markdown(file_path: str, task_uid):
     if file_path.lower().endswith(('.pptx', '.ppt')):
-        insert_formatity_task_log_info(task_uid, f'源文件地址：{file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
         try:
             prs = Presentation(file_path)
             markdown_content = ""
             for i, slide in enumerate(prs.slides):
-                markdown_content += f"# 幻灯片 {i + 1}\n\n"
+                markdown_content += f" PPT {i + 1}\n\n"
                 for shape in slide.shapes:
                     if hasattr(shape, "text") and shape.text.strip():
                         text_content = shape.text.strip()
@@ -222,13 +218,12 @@ def convert_ppt_to_markdown(file_path: str, task_uid):
             markdown_file_path = os.path.splitext(file_path)[0] + '.md'
             with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
                 md_file.write(markdown_content)
-            insert_formatity_task_log_info(task_uid, f'转换文件 {markdown_file_path} 成功')
+            insert_formatity_task_log_info(task_uid, f'The file {markdown_file_path} has been converted successfully.')
             os.remove(file_path)
             return True
         except Exception as e:
-            print(f"转换文件 {file_path} 时出错: {e}")
-            insert_formatity_task_log_error(task_uid, f"转换文件 {file_path} 时出错: {e}")
+            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
             return False
     else:
-        # 非 PPT 文件，跳过
+
         return True

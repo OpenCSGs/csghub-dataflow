@@ -44,70 +44,34 @@ def get_redis_client_by_db_number(number: int) -> str:
 
 
 def get_celery_worker_redis_db():
-    """
-    获取Celery工作进程的Redis数据库连接。
 
-    Returns:
-        返回连接到Redis数据库（数据库编号为5）的客户端对象。
-    """
     return get_redis_client_by_db_number(5)
 
 
 def get_celery_worker_key():
-    """
-    获取Celery工作进程的Redis worker list key。
 
-    Returns:
-        返回字符串，表示Celery工作进程使用的Redis worker list key。
-    """
     return 'celery-worker-server-list'
 
 def get_celery_process_list_key(work_name,current_ip):
-    """
-    获取Celery工作进程的Redis process list key。
-    Args:
-        work_name: 工作名称
-        current_ip: 当前IP地址
 
-    Returns:
-        返回字符串，表示Celery工作进程使用的Redis process list key。
-    """
     return f"{work_name}_{current_ip}_processes"
 
 
 def get_celery_kill_process_list_key(work_name,current_ip):
-    """
-    获取Celery工作进程的Redis kill process list key。
-    Args:
-        work_name: 工作名称
-        current_ip: 当前IP地址
 
-    Returns:
-        返回字符串，表示Celery工作进程使用的Redis kill process list key。
-    """
     return f"{work_name}_{current_ip}_kill_processes"
 
 
 
 def get_celery_task_process_real_key(task_uid):
-    """
-    获取Celery任务详细信息的Redis key。
 
-    Returns:
-        返回字符串，表示Celery任务详细信息的Redis key。
-    """
     return f"celery-pipline-task:{task_uid}"
 
 def get_celery_task_process_resource_key(task_uid):
     return f"celery-pipline-task-resource:{task_uid}"
 
 def get_celery_info_details_key(work_name):
-    """
-    获取Celery任务详细信息的Redis key。
 
-    Returns:
-        返回字符串，表示Celery任务详细信息的Redis key。
-    """
     return f'celery-worker-time:{work_name}'
 
 
@@ -152,7 +116,7 @@ def get_sync_session() -> Session:  # pragma: no cover
     return _SYNC_SESSIONMAKER()
 
 
-# MONG 相关
+
 MONGO_URI = os.getenv('MONG_HOST_URL', 'mongodb://root:example@net-power.9free.com.cn:18123')
 
 

@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 
-# DataFormatTask 请求类
+
 class DataFormatTaskRequest(BaseModel):
     name: Optional[str] = None
     des: Optional[str] = None

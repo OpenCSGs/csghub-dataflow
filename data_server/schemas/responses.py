@@ -22,7 +22,7 @@ class JobsResponse(BaseModel):
 
 
 class JobListResponse(BaseModel):
-    """Job列表分页响应模型"""
+
     data: List["ShowJob"] = []
     total: int = 0
     page: int = 1

@@ -5,7 +5,7 @@ import concurrent.futures
 from pathlib import Path
 from typing import List, Dict, Callable, Optional
 
-# 配置日志系统
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -37,10 +37,10 @@ class ConversionTask:
             self.start_time = time.time()
             logger.info(f'Starting conversion task {self.task_id}: {self.file_path}')
 
-            # 确保输出目录存在
+
             self.output_dir.mkdir(parents=True, exist_ok=True)
 
-            # 执行转换函数
+
             self.result = self.converter_func(
                 str(self.file_path), 
                 str(self.output_dir),
@@ -74,7 +74,7 @@ class ParallelConverter:
         logger.info(f'Added task {task.task_id} to queue')
 
     def run_all(self) -> Dict[str, ConversionTask]:
-        """执行所有任务并返回结果"""
+
         logger.info(f'Starting {len(self.tasks)} conversion tasks')
         futures = {
             self.executor.submit(task.execute): task 
@@ -87,7 +87,7 @@ class ParallelConverter:
             try:
                 future.result()
             except Exception:
-                # 错误已在任务执行中记录
+
                 pass
             results[task.task_id] = task
 
@@ -97,12 +97,12 @@ class ParallelConverter:
     def shutdown(self):
         self.executor.shutdown()
 
-# 导入转换函数
+
 from excel import excel_to_formats
 from ppt import pptx_to_md
 from word import docx_to_md_with_images
 
-# 格式转换映射
+
 FORMAT_CONVERTERS = {
     '.xlsx': excel_to_formats,
     '.xls': excel_to_formats,
@@ -114,14 +114,8 @@ def convert_files(
         file_paths: List[str], 
         output_dir: str, 
         max_workers: Optional[int] = None,** kwargs):
-    """
-    并行转换多个文件
-    :param file_paths: 要转换的文件路径列表
-    :param output_dir: 输出目录
-    :param max_workers: 最大工作线程数
-    :param kwargs: 传递给转换函数的额外参数
-    :return: 转换结果字典
-    """
+
+
     converter = ParallelConverter(max_workers=max_workers)
     output_root = Path(output_dir)
 
@@ -131,18 +125,17 @@ def convert_files(
             logger.error(f'File not found: {file_path}')
             continue
 
-        # 获取文件扩展名
+
         ext = file_path.suffix.lower()
         if ext not in FORMAT_CONVERTERS:
             logger.error(f'Unsupported file format: {ext} for file {file_path}')
             continue
 
-        # 创建任务ID
         task_id = f'task_{i}_{file_path.stem}'
-        # 创建输出子目录
+
         task_output_dir = output_root / file_path.stem
 
-        # 创建转换任务
+
         task = ConversionTask(
             task_id=task_id,
             file_path=str(file_path),
@@ -152,13 +145,13 @@ def convert_files(
         )
         converter.add_task(task)
 
-    # 执行所有任务
+
     results = converter.run_all()
     converter.shutdown()
     return results
 
 if __name__ == '__main__':
-    # 示例用法
+
     files_to_convert = [
         'data/Excel/excel.xlsx',
         'data/ppt/ppt.pptx',
@@ -171,7 +164,7 @@ if __name__ == '__main__':
         max_workers=3
     )
     
-    # 打印汇总结果
+
     print('\n转换结果汇总:')
     for task_id, task in results.items():
         status = '成功' if task.status == 'completed' else '失败'

@@ -22,9 +22,7 @@ _workflow_thread: threading.Thread = None
 
 
 def celery_status_scheduled_task():
-    """
-    定时检测celery状态
-    """
+
     try:
         pass
     except Exception as e:
@@ -46,11 +44,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize managers (DB, Connection, Team)
         await init_managers()
         logger.info("Managers initialized successfully")
-        # 初始化定时任务调度器
+
         # _scheduler = BackgroundScheduler()
         # _scheduler.add_job(
         #     func=celery_status_scheduled_task,
-        #     trigger=IntervalTrigger(seconds=3),  # 每3秒执行一次
+        #     trigger=IntervalTrigger(seconds=3),
         #     id='celery_status_scheduled_task',
         #     name='celery_status_scheduled_task Task',
         #     replace_existing=True
@@ -123,7 +121,7 @@ async def log_requests(request: Request, call_next):
         except Exception as e:
             logger.warning(f"Could not read request body: {e}")
     
-    # 执行请求
+
     response = await call_next(request)
     
     

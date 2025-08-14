@@ -2,7 +2,7 @@ services:
 
   celery_worker1:
     restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/dataflow  # 使用配置好的镜像
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/dataflow
     env_file:
       - .env
     volumes:

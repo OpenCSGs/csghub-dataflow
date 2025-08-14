@@ -16,12 +16,14 @@ services:
     ports:
       - "5433:${DATABASE_PORT}"
   celery_redis:
-    restart: unless-stopped
-    image: redis:latest  # 使用配置好的镜像
-    volumes:
-      - celery_redis_data:/data  # 挂载数据卷以持久化 Redis 数据
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
+    container_name: redis
+    restart: always
     ports:
-      - "6379:6379"  # 将主机的 6379 端口映射到容器的 6379 端口
+      - "6379:6379"
+    volumes:
+      - celery_redis_data:/data
+
   api_server:
     build: .
     env_file:
@@ -34,13 +36,17 @@ services:
     depends_on:
       - postgres_db
     # command: ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
-  mongo_db: # 新增的MongoDB服务
-    restart: unless-stopped
-    image: mongo:latest  # 使用最新的MongoDB镜像
-    volumes:
-      - mongo_data:/data/db  # 挂载数据卷以持久化MongoDB数据
+  mongo_db:
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
+    container_name: mongo_db
+    restart: always
     ports:
-      - "27017:27017"  # 将主机的27017端口映射到容器的27017端口
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example1
 volumes:
   postgres_db:
   celery_redis_data:

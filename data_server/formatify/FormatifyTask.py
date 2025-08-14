@@ -9,13 +9,7 @@ def run_format_task(task_id: int,user_name:str,user_token:str):
 
 
 def stop_celery_task(task_uid: str):
-    """
-    停止celery任务
-    Args:
-        task_uid (str): 任务UID
-    Returns:
-        bool: 执行操作是否成功
-    """
+
     task_result = AsyncResult(task_uid, app=celery_app)
     if not task_result:
         return False
