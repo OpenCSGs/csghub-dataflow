@@ -161,7 +161,8 @@ celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent
 
 Notes: 
 - `kenlm`, `simhash-pybind`, `opencc==1.1.8`, `imagededup` in file `environments/science_requires.txt` are only support X86 platform. Remove them if you are using ARM platform. 
--  The configuration information of `REDIS_HOST_URL` and `MONG_HOST_URL` in `data-flow` and `data-flow-celery` must be consistent.
+- The configuration information of `REDIS_HOST_URL` and `MONG_HOST_URL` in `data-flow` and `data-flow-celery` must be consistent.
+- If you want to use the data annotation service, please install and enable the **[Label Studio](https://github.com/OpenCSGs/label-studio)** service. Additionally, you need to set the `STUDIO_JUMP_URL` variable of the `data-flow` service to the address of the `Label Studio` service.
 
 ## 🛣️ Roadmap
 Upcoming:  

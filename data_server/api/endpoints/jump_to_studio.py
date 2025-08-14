@@ -21,10 +21,9 @@ async def jump_to_studio(
     """Jump to studio with credentials from headers."""
 
     if user_name:
-        target_url = f"{BASE_STUDIO_URL}?email={user_name}@qq.com"
+        target_url = f"{BASE_STUDIO_URL}/user/login1/?email={user_name}@qq.com"
     else:
-
-        target_url = f"{BASE_STUDIO_URL}?email=z275748353@qq.com"
+        target_url = f"{BASE_STUDIO_URL}/user/login1/?email=z275748353@qq.com"
     
     # Prepare the JSON payload with credentials from headers
     payload = {

@@ -1,6 +1,7 @@
 from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from data_server.database.session import initialize_database
 from data_server.api.api_router import api_router
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -67,6 +68,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 stop_event=_stop_event
             )
             logger.info("Resource workflow watcher initialized successfully")
+
+        # Initialize database data
+        initialize_database()
 
         # Any other initialization code
         logger.info("Application startup complete")

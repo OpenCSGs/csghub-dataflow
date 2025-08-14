@@ -8,14 +8,82 @@ from sqlalchemy import text
 from .session import get_sync_session
 
 
-def execute_initialization_scripts():
+def _execute_sql_file(sql_file):
+    logger.info(f"Executing initialization script: {os.path.basename(sql_file)}")
+    try:
+        with open(sql_file, 'r', encoding='utf-8') as f:
+            sql_content = f.read()
+        
+        insert_statements = extract_insert_statements(sql_content)
+        successful_count = 0
+        skipped_count = 0
+        
+        for statement in insert_statements:
+            if statement.strip():
+                with get_sync_session() as session:
+                    try:
+                        with session.begin():
+                            processed_statement = preprocess_sql_statement(statement)
+                            session.execute(text(processed_statement))
+                        successful_count += 1
+                    except Exception as e:
+                        if ("duplicate key" in str(e).lower() or 
+                            "already exists" in str(e).lower() or
+                            "unique constraint" in str(e).lower() or
+                            "重复键" in str(e) or
+                            "唯一约束" in str(e) or
+                            "已经存在" in str(e)):
+                            logger.debug(f"Skipping duplicate data in {os.path.basename(sql_file)}: {str(e)[:100]}...")
+                            skipped_count += 1
+                            continue
+                        elif "syntax error" in str(e).lower() or "unterminated" in str(e).lower():
+                            logger.warning(f"Skipping malformed SQL statement in {os.path.basename(sql_file)}: {str(e)[:100]}...")
+                            logger.debug(f"Problematic statement: {statement[:300]}...")
+                            skipped_count += 1
+                            continue
+                        else:
+                            logger.error(f"Error executing statement in {os.path.basename(sql_file)}: {e}")
+                            logger.error(f"Failed statement: {statement[:200]}...")
+                            continue
+        
+        logger.info(f"Processed {os.path.basename(sql_file)}: {successful_count} successful, {skipped_count} skipped")
+    except Exception as e:
+        logger.error(f"Error processing file {sql_file}: {e}")
+
+def initialize_table(table_name: str):
     """
-    Execute the SQL script for database initialization
-    From data_server/database/Initialization_data directory reads all. SQL file
-    And execute the INSERT statement within it to initialize the data
+    Initializes a single table by finding and executing its corresponding .sql file.
     """
     try:
-        # Obtain the path of the initialization script directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        init_data_dir = os.path.join(current_dir, "Initialization_data")
+        
+        if not os.path.exists(init_data_dir):
+            logger.warning(f"Initialization data directory not found: {init_data_dir}")
+            return
+
+        # Find the sql file corresponding to the table name
+        # Look for exact match: table_name.sql
+        target_filename = f"{table_name}.sql"
+        sql_file = os.path.join(init_data_dir, target_filename)
+        
+        if not os.path.exists(sql_file):
+            sql_file = None
+
+        if sql_file:
+            _execute_sql_file(sql_file)
+        else:
+            logger.warning(f"No SQL initialization file found for table: {table_name}")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize table {table_name}: {e}")
+        raise
+
+def execute_initialization_scripts():
+    """
+    Execute all SQL scripts for database initialization.
+    """
+    try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         init_data_dir = os.path.join(current_dir, "Initialization_data")
         
@@ -23,68 +91,18 @@ def execute_initialization_scripts():
             logger.warning(f"Initialization data directory not found: {init_data_dir}")
             return
         
-        # get All Sql Files
         sql_files = glob.glob(os.path.join(init_data_dir, "*.sql"))
         
         if not sql_files:
             logger.info("No SQL initialization files found")
             return
         
-        logger.info(f"Found {len(sql_files)} SQL initialization files")
+        logger.info(f"Found {len(sql_files)} SQL initialization files for full initialization.")
         
-        for sql_file in sorted(sql_files):  # sort_by_file_name_to_ensure_the_execution_order
-            logger.info(f"Executing initialization script: {os.path.basename(sql_file)}")
-            
-            try:
-                with open(sql_file, 'r', encoding='utf-8') as f:
-                    sql_content = f.read()
+        for sql_file in sorted(sql_files):
+            _execute_sql_file(sql_file)
                 
-                # Extract the INSERT statement (ignore table creation and other statements)
-                insert_statements = extract_insert_statements(sql_content)
-                
-                successful_count = 0
-                skipped_count = 0
-                
-                for statement in insert_statements:
-                    if statement.strip():
-                        # Execute each INSERT statement in its own transaction
-                        with get_sync_session() as session:
-                            try:
-                                with session.begin():
-
-                                    processed_statement = preprocess_sql_statement(statement)
-                                    session.execute(text(processed_statement))
-                                successful_count += 1
-                            except Exception as e:
-                                # If it is a repeated key error, skip (the data already exists)
-                                if ("duplicate key" in str(e).lower() or 
-                                    "already exists" in str(e).lower() or
-                                    "unique constraint" in str(e).lower() or
-                                    "重复键" in str(e) or  # adapt-to-chinese-error-messages
-                                    "唯一约束" in str(e) or # adapt-to-chinese-error-messages
-                                    "已经存在" in str(e)): # adapt-to-chinese-error-messages
-                                    logger.debug(f"Skipping duplicate data in {os.path.basename(sql_file)}: {str(e)[:100]}...")
-                                    skipped_count += 1
-                                    continue
-                                elif "syntax error" in str(e).lower() or "unterminated" in str(e).lower():
-                                    logger.warning(f"Skipping malformed SQL statement in {os.path.basename(sql_file)}: {str(e)[:100]}...")
-                                    logger.debug(f"Problematic statement: {statement[:300]}...")
-                                    skipped_count += 1
-                                    continue
-                                else:
-                                    logger.error(f"Error executing statement in {os.path.basename(sql_file)}: {e}")
-                                    logger.error(f"Failed statement: {statement[:200]}...")
-                                    # Continue with next statement instead of raising
-                                    continue
-                
-                logger.info(f"Processed {os.path.basename(sql_file)}: {successful_count} successful, {skipped_count} skipped")
-                
-            except Exception as e:
-                logger.error(f"Error processing file {sql_file}: {e}")
-                # Continue with next file instead of raising
-                continue
-                
-        logger.info("Database initialization completed successfully")
+        logger.info("Database full initialization scan completed successfully")
                 
     except Exception as e:
         logger.error(f"Failed to execute initialization scripts: {e}")
@@ -113,7 +131,7 @@ def preprocess_sql_statement(statement):
         
 
 
-        fixed_values = fix_quoted_strings(values_part)
+        fixed_values = fix_quoted_strings(values_part).replace('\\n', '\n')
         
 
         table_part = statement[:values_match.start()]
