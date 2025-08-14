@@ -1,0 +1,14 @@
+services:
+
+  celery_worker1:
+    restart: unless-stopped
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/dataflow
+    env_file:
+      - .env
+    volumes:
+      # - .:/dataflow
+      - ${DATA_DIR}:${DATA_DIR}
+    command: >
+      sh -c "
+        celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet -n NODENAME1
+      "

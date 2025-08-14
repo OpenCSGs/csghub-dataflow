@@ -1,9 +1,14 @@
 import json
 from concurrent.futures import ProcessPoolExecutor
-import os
+import os, uuid
 
-exclude_fields_config=['buildin', 'name', 'template_id', 'description', 'type', 'job_source']
+exclude_fields_config=['buildin', 'name', 'template_id', 'description', 'type', 'job_source', 'dslText', 'is_run', 'task_run_time']
 executor = None
+
+
+def greate_task_uid():
+
+    return str(uuid.uuid4())
 
 def read_jsonl_to_list(filepath):
     data_list = [] 

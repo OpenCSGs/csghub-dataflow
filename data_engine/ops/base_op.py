@@ -11,6 +11,11 @@ from data_engine.utils.mm_utils import size_to_bytes
 from data_engine.utils.process_utils import calculate_np
 from data_engine.utils.registry import Registry
 
+from data_celery.mongo_tools.tools import (insert_pipline_job_run_task_log_error,
+                                           insert_pipline_job_run_task_log_info,
+                                           insert_pipline_job_run_task_log_debug,
+                                           set_pipline_job_operator_status,OperatorStatusEnum)
+
 OPERATORS = Registry('Operators')
 UNFORKABLE = Registry('Unforkable')
 
@@ -141,6 +146,9 @@ class OP:
         else:
             self.accelerator = self._accelerator
 
+        self.pipline_index = 0
+        self.job_uid = ""
+
         # parameters to determind the number of procs for this op
         self.num_proc = kwargs.get('num_proc', None)
         self.cpu_required = kwargs.get('cpu_required', 1)
@@ -170,9 +178,11 @@ class OP:
     def runtime_np(self):
         op_proc = calculate_np(self._name, self.mem_required,
                                self.cpu_required, self.num_proc,
-                               self.use_cuda())
+                               self.use_cuda(),job_uid=self.job_uid,run_op_index=self.pipline_index)
         logger.debug(
             f'Op [{self._name}] running with number of procs:{op_proc}')
+        insert_pipline_job_run_task_log_debug(self.job_uid,f'Op [{self._name}] running with number of procs:{op_proc}',
+                                              operator_name=self._name,operator_index=self.pipline_index)
         return op_proc
 
     def remove_extra_parameters(self, param_dict, keys=None):
@@ -249,16 +259,30 @@ class Mapper(OP):
         raise NotImplementedError
 
     def run(self, dataset, *, exporter=None, tracer=None):
-        new_dataset = dataset.map(
-            self.process,
-            num_proc=self.runtime_np(),
-            with_rank=self.use_cuda(),
-            desc=self._name + '_process',
-        )
-        if tracer:
-            tracer.trace_mapper(self._name, dataset, new_dataset,
-                                self.text_key)
-        return new_dataset
+        insert_pipline_job_run_task_log_info(self.job_uid, f"starting mapper job", operator_name=self._name,
+                                             operator_index=self.pipline_index)
+        set_pipline_job_operator_status(self.job_uid,OperatorStatusEnum.Processing,self._name,self.pipline_index)
+        try:
+            new_dataset = dataset.map(
+                self.process,
+                num_proc=self.runtime_np(),
+                with_rank=self.use_cuda(),
+                desc=self._name + '_process',
+            )
+            if tracer:
+                tracer.trace_mapper(self._name, dataset, new_dataset,
+                                    self.text_key,job_uid=self.job_uid,pipeline_index=self.pipline_index)
+            set_pipline_job_operator_status(self.job_uid,OperatorStatusEnum.SUCCESS,self._name,self.pipline_index)
+            return new_dataset
+        except Exception as e:
+            # logger.error(f"An error occurred during data mapping: {e}")
+            set_pipline_job_operator_status(self.job_uid,OperatorStatusEnum.ERROR,self._name,self.pipline_index)
+            insert_pipline_job_run_task_log_error(self.job_uid,
+                                                  f"An error occurred during data mapping: {e}",
+                                                  operator_name=self._name,operator_index=self.pipline_index)
+            raise
+        finally:
+            insert_pipline_job_run_task_log_info(self.job_uid,"ending mapper job",operator_name=self._name,operator_index=self.pipline_index)
 
 
 class Filter(OP):
@@ -308,27 +332,42 @@ class Filter(OP):
         raise NotImplementedError
 
     def run(self, dataset, *, exporter=None, tracer=None):
-        if Fields.stats not in dataset.features:
-            from data_engine.core.data import add_same_content_to_new_column
-            dataset = dataset.map(add_same_content_to_new_column,
-                                  fn_kwargs={
-                                      'new_column_name': Fields.stats,
-                                      'initial_value': {}
-                                  },
+        insert_pipline_job_run_task_log_info(self.job_uid, f"starting filter job", operator_name=self._name,
+                                             operator_index=self.pipline_index)
+        set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.Processing, self._name, self.pipline_index)
+        try:
+            if Fields.stats not in dataset.features:
+                from data_engine.core.data import add_same_content_to_new_column
+                dataset = dataset.map(add_same_content_to_new_column,
+                                      fn_kwargs={
+                                          'new_column_name': Fields.stats,
+                                          'initial_value': {}
+                                      },
+                                      num_proc=self.runtime_np(),
+                                      desc='Adding new column for stats')
+            dataset = dataset.map(self.compute_stats,
                                   num_proc=self.runtime_np(),
-                                  desc='Adding new column for stats')
-        dataset = dataset.map(self.compute_stats,
-                              num_proc=self.runtime_np(),
-                              with_rank=self.use_cuda(),
-                              desc=self._name + '_compute_stats')
-        if self.stats_export_path is not None:
-            exporter.export_compute_stats(dataset, self.stats_export_path)
-        new_dataset = dataset.filter(self.process,
-                                     num_proc=self.runtime_np(),
-                                     desc=self._name + '_process')
-        if tracer:
-            tracer.trace_filter(self._name, dataset, new_dataset)
-        return new_dataset
+                                  with_rank=self.use_cuda(),
+                                  desc=self._name + '_compute_stats')
+            if self.stats_export_path is not None:
+                exporter.export_compute_stats(dataset, self.stats_export_path)
+            new_dataset = dataset.filter(self.process,
+                                         num_proc=self.runtime_np(),
+                                         desc=self._name + '_process')
+            if tracer:
+                tracer.trace_filter(self._name, dataset, new_dataset,job_uid=self.job_uid,pipeline_index=self.pipline_index)
+            set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.SUCCESS, self._name, self.pipline_index)
+            return new_dataset
+        except Exception as e:
+            # logger.error(f"An error occurred during data mapping: {e}")
+            set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.ERROR, self._name, self.pipline_index)
+            insert_pipline_job_run_task_log_error(self.job_uid,
+                                                  f"An error occurred during data filter: {e}",
+                                                  operator_name=self._name, operator_index=self.pipline_index)
+            raise
+        finally:
+            insert_pipline_job_run_task_log_info(self.job_uid, "ending filter job", operator_name=self._name,
+                                                 operator_index=self.pipline_index)
 
 
 class Deduplicator(OP):
@@ -375,15 +414,30 @@ class Deduplicator(OP):
         raise NotImplementedError
 
     def run(self, dataset, *, exporter=None, tracer=None):
-        dataset = dataset.map(self.compute_hash,
-                              num_proc=self.runtime_np(),
-                              with_rank=self.use_cuda(),
-                              desc=self._name + '_compute_hash')
-        show_num = tracer.show_num if tracer else 0
-        new_dataset, dup_pairs = self.process(dataset, show_num)
-        if tracer:
-            tracer.trace_deduplicator(self._name, dataset, dup_pairs)
-        return new_dataset
+        insert_pipline_job_run_task_log_info(self.job_uid, f"starting duplicate job", operator_name=self._name,
+                                             operator_index=self.pipline_index)
+        set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.Processing, self._name, self.pipline_index)
+        try:
+            dataset = dataset.map(self.compute_hash,
+                                  num_proc=self.runtime_np(),
+                                  with_rank=self.use_cuda(),
+                                  desc=self._name + '_compute_hash')
+            show_num = tracer.show_num if tracer else 0
+            new_dataset, dup_pairs = self.process(dataset, show_num)
+            if tracer:
+                tracer.trace_deduplicator(self._name, dataset, dup_pairs,job_uid=self.job_uid,pipeline_index=self.pipline_index)
+            set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.SUCCESS, self._name, self.pipline_index)
+            return new_dataset
+        except Exception as e:
+            # logger.error(f"An error occurred during data mapping: {e}")
+            set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.ERROR, self._name, self.pipline_index)
+            insert_pipline_job_run_task_log_error(self.job_uid,
+                                                  f"An error occurred during data duplicate: {e}",
+                                                  operator_name=self._name, operator_index=self.pipline_index)
+            raise
+        finally:
+            insert_pipline_job_run_task_log_info(self.job_uid, "ending duplicate job", operator_name=self._name,
+                                                 operator_index=self.pipline_index)
 
 
 class Selector(OP):
@@ -413,10 +467,26 @@ class Selector(OP):
         raise NotImplementedError
 
     def run(self, dataset, *, exporter=None, tracer=None):
-        new_dataset = self.process(dataset)
-        if tracer:
-            tracer.trace_filter(self._name, dataset, new_dataset)
-        return new_dataset
+        insert_pipline_job_run_task_log_info(self.job_uid, f"starting select job", operator_name=self._name,
+                                             operator_index=self.pipline_index)
+        set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.Processing, self._name, self.pipline_index)
+        try:
+            new_dataset = self.process(dataset)
+            if tracer:
+                tracer.trace_filter(self._name, dataset, new_dataset,job_uid=self.job_uid,pipeline_index=self.pipline_index)
+            set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.SUCCESS, self._name, self.pipline_index)
+            return new_dataset
+        except Exception as e:
+            # logger.error(f"An error occurred during data mapping: {e}")
+            set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.ERROR, self._name, self.pipline_index)
+            insert_pipline_job_run_task_log_error(self.job_uid,
+                                                  f"An error occurred during data select: {e}",
+                                                  operator_name=self._name, operator_index=self.pipline_index)
+            raise
+        finally:
+            insert_pipline_job_run_task_log_info(self.job_uid, "ending select job", operator_name=self._name,
+                                                 operator_index=self.pipline_index)
+
 
 from dataclasses import dataclass
 from enum import Enum

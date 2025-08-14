@@ -28,10 +28,16 @@ This project inherits the [Apache License 2.0](LICENSE) from Data Juicer.
 
 # 🚀 Quick Start
 
-## Building from Source
+## Building data-flow from Source
 
 ```
 docker build -t data_flow . -f Dockerfile
+```
+
+## Building data-flow-celery from Source
+
+```
+docker build -t data_flow . -f Dockerfile-celery
 ```
 
 ## Prerequisites
@@ -48,7 +54,27 @@ docker run -d --name dataflow-pg \
    opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/csghub/postgres:15.10
 ```
 
-## Installation
+Launch mongoDB container
+
+```bash
+docker run -d --name dataflow-mongo \
+   -p 27017:27017 \
+   -v /home/mongodata:/data/db \
+   -e MONGO_INITDB_ROOT_USERNAME=root \
+   -e MONGO_INITDB_ROOT_PASSWORD=example \
+   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
+```
+
+Launch redis container
+
+```bash
+docker run -d --name dataflow-redis \
+   -p 6379:6379 \
+   -v /home/redisdata:/data \
+   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
+```
+
+## Installation data-flow
 
 ```bash
 
@@ -68,11 +94,40 @@ docker run -d --name dataflow-api -p 8000:8000 \
    -e POSTGRES_PASSWORD=postgres \
    -e DATABASE_HOSTNAME=127.0.0.1 \
    -e DATABASE_PORT=5433 \
+   -e STUDIO_JUMP_URL=https://data-label.opencsg.com \
+   -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
+   -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
    data_flow
 
 ```
 
-## Run server in development mode locally
+## Installation data-flow-celery
+
+```bash
+
+docker run -d --name celery-work -p 8001:8001 \
+   -v /home/celery-data:/data/dataflow_celery \
+   -e DATA_DIR=/data/dataflow_celery \
+   -e CSGHUB_ENDPOINT=https://hub.opencsg.com \
+   -e MAX_WORKERS=99 \
+   -e RAY_ADDRESS=auto \
+   -e RAY_ENABLE=False \
+   -e RAY_LOG_DIR=/home/output \
+   -e API_SERVER=0.0.0.0 \
+   -e API_PORT=8001 \
+   -e ENABLE_OPENTELEMETRY=False \
+   -e POSTGRES_DB=data_flow \
+   -e POSTGRES_USER=postgres \
+   -e POSTGRES_PASSWORD=postgres \
+   -e DATABASE_HOSTNAME=127.0.0.1 \
+   -e DATABASE_PORT=5433 \
+   -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
+   -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
+   data_flow_celery
+
+```
+
+## Run data-flow server in development mode locally
 
 ```bash
 # Create virtual python 3.10 environment
@@ -88,7 +143,25 @@ pip install -r docker/requirements.txt
 uvicorn data_server.main:app --reload
 ```
 
-Notes: `kenlm`, `simhash-pybind`, `opencc==1.1.8`, `imagededup` in file `environments/science_requires.txt` are only support X86 platform. Remove them if you are using ARM platform. 
+## Run data-flow-celery server in development mode locally
+
+```bash
+# Create virtual python 3.10 environment
+conda create -n  dataflow python=3.10
+
+# Install dependencies
+pip install '.[dist]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install '.[tools]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install '.[sci]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+pip install -r docker/requirements.txt
+
+# Run the celery server locally
+celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent
+```
+
+Notes: 
+- `kenlm`, `simhash-pybind`, `opencc==1.1.8`, `imagededup` in file `environments/science_requires.txt` are only support X86 platform. Remove them if you are using ARM platform. 
+-  The configuration information of `REDIS_HOST_URL` and `MONG_HOST_URL` in `data-flow` and `data-flow-celery` must be consistent.
 
 ## 🛣️ Roadmap
 Upcoming:  

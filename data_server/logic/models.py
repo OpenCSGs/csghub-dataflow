@@ -4,12 +4,23 @@ from data_server.schemas import responses
 import yaml
 from yaml.dumper import SafeDumper
 from data_engine.config.config import default_suffixes
+from datetime import datetime
 
 def represent_none(self, _):
     return self.represent_scalar('tag:yaml.org,2002:null', '')
 
 SafeDumper.add_representer(type(None), represent_none)
-    
+
+class OperatorIdentifierItem(BaseModel):
+    name: str
+    index: int
+
+class OperatorIdentifier(BaseModel):
+    job_id: int
+    operators:list[OperatorIdentifierItem]
+
+
+
 class BaseModelExtended(BaseModel):
     @classmethod
     def parse_yaml(cls, file, **kwargs) -> "BaseModelExtended":
@@ -50,7 +61,7 @@ class BaseModelExtended(BaseModel):
         recipe["process"] = reverse_ops(ops_origin)
         return yaml.dump(
             recipe,
-            Dumper=SafeDumper, 
+            Dumper=SafeDumper,
             default_flow_style=False,
             stream=stream,
             **kwargs,
@@ -132,10 +143,15 @@ class Recipe(BaseModelExtended):
     # process schedule: a list of several process operators with their arguments
     process: list[Op]
 
-    @field_validator("process")
-    def process_non_empty(cls, process):
-        assert len(process) > 0
-        return process
+    dslText: Optional[str] = None
+
+    is_run: Optional[bool]= False
+    task_run_time: Optional[datetime] = None
+
+    # @field_validator("process")
+    # def process_non_empty(cls, process):
+    #     assert len(process) > 0
+    #     return process
 
 
 def make_ops(ops: list) -> list[Op]:
@@ -167,7 +183,7 @@ def reverse_ops(ops: list):
         params = {}
         for param in op["params"]:
             params[param["name"]] = param["value"]
-        
+
         ops_reverse.append({op["name"]: (params if len(params) > 0 else None)})
 
     return ops_reverse

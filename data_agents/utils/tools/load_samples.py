@@ -35,7 +35,8 @@ def load_samples():
     # print(f"loading samples from path: {sample_path}")
 
     def parse(path: str):
-        raw_items = path.split("/")
+        separator = "\\" if os.name == "nt" else "/"
+        raw_items = path.split(separator)
         assert len(raw_items) == 3
 
         category = "refine" if "refine" in raw_items[0] else "reproduced"
@@ -51,10 +52,14 @@ def load_samples():
         plan: Plan = Plan()
         plan.category, plan.dataset, plan.sub_dataset = parse(subpath)
         readme_path = os.path.join(os.path.dirname(file), "README.md")
-
-        with open(readme_path) as stream:
-            content = stream.read()
-            plan.readme = content
+        is_windows = os.name == 'nt'
+        if is_windows:
+            with open(readme_path, encoding='utf-8') as stream:
+                content = stream.read()
+        else:
+            with open(readme_path) as stream:  # 在 Linux 和 macOS 下不显式指定编码
+                content = stream.read()
+        plan.readme = content
 
         with open(file) as stream:
             try:

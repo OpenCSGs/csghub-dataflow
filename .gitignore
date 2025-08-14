@@ -3,13 +3,15 @@
 outputs/
 assets/
 temp/
-
+demo/
 # setup
 data_juicer.egg-info/
 py_data_juicer.egg-info/
 py_data_flow.egg-info/
 build/
 dist
+.venv/
+.codesouler
 
 # others
 .DS_Store
@@ -17,3 +19,10 @@ dist
 wandb/
 __pycache__
 .vscode/
+data_server/.nat
+*.nat
+temp_format/
+temp_pipline/
+datasource/json/**
+datasource/csg_hub_server/**
+datasource/parquet/**

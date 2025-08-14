@@ -36,9 +36,12 @@ class IngesterCSGHUB(Ingester):
         """
         Ingest data from different source to DEFAULT_SRC_PATH
         """
-        logger.info(f'downloading repo:{self.repo_id} with branch:{self.branch} to {self._src_path}')
+        # logger.info(f'downloading repo:{self.repo_id} with branch:{self.branch} to {self._src_path}')
         if self.repo_id is not None and len(self.repo_id) > 0:
+            logger.info(f'model_id:{self.repo_id}')
             endpoint = get_endpoint(endpoint=GetHubEndpoint())
+            logger.info(f'endpoint:{endpoint}')
+            logger.info(f'入参:repo_id:{self.repo_id}, repo_type:{REPO_TYPE_DATASET}, revision:{self.branch}, cache_dir:{self._src_path}, endpoint:{endpoint}, token:{self.user_token}')
             result = snapshot_download(
                 repo_id=self.repo_id,
                 repo_type=REPO_TYPE_DATASET,
@@ -47,6 +50,9 @@ class IngesterCSGHUB(Ingester):
                 endpoint=endpoint,
                 token=self.user_token
             )
+            logger.info(f'result:{result}')
             return result
         else:
+            logger.info(f'Using local path: {self._src_path}')
             return self._src_path
+

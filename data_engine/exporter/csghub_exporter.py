@@ -1,4 +1,10 @@
+import traceback
 from typing import List
+
+from pycsghub.cmd.repo_types import RepoType
+from pycsghub.upload_large_folder.main import upload_large_folder_internal
+
+from build.lib.data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
 from data_engine.exporter.base_exporter import Exporter
 import os
 import uuid
@@ -16,22 +22,24 @@ from pathlib import Path
 
 DEFAULT_TARGET_PATH = "/tmp"
 
+
 class ExporterCSGHUB(Exporter):
     def __init__(
-        self,
-        export_path,
-        export_shard_size=0,
-        export_in_parallel=True,
-        num_proc=1,
-        export_ds=True,
-        keep_stats_in_res_ds=False,
-        keep_hashes_in_res_ds=False,
-        export_stats=True,
-        repo_id: str=None,
-        branch: str=None,
-        user_name: str=None,
-        user_token: str=None,
-        work_dir: str=None,
+            self,
+            export_path,
+            export_shard_size=0,
+            export_in_parallel=True,
+            num_proc=1,
+            export_ds=True,
+            keep_stats_in_res_ds=False,
+            keep_hashes_in_res_ds=False,
+            export_stats=True,
+            repo_id: str = None,
+            branch: str = None,
+            user_name: str = None,
+            user_token: str = None,
+            work_dir: str = None,
+            path_is_dir: bool = False,
     ):
         """
         Initialization method.
@@ -47,17 +55,17 @@ class ExporterCSGHUB(Exporter):
             dataset.
         :param export_stats: whether to export the stats of dataset.
         """
-        if Path(export_path).is_dir():
+        if Path(export_path).is_dir() and not path_is_dir:
             export_path = os.path.join(export_path, "x.jsonl")
-            
+
         self.csghub_path = export_path
         # decide to use jsonl format, it's not required, candidates are ["jsonl", "json", "parquet"]
         # self.target_path = os.path.join(DEFAULT_TARGET_PATH, str(uuid.uuid4()) + '.jsonl')
-        self.repo_id=repo_id
-        self.branch=branch
-        self.user_name=user_name
-        self.user_token=user_token
-        self.work_dir=work_dir
+        self.repo_id = repo_id
+        self.branch = branch
+        self.user_name = user_name
+        self.user_token = user_token
+        self.work_dir = work_dir
         super().__init__(
             export_path=export_path,
             export_shard_size=export_shard_size,
@@ -71,9 +79,10 @@ class ExporterCSGHUB(Exporter):
             branch=branch,
             user_name=user_name,
             user_token=user_token,
-            work_dir=work_dir           
+            work_dir=work_dir,
+            path_is_dir=path_is_dir
         )
-    
+
     def export_from_files(self, upload_path: Path):
         """
         Export method for dir with files.
@@ -85,11 +94,32 @@ class ExporterCSGHUB(Exporter):
             logger.info(f'The target dir is empty, no need to upload anything, abort.')
             return None
         self.upload_path = str(upload_path)
+        logger.info(f'Start to upload {upload_path} to repo: {self.repo_id} with branch: {self.branch}')
         self.repo_work_dir = os.path.join(self.work_dir, "_git")
         self._export_common()
         return self.output_branch_name
 
-
+    def export_large_folder(self):
+        try:
+            if self.branch is None:
+                self.branch = 'main'
+                self.branch = self.get_avai_branch(self.branch)
+            logger.info(f'Start to upload {self.export_path} to repo: {self.repo_id} with branch: {self.branch}')
+            upload_large_folder_internal(
+                repo_id=self.repo_id,
+                local_path=self.export_path,
+                repo_type=RepoType.DATASET,
+                revision=self.branch,
+                endpoint=get_endpoint(endpoint=GetHubEndpoint()),
+                token=self.user_token,
+                num_workers=1,
+                print_report=False,
+                print_report_every=1,
+                allow_patterns=None,
+                ignore_patterns=None
+            )
+        except Exception as e:
+            traceback.print_exc()
 
     def export(self, dataset):
         """
@@ -117,22 +147,21 @@ class ExporterCSGHUB(Exporter):
                 os.makedirs(self.upload_path, exist_ok=True)
             if not os.path.exists(self.repo_work_dir):
                 os.makedirs(self.repo_work_dir, exist_ok=True)
-            
-            logger.info(f'Pushing {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}, SDK work dir: {self.repo_work_dir}')
-            
+            logger.info(
+                f'Start to push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name},user_name: {self.user_name}, token: {self.user_token}')
             r = Repository(
                 repo_id=self.repo_id,
                 upload_path=self.upload_path,
                 branch_name=self.output_branch_name,
-                work_dir=self.repo_work_dir,
                 user_name=self.user_name,
                 token=self.user_token,
                 repo_type=REPO_TYPE_DATASET,
                 endpoint=get_endpoint(endpoint=GetHubEndpoint()),
-                copy_files=True
+                work_dir=self.work_dir
             )
             r.upload()
             logger.info(f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
+            #insert_pipline_job_run_task_log_info(job_uid, f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
             if os.path.exists(self.repo_work_dir):
                 logger.info(f'Remove {self.repo_work_dir}')
                 shutil.rmtree(self.repo_work_dir)
@@ -140,9 +169,9 @@ class ExporterCSGHUB(Exporter):
                 logger.info(f'Remove {self.upload_path}')
                 shutil.rmtree(self.upload_path)
         else:
-            self.output_branch_name = 'N/A' 
+            self.output_branch_name = 'N/A'
 
-    def get_avai_branch(self, origin_branch:str) -> str:
+    def get_avai_branch(self, origin_branch: str) -> str:
         action_endpoint = get_endpoint(endpoint=GetHubEndpoint())
         url = f"{action_endpoint}/api/v1/datasets/{self.repo_id}/branches"
         headers = build_csg_headers(
@@ -153,7 +182,7 @@ class ExporterCSGHUB(Exporter):
         response.raise_for_status()
         if response.status_code != 200:
             raise ValueError(f"cannot request repo {self.repo_id} branches")
-        
+
         jsonRes = response.json()
         if jsonRes["msg"] != "OK":
             raise ValueError(f"cannot read repo {self.repo_id} branches")
@@ -168,7 +197,7 @@ class ExporterCSGHUB(Exporter):
         logger.info(f'repo {self.repo_id} all branches: {valid_branches}')
         return self.find_next_version(origin_branch=origin_branch, valid_branches=valid_branches)
 
-    def find_next_version(self, origin_branch:str, valid_branches: List):
+    def find_next_version(self, origin_branch: str, valid_branches: List):
         latestNum = 0
         for b in valid_branches:
             if origin_branch == "main" and re.match(r"^v\d+", b):
@@ -176,14 +205,14 @@ class ExporterCSGHUB(Exporter):
                 num = int(numStr)
                 latestNum = max(latestNum, num)
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):
-                numStr = b[len(origin_branch)+1:]
+                numStr = b[len(origin_branch) + 1:]
                 if not numStr.isdigit():
                     continue
             else:
                 continue
             num = int(numStr)
             latestNum = max(latestNum, num)
-        
+
         if origin_branch == "main":
             if latestNum > 0:
                 return "v" + str(latestNum + 1)

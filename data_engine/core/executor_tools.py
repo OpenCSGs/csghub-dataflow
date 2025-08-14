@@ -83,8 +83,8 @@ if __name__ == "__main__":
         type="Internal",
         repo_id="depenglee/testdepeng",
         branch="main",
-        dataset_path="/Users/lipeng/workspaces/git-devops/data-flow/demo/input",
-        export_path="/Users/lipeng/workspaces/git-devops/data-flow/demo/output",
+        dataset_path="/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/input",
+        export_path="/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/output",
         params=params,
     )
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         user_id="123",
         user_name="depenglee",
         user_token="ab0033c38611468f8807f2f26013d5d1",
-        work_dir="/Users/lipeng/workspaces/git-devops/data-flow/demo/output",
+        work_dir="/Users/zhanglongbin/pythonWork/csghub-dataflow-main/demo/output",
     )
 
     # test = load_tool(tool,  params)

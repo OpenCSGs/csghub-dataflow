@@ -15,6 +15,15 @@ services:
       - ${DATABASE_PORT}
     ports:
       - "5433:${DATABASE_PORT}"
+  celery_redis:
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - celery_redis_data:/data
+
   api_server:
     build: .
     env_file:
@@ -27,5 +36,18 @@ services:
     depends_on:
       - postgres_db
     # command: ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  mongo_db:
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
+    container_name: mongo_db
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example1
 volumes:
   postgres_db:
+  celery_redis_data:
+  mongo_data:

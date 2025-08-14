@@ -1,15 +1,32 @@
 from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from data_server.api.api_router import api_router
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from loguru import logger
 from data_server.agent.deps import init_managers, cleanup_managers
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from data_celery.main import celery_app
+from data_celery.redis_tools.tools import (celery_server_status_is_exists,get_celery_server_list,
+                                           del_celery_server_list)
+from data_celery.utils import get_project_root
 import threading
 import os
 
+from data_server.api.endpoints.op_pic_upload import op_pic_router
+
 _stop_event: threading.Event = None
 _workflow_thread: threading.Thread = None
+
+
+def celery_status_scheduled_task():
+
+    try:
+        pass
+    except Exception as e:
+        logger.error(f"celery_status_scheduled_task 定时任务执行出错: {e}")
 
 
 @asynccontextmanager
@@ -27,6 +44,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize managers (DB, Connection, Team)
         await init_managers()
         logger.info("Managers initialized successfully")
+
+        # _scheduler = BackgroundScheduler()
+        # _scheduler.add_job(
+        #     func=celery_status_scheduled_task,
+        #     trigger=IntervalTrigger(seconds=3),
+        #     id='celery_status_scheduled_task',
+        #     name='celery_status_scheduled_task Task',
+        #     replace_existing=True
+        # )
+        # _scheduler.start()
+        # logger.info("APScheduler started with scheduled task (every 3 seconds)")
 
         if os.getenv("WORKFLOW_ENABLED", "False") == "True":
             from data_server.job.JobWorkflow import watch_dataflow_resources
@@ -93,7 +121,7 @@ async def log_requests(request: Request, call_next):
         except Exception as e:
             logger.warning(f"Could not read request body: {e}")
     
-    # 执行请求
+
     response = await call_next(request)
     
     
@@ -102,6 +130,14 @@ async def log_requests(request: Request, call_next):
     return response
 
 app.include_router(api_router)
+
+# Add a static file service to access uploaded files
+from pathlib import Path
+uploads_dir = Path(os.path.join(get_project_root(), 'attach'))
+# logger.info(f"Uploads directory: {uploads_dir}")
+uploads_dir.mkdir(parents=True, exist_ok=True)
+# For requests starting with "files", remove "files" and concatenate them to the "uploads_dir" path to access the files
+app.mount("/files", StaticFiles(directory=str(uploads_dir)), name="files")
 
 # Sets all CORS enabled origins
 app.add_middleware(

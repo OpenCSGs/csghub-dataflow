@@ -3,6 +3,7 @@ from .helper_func import (get_sentences_from_document, get_words_from_document,
                           split_on_newline_tab_whitespace, split_on_whitespace,
                           strip, words_augmentation, words_refinement)
 from .special_characters import SPECIAL_CHARACTERS
+from .llm_client import chat_with_model
 
 __all__ = [
     'get_sentences_from_document',
@@ -13,4 +14,5 @@ __all__ = [
     'strip',
     'words_augmentation',
     'words_refinement',
+    'chat_with_model',
 ]
