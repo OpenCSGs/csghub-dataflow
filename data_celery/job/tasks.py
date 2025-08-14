@@ -37,7 +37,7 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
             if job_obj is not None and job_obj.job_celery_uuid is not None and job_obj.job_celery_uuid != "":
                 job_celery_uuid = job_obj.job_celery_uuid
                 break
-            time.sleep(1)
+            # time.sleep(1)
         if job_celery_uuid == "":
             insert_pipline_job_run_task_log_error(job_uuid, f"not found job celery uuid : {job_uuid}")
             return False
@@ -54,7 +54,9 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
             return False
         current_process_id = os.getpid()
         add_process_to_redis(job_uuid,current_process_id, current_ip,work_name)
-
+        # for i in range(100000):
+        #     print(f"任务进行中:{i}")
+        #     time.sleep(1)
 
         job_obj.task_run_host = current_ip
         job_obj.job_celery_work_name = work_name

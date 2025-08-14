@@ -166,12 +166,41 @@ def create_tables():
     _initialized = True
 
     add_first_op_column()
+def is_table_initialized(table_name: str) -> bool:
+    """
+    Check if a specific table contains any data.
+    """
+    with get_sync_session() as session:
+        try:
+            result = session.execute(text(f"SELECT 1 FROM {table_name} LIMIT 1"))
+            return result.scalar_one_or_none() is not None
+        except Exception as e:
+            logger.warning(f"Could not check table '{table_name}', assuming it's not initialized. Error: {e}")
+            return False
 
-    # Execute the data initialization script
-    logger.info("Starting database data initialization...")
-    from .initializer import execute_initialization_scripts
-    execute_initialization_scripts()
-    logger.info("Database initialization process completed")
+def initialize_database():
+    """
+    Selectively initializes tables if they are empty.
+    This should be called once when the application starts.
+    """
+    tables_to_initialize = [
+        'operator_info',
+        'operator_config',
+        'operator_config_select_options',
+        'algo_templates'
+    ]
+    
+    logger.info("Starting selective database data initialization check...")
+    from .initializer import initialize_table
+
+    for table in tables_to_initialize:
+        if is_table_initialized(table):
+            logger.info(f"Table '{table}' already contains data, skipping initialization.")
+        else:
+            logger.info(f"Table '{table}' is empty, proceeding with initialization.")
+            initialize_table(table)
+            
+    logger.info("Database selective initialization process completed.")
 
 
 create_tables()

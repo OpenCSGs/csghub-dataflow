@@ -1,4 +1,5 @@
 # utf-8
+import traceback
 
 from celery import Celery
 from celery.signals import worker_ready,worker_shutdown
@@ -190,24 +191,27 @@ def get_process_resource_usage_task(worker_name:str,current_ip:str):
             process_id = element.split(":")[-1]
             job_uuid = element.split(":")[0]
             get_process_resource_usage(redis_celery,job_uuid,process_id)
-    except Exception:
+    except Exception as ex:
+        print(f"get_process_resource_usage_task error:{ex}")
         pass
 
 def get_process_resource_usage(redis_celery,job_uuid,process_id):
     try:
-
+        # print(1)
         process = psutil.Process(int(process_id))
-        cpu_usage = process.cpu_percent(interval=1)
-
-        memory_info = process.memory_info()
-        memory_usage = memory_info.rss / (1024 * 1024)
-        process_resource_key = get_celery_task_process_resource_key(job_uuid)
-        status_json = {
-            "job_uuid": job_uuid,
-            "process_id": process_id,
-            "cpu_usage": cpu_usage,
-            "memory_usage": memory_usage
-        }
-        redis_celery.set(process_resource_key, status_json, 8)
-    except Exception:
+        if process.is_running():
+            cpu_usage = process.cpu_percent(interval=1)
+            memory_info = process.memory_info()
+            memory_usage = memory_info.rss / (1024 * 1024)
+            process_resource_key = get_celery_task_process_resource_key(job_uuid)
+            status_json = {
+                "job_uuid": job_uuid,
+                "process_id": process_id,
+                "cpu_usage": cpu_usage,
+                "memory_usage": memory_usage
+            }
+            status_json_str = json.dumps(status_json)
+            redis_celery.set(process_resource_key, status_json_str, 8)
+    except Exception as ex:
+        # traceback.print_exc()
         pass
