@@ -35,7 +35,7 @@ configparser==7.2.0
 contextlib2==21.6.0
 contourpy==1.3.2
 cryptography==44.0.2
-csghub-sdk==0.4.6
+csghub-sdk==0.7.4
 cycler==0.12.1
 cymem==2.0.11
 Cython==3.0.12
