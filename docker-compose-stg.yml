@@ -2,7 +2,7 @@ services:
 
   dataflow_postgres_db:
     restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/postgres
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/csghub/postgres:15.10
     volumes:
       - /root/dataflow/dataflow-v2/postgres_db_data:/var/lib/postgresql/data
     command: -p 5432
