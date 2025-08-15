@@ -187,6 +187,9 @@ class HashKeys(object):
     # video
     videohash = DEFAULT_PREFIX + 'videohash'
 
+    # similarity-based deduplication
+    similarity_hash = DEFAULT_PREFIX + 'similarity_hash'
+
     # duplicate flag
     is_duplicate = DEFAULT_PREFIX + 'is_duplicate'
 

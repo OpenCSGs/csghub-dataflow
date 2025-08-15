@@ -288,7 +288,6 @@ class NestedDataset(Dataset, DJDataset):
         # cache files includes two sets with different fingerprint (before and
         # after). So we need to decompress these two sets of compressed cache
         # files
-        print(kargs['num_proc'])
         if cache_utils.CACHE_COMPRESS:
             decompress(self, [kargs['new_fingerprint'], self._fingerprint],
                        kargs['num_proc'] if 'num_proc' in kargs else 1)

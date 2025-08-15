@@ -37,7 +37,7 @@ docker build -t data_flow . -f Dockerfile
 ## Building data-flow-celery from Source
 
 ```
-docker build -t data_flow . -f Dockerfile-celery
+docker build -t data_flow_celery . -f Dockerfile-celery
 ```
 
 ## Prerequisites

@@ -26,14 +26,10 @@ RUN apt install git-lfs && git lfs install && apt clean && rm -rf /var/lib/apt/l
 # install data-flow then
 COPY . .
 
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ENV PIP_INDEX_URL=ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 ENV PIP_EXTRA_INDEX_URL=https://wheels.myhloli.com
 # Install deps
-RUN pip install --no-cache-dir -v \
-    '.[dist]' \
-    '.[sci]' \
-    '.[tools]' \
-    -r docker/requirements.txt
+RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
 # compile code
 # RUN python -m compileall .
 # RUN find ./ -name "*.py" -delete
