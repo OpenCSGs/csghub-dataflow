@@ -2,22 +2,16 @@ FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/python:3.10.14
 
 
 WORKDIR /app
-
-RUN echo "deb http://mirrors.aliyun.com/debian bookworm main contrib non-free" > /etc/apt/sources.list && \
-    echo "deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list && \
-    echo "deb http://mirrors.aliyun.com/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list
-
-# install 3rd-party system dependencies
-# RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  libpq-dev -y
-RUN apt-get update && apt-get install libpq-dev libgl1-mesa-glx -y
-RUN apt install git-lfs && git lfs install && apt clean && rm -rf /var/lib/apt/lists/*
-
 COPY docker/apiserver_requirements.txt .
 
 # Install deps
-RUN pip install -v  --use-deprecated=legacy-resolver --no-cache-dir '.[sci]' -i https://pypi.tuna.tsinghua.edu.cn/simple/  -r apiserver_requirements.txt
+RUN pip install -v  --use-deprecated=legacy-resolver --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple/  -r apiserver_requirements.txt
 
-COPY . .
+COPY data_server /app/data_server
+COPY data_engine /app/data_engine
+COPY data_agents /app/data_agents
+COPY configs /app/configs
+COPY .env /app/.env
 
 RUN git config --global user.email "dataflow@opencsg.com"
 RUN git config --global user.name "dataflow"

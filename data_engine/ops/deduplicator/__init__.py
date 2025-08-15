@@ -1,6 +1,5 @@
 from . import (document_deduplicator, document_minhash_deduplicator,
-               document_simhash_deduplicator, image_deduplicator,
-               ss_dedup_and_save_deduplicator, ray_document_deduplicator,
+               document_simhash_deduplicator, image_deduplicator,ray_document_deduplicator,
                ray_image_deduplicator, ray_video_deduplicator, video_deduplicator,
                dedup_and_save_deduplicator)
 from .document_deduplicator import DocumentDeduplicator
