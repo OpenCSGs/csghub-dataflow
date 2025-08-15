@@ -89,9 +89,9 @@ docker run -d --name dataflow-api -p 8000:8000 \
    -e API_SERVER=0.0.0.0 \
    -e API_PORT=8000 \
    -e ENABLE_OPENTELEMETRY=False \
-   -e POSTGRES_DB=data_flow \
-   -e POSTGRES_USER=postgres \
-   -e POSTGRES_PASSWORD=postgres \
+   -e DATABASE_DB=data_flow \
+   -e DATABASE_USERNAME=postgres \
+   -e DATABASE_PASSWORD=postgres \
    -e DATABASE_HOSTNAME=127.0.0.1 \
    -e DATABASE_PORT=5433 \
    -e STUDIO_JUMP_URL=https://data-label.opencsg.com \
@@ -116,9 +116,9 @@ docker run -d --name celery-work -p 8001:8001 \
    -e API_SERVER=0.0.0.0 \
    -e API_PORT=8001 \
    -e ENABLE_OPENTELEMETRY=False \
-   -e POSTGRES_DB=data_flow \
-   -e POSTGRES_USER=postgres \
-   -e POSTGRES_PASSWORD=postgres \
+   -e DATABASE_DB=data_flow \
+   -e DATABASE_USERNAME=postgres \
+   -e DATABASE_PASSWORD=postgres \
    -e DATABASE_HOSTNAME=127.0.0.1 \
    -e DATABASE_PORT=5433 \
    -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
