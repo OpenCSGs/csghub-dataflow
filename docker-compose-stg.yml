@@ -59,7 +59,7 @@ services:
       - DATABASE_HOSTNAME=dataflow_postgres_db
       - DATABASE_PORT=5432
       - REDIS_HOST_URL=redis://dataflow_celery_redis:16379
-      - MONG_HOST_URL=mongodb://root:example@dataflow_celery_redis:27017
+      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
     ports:
       - "8001:8001"
     depends_on:
@@ -89,10 +89,11 @@ services:
       - DATABASE_PORT=5432
       - STUDIO_JUMP_URL=https://data-label.opencsg.com
       - REDIS_HOST_URL=redis://dataflow_celery_redis:16379
-      - MONG_HOST_URL=mongodb://root:example@dataflow_celery_redis:27017
+      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
     ports:
       - "8000:8000"
     depends_on:
+      - dataflow_celery_redis
       - dataflow_mongo_db
       - dataflow_postgres_db
       - dataflow_celery_worker
