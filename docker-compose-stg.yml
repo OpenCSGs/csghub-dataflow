@@ -68,6 +68,7 @@ services:
       - dataflow_postgres_db
 
   dataflow_api_server:
+    restart: unless-stopped
     image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250814
     volumes:
       - /root/dataflow/dataflow-v2/apidata:/data/dataflow_data
