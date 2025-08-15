@@ -6,6 +6,7 @@ pymongo==4.13.2
 pyhive==0.7.0
 thrift==0.22.0
 celery==5.5.3
+eventlet==0.40.1
 numpy==1.26.4
 nbformat
 transformers

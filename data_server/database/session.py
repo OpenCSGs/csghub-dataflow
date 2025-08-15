@@ -24,16 +24,15 @@ def sqlalchemy_database_uri() -> URL:
     return URL.create(
         # drivername="postgresql+asyncpg",
         drivername="postgresql",
-        username=os.getenv('DATABASE_USERNAME', "admin"),
-        password=os.getenv('DATABASE_PASSWORD', "admin123456"),
-        host=os.getenv('DATABASE_HOSTNAME', "net-power.9free.com.cn"),
-        port=os.getenv('DATABASE_PORT', 18119),
+        username=os.getenv('DATABASE_USERNAME', "postgres"),
+        password=os.getenv('DATABASE_PASSWORD', "postgres"),
+        host=os.getenv('DATABASE_HOSTNAME', "127.0.0.1"),
+        port=os.getenv('DATABASE_PORT', 5432),
         database=os.getenv('DATABASE_DB', "data_flow")
     )
 
 
 def get_radis_database_uri() -> str:
-    # return os.getenv("REDIS_HOST_URL", "redis://:redis123456@net-power.9free.com.cn:18122")
     return os.getenv("REDIS_HOST_URL", "redis://127.0.0.1:6379")
 
 
