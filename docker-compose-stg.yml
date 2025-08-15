@@ -1,53 +1,98 @@
 services:
-  postgres_db:
+
+  dataflow_postgres_db:
     restart: unless-stopped
-    # image: postgres:16
     image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/postgres
     volumes:
-      - /postgres_db_data:/var/lib/postgresql/data
+      - /root/dataflow/dataflow-v2/postgres_db_data:/var/lib/postgresql/data
     command: -p 5432
     environment:
-      - POSTGRES_DB=${DATABASE_DB}
-      - POSTGRES_USER=${DATABASE_USERNAME}
-      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
-    env_file:
-      - .env-stg
-    expose: 
-      - ${DATABASE_PORT}
+      - POSTGRES_DB=data_flow
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
       - "5433:5432"
-  celery_redis:
+
+  dataflow_mongo_db:
     restart: unless-stopped
-    image: redis:latest
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
     volumes:
-      - celery_redis_data:/data
+      - /root/dataflow/dataflow-v2/mongodata:/data/db
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=example
     ports:
-      - "6379:6379"
-  celery_worker:
-    build: .
+      - "27017:27017"
+
+  dataflow_celery_redis:
+    restart: unless-stopped
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
+    volumes:
+      - /root/dataflow/dataflow-v2/celery_redis_data:/data
+    ports:
+      - "16379:6379"
+
+  dataflow_celery_worker:
+    restart: unless-stopped
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow-celery:20250814
     command: >
       sh -c "
         MILLISECOND_TIMESTAMP=$$(date +%s%3N);
         NODENAME=worker_$$MILLISECOND_TIMESTAMP@$$(hostname -f);
         celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet -n $$NODENAME
       "
-    depends_on:
-      - celery_redis
-  api_server:
-    build: .
-    env_file:
-      - .env-stg
     volumes:
-      # - .:/dataflow
-      - ${DATA_DIR}:${DATA_DIR}
-      - /root/.kube:/root/.kube
+      - /root/dataflow/dataflow-v2/celery-data:/data/dataflow_celery
+    environment:
+      - DATA_DIR=/data/dataflow_celery
+      - CSGHUB_ENDPOINT=https://hub.opencsg-stg.com
+      - MAX_WORKERS=99
+      - RAY_ADDRESS=auto
+      - RAY_ENABLE=False
+      - RAY_LOG_DIR=/home/output
+      - API_SERVER=0.0.0.0
+      - API_PORT=8001
+      - ENABLE_OPENTELEMETRY=False
+      - DATABASE_DB=data_flow
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_HOSTNAME=dataflow_postgres_db
+      - DATABASE_PORT=5432
+      - REDIS_HOST_URL=redis://172.19.5.50:16379
+      - MONG_HOST_URL=mongodb://root:example@172.19.5.50:27017
+    ports:
+      - "8001:8001"
+    depends_on:
+      - dataflow_celery_redis
+      - dataflow_mongo_db
+      - dataflow_postgres_db
+
+  dataflow_api_server:
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250814
+    volumes:
+      - /root/dataflow/dataflow-v2/apidata:/data/dataflow_data
+    environment:
+      - DATA_DIR=/data/dataflow_data
+      - CSGHUB_ENDPOINT=https://hub.opencsg-stg.com
+      - MAX_WORKERS=99
+      - RAY_ADDRESS=auto
+      - RAY_ENABLE=False
+      - RAY_LOG_DIR=/home/output
+      - API_SERVER=0.0.0.0
+      - API_PORT=8000
+      - ENABLE_OPENTELEMETRY=False
+      - DATABASE_DB=data_flow
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_HOSTNAME=dataflow_postgres_db
+      - DATABASE_PORT=5432
+      - STUDIO_JUMP_URL=https://data-label.opencsg.com
+      - REDIS_HOST_URL=redis://172.19.5.50:16379
+      - MONG_HOST_URL=mongodb://root:example@172.19.5.50:27017
     ports:
       - "8000:8000"
     depends_on:
-      - postgres_db
-      - celery_worker
-    # command: ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
+      - dataflow_mongo_db
+      - dataflow_postgres_db
+      - dataflow_celery_worker
 
-volumes:
-  postgres_db:
-  celery_redis_data:
