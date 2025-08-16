@@ -37,7 +37,7 @@ docker build -t dataflow . -f Dockerfile
 ## Building data-flow-celery from Source
 
 ```
-docker build -t dataflow_celery . -f Dockerfile-celery
+docker build -t dataflow-celery . -f Dockerfile-celery
 ```
 
 ## Prerequisites
@@ -123,7 +123,7 @@ docker run -d --name celery-work -p 8001:8001 \
    -e DATABASE_PORT=5433 \
    -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
    -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
-   dataflow_celery
+   dataflow-celery
 
 ```
 
