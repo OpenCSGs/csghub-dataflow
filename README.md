@@ -97,7 +97,7 @@ docker run -d --name dataflow-api -p 8000:8000 \
    -e STUDIO_JUMP_URL=https://data-label.opencsg.com \
    -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
    -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
-   data_flow
+   dataflow
 
 ```
 
@@ -123,7 +123,7 @@ docker run -d --name celery-work -p 8001:8001 \
    -e DATABASE_PORT=5433 \
    -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
    -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
-   data_flow_celery
+   dataflow_celery
 
 ```
 
