@@ -28,11 +28,7 @@ COPY . .
 
 ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 # Install deps
-RUN pip install --use-deprecated=legacy-resolver --no-cache-dir -v \
-    '.[dist]' \
-    '.[sci]' \
-    '.[tools]' \
-    -r docker/requirements.txt
+RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
 # compile code
 # RUN python -m compileall .
 # RUN find ./ -name "*.py" -delete

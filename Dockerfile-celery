@@ -11,7 +11,7 @@ RUN wget https://aka.ms/download-jdk/microsoft-jdk-17.0.9-linux-x64.tar.gz -O jd
 # set the environment variable
 ENV JAVA_HOME=/opt/jdk
 
-WORKDIR /dataflow
+WORKDIR /data-flow-celery
 
 
 RUN echo "deb http://mirrors.aliyun.com/debian bookworm main contrib non-free" > /etc/apt/sources.list && \
@@ -28,12 +28,11 @@ COPY . .
 
 ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
 # Install deps
-RUN pip install --use-deprecated=legacy-resolver --no-cache-dir -v \
-    '.[dist]' \
-    '.[sci]' \
-    '.[tools]' \
-    -r docker/requirements.txt
+RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
 
+RUN git config --global user.email "dataflow@opencsg.com"
+RUN git config --global user.name "dataflow"
+RUN git config --global --add safe.directory '*'
 
 CMD ["celery", "-A", "data_celery.main:celery_app", "worker", "--loglevel=info", "--pool=gevent", "--concurrency=5"]
 

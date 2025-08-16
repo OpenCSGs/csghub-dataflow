@@ -12,6 +12,8 @@ services:
       - POSTGRES_PASSWORD=postgres
     ports:
       - "5433:5432"
+    networks:
+      - csg-network
 
   dataflow_mongo_db:
     restart: unless-stopped
@@ -23,6 +25,8 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=example
     ports:
       - "27017:27017"
+    networks:
+      - csg-network
 
   dataflow_celery_redis:
     restart: unless-stopped
@@ -31,6 +35,8 @@ services:
       - /root/dataflow/dataflow-v2/celery_redis_data:/data
     ports:
       - "16379:6379"
+    networks:
+      - csg-network
 
   dataflow_celery_worker:
     restart: unless-stopped
@@ -58,7 +64,7 @@ services:
       - DATABASE_PASSWORD=postgres
       - DATABASE_HOSTNAME=dataflow_postgres_db
       - DATABASE_PORT=5432
-      - REDIS_HOST_URL=redis://dataflow_celery_redis:16379
+      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
       - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
     ports:
       - "8001:8001"
@@ -66,6 +72,8 @@ services:
       - dataflow_celery_redis
       - dataflow_mongo_db
       - dataflow_postgres_db
+    networks:
+      - csg-network
 
   dataflow_api_server:
     restart: unless-stopped
@@ -88,7 +96,7 @@ services:
       - DATABASE_HOSTNAME=dataflow_postgres_db
       - DATABASE_PORT=5432
       - STUDIO_JUMP_URL=https://data-label.opencsg.com
-      - REDIS_HOST_URL=redis://dataflow_celery_redis:16379
+      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
       - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
     ports:
       - "8000:8000"
@@ -97,4 +105,10 @@ services:
       - dataflow_mongo_db
       - dataflow_postgres_db
       - dataflow_celery_worker
+    networks:
+      - csg-network
+
+networks:
+  csg-network:
+    driver: bridge
 

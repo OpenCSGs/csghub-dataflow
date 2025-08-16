@@ -15,6 +15,7 @@ services:
       - ${DATABASE_PORT}
     ports:
       - "5433:${DATABASE_PORT}"
+      -
   celery_redis:
     image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
     container_name: redis
