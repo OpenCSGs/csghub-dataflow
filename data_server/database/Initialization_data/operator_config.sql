@@ -172,6 +172,9 @@ INSERT INTO "public"."operator_config" VALUES (25, 16, 'ocr_error_char', 'checkb
 INSERT INTO "public"."operator_config" VALUES (27, 16, 'swap_random_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576');
 INSERT INTO "public"."operator_config" VALUES (28, 16, 'insert_random_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576');
 
+
+ALTER SEQUENCE "public"."operator_config" START WITH 1000;
+
 -- ----------------------------
 -- Indexes structure for table operator_config
 -- ----------------------------

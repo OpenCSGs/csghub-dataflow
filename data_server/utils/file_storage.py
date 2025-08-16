@@ -45,7 +45,7 @@ class FileStorageManager:
             file_code = f"{category}/{file_id}"
             
 
-            file_url = f"files/{category}/{file_name}"
+            file_url = f"api/v1/dataflow/real_static_files/{category}/{file_name}"
             
             logger.info(f"文件保存成功: {file_path}, 代码: {file_code}")
             

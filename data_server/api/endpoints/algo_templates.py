@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, Path, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Path, status, Header
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional, Annotated
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from data_server.api.dependencies import get_validated_token_payload
 from data_server.database.session import get_sync_session
 from data_server.algo_templates.mapper.algo_template_mapper import (
     get_template_by_id,
@@ -34,7 +33,7 @@ class AlgoTemplateListResponse(BaseModel):
 
 @router.get("/", response_model=dict, summary="获取算法模板列表")
 async def get_algo_templates(
-    payload: Dict = Depends(get_validated_token_payload),
+    user_id: str = Header(..., alias="user_id", description="用户ID"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100000000, description="每页数量"),
     buildin: bool = Query(None,description="是否为内置模版过滤"),
@@ -42,9 +41,8 @@ async def get_algo_templates(
 ):
 
     try:
-        user_id = payload.get("uuid")
         if not user_id:
-            return response_fail(msg="Token中缺少用户信息 (uuid)")
+            return response_fail(msg="请求头中缺少用户信息 (user_id)")
 
         templates, total = get_templates_by_query(
             db, user_id, page, page_size, buildin
@@ -74,15 +72,14 @@ async def get_algo_templates(
 
 @router.get("/{template_id}", response_model=dict, summary="根据模板id获取单个算法模板详情")
 async def get_algo_template_by_id(
-    payload: Dict = Depends(get_validated_token_payload),
+    user_id: str = Header(..., alias="user_id", description="用户ID"),
     template_id: int = Path(..., description="模板ID"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
-        user_id = payload.get("uuid")
         if not user_id:
-            return response_fail(msg="Token中缺少用户信息 (uuid)")
+            return response_fail(msg="请求头中缺少用户信息 (user_id)")
 
 
         template = get_template_by_id(db, template_id, user_id)
@@ -107,14 +104,13 @@ async def get_algo_template_by_id(
 @router.post("/", response_model=dict, summary="创建新的算法模板")
 async def create_algo_template(
     template_data: AlgoTemplateCreate,
-    payload: Dict = Depends(get_validated_token_payload),
+    user_id: str = Header(..., alias="user_id", description="用户ID"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
-        user_id = payload.get("uuid")
         if not user_id:
-            return response_fail(msg="Token中缺少用户信息 (uuid)")
+            return response_fail(msg="请求头中缺少用户信息 (user_id)")
             
 
         template_dict = template_data.model_dump(exclude_none=True)
@@ -144,16 +140,15 @@ async def create_algo_template(
 
 @router.put("/{template_id}", response_model=dict, summary="更新算法模板")
 async def update_algo_template(
-    payload: Dict = Depends(get_validated_token_payload),
+    user_id: str = Header(..., alias="user_id", description="用户ID"),
     template_id: int = Path(..., description="模板ID"),
     template_data: AlgoTemplateUpdate = None,
     db: Session = Depends(get_sync_session)
 ):
 
     try:
-        user_id = payload.get("uuid")
         if not user_id:
-            return response_fail(msg="Token中缺少用户信息 (uuid)")
+            return response_fail(msg="请求头中缺少用户信息 (user_id)")
 
 
         current_template = get_template_by_id(db, template_id, user_id)
@@ -191,15 +186,14 @@ async def update_algo_template(
 
 @router.delete("/{template_id}", response_model=dict, summary="删除算法模板")
 async def delete_algo_template(
-    payload: Dict = Depends(get_validated_token_payload),
+    user_id: str = Header(..., alias="user_id", description="用户ID"),
     template_id: int = Path(..., description="模板ID"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
-        user_id = payload.get("uuid")
         if not user_id:
-            return response_fail(msg="Token中缺少用户信息 (uuid)")
+            return response_fail(msg="请求头中缺少用户信息 (user_id)")
 
 
         success = delete_template_by_id(db, template_id, user_id)
@@ -231,15 +225,14 @@ async def get_algo_template_type():
 
 @router.get("/get/ByName", response_model=dict, summary="根据模版名称获取算法模板列表")
 async def get_algo_template_by_name(
-    payload: Dict = Depends(get_validated_token_payload),
+    user_id: str = Header(..., alias="user_id", description="用户ID"),
     template_name: str = Query(..., description="模板名称"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
-        user_id = payload.get("uuid")
         if not user_id:
-            return response_fail(msg="Token中缺少用户信息 (uuid)")
+            return response_fail(msg="请求头中缺少用户信息 (user_id)")
 
 
         template = find_repeat_name(db, template_name, user_id)
