@@ -31,13 +31,13 @@ This project inherits the [Apache License 2.0](LICENSE) from Data Juicer.
 ## Building data-flow from Source
 
 ```
-docker build -t data_flow . -f Dockerfile
+docker build -t dataflow . -f Dockerfile
 ```
 
 ## Building data-flow-celery from Source
 
 ```
-docker build -t data_flow_celery . -f Dockerfile-celery
+docker build -t dataflow-celery . -f Dockerfile-celery
 ```
 
 ## Prerequisites
@@ -51,7 +51,7 @@ docker run -d --name dataflow-pg \
    -e POSTGRES_DB=data_flow \
    -e POSTGRES_USER=postgres \
    -e POSTGRES_PASSWORD=postgres \
-   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/csghub/postgres:15.10
+   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/csghub/postgres:15.10
 ```
 
 Launch mongoDB container
@@ -97,7 +97,7 @@ docker run -d --name dataflow-api -p 8000:8000 \
    -e STUDIO_JUMP_URL=https://data-label.opencsg.com \
    -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
    -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
-   data_flow
+   dataflow
 
 ```
 
@@ -123,7 +123,7 @@ docker run -d --name celery-work -p 8001:8001 \
    -e DATABASE_PORT=5433 \
    -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
    -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
-   data_flow_celery
+   dataflow-celery
 
 ```
 
