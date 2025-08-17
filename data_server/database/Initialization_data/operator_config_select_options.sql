@@ -73,6 +73,7 @@ INSERT INTO "public"."operator_config_select_options" VALUES (39, 'amrul-hzz/wat
 INSERT INTO "public"."operator_config_select_options" VALUES (40, 'google/owlvit-base-patch32', 'f', 0, '2025-08-04 09:53:12.245911', '2025-08-04 09:53:12.245911');
 INSERT INTO "public"."operator_config_select_options" VALUES (28, 'all', 'f', 0, '2025-07-29 16:49:26.670396', '2025-07-29 16:49:26.670396');
 
+ALTER SEQUENCE "public"."operator_config_select_options" START WITH 1000;
 -- ----------------------------
 -- Indexes structure for table operator_config_select_options
 -- ----------------------------
