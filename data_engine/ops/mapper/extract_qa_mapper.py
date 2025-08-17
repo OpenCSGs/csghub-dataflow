@@ -50,39 +50,7 @@ class ExtractQAMapper(Mapper):
                  sampling_params: Dict = {'temperature': 0.3},
                  *args,
                  **kwargs):
-        """
-        Initialization method.
-        :param hf_model: Hugginface model id.
-        :param trust_remote_code: passed to transformers
-        :param pattern: regular expression pattern to search for within text.
-        :param qa_format: Output format of question and answer pair.
-        :param enable_vllm: Whether to use vllm for inference acceleration.
-        :param tensor_parallel_size: It is only valid when enable_vllm is True.
-            The number of GPUs to use for distributed execution with tensor
-            parallelism.
-        :param max_model_len: It is only valid when enable_vllm is True.
-            Model context length. If unspecified, will be automatically
-            derived from the model config.
-        :param max_num_seqs: It is only valid when enable_vllm is True.
-            Maximum number of sequences to be processed in a single iteration.
-        :param sampling_params: Sampling parameters for text generation.
-            e.g {'temperature': 0.9, 'top_p': 0.95}
-        :param args: extra args
-        :param kwargs: extra args
 
-        The default data format parsed by this interface is as follows:
-        Model Input:
-            蒙古国的首都是乌兰巴托（Ulaanbaatar）
-            冰岛的首都是雷克雅未克（Reykjavik）
-        Model Output:
-            蒙古国的首都是乌兰巴托（Ulaanbaatar）
-            冰岛的首都是雷克雅未克（Reykjavik）
-            Human: 请问蒙古国的首都是哪里？
-            Assistant: 你好，根据提供的信息，蒙古国的首都是乌兰巴托（Ulaanbaatar）。
-            Human: 冰岛的首都是哪里呢？
-            Assistant: 冰岛的首都是雷克雅未克（Reykjavik）。
-            ...
-        """
 
         super().__init__(*args, **kwargs)
         self.num_proc = 1

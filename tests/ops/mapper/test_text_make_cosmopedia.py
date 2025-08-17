@@ -13,7 +13,6 @@ class MakeCosmopediaMapperTest(DataJuicerTestCaseBase):
         target_list = dataset.select_columns(['title', 'text']).to_list()
         res_list = new_dataset.select_columns(['title', 'text']).to_list()
         self.assertEqual(res_list, target_list)
-        print(dataset.to_pandas())
 
     def test_en_text_case(self):
         """Test processing sample with only text field."""

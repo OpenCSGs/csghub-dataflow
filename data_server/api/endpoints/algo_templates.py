@@ -31,7 +31,7 @@ class AlgoTemplateListResponse(BaseModel):
     page_size: int = Field(..., description="每页数量")
 
 
-@router.get("/", response_model=dict, summary="获取算法模板列表")
+@router.get("", response_model=dict, summary="获取算法模板列表")
 async def get_algo_templates(
     user_id: str = Header(..., alias="user_id", description="用户ID"),
     page: int = Query(1, ge=1, description="页码"),
@@ -101,7 +101,7 @@ async def get_algo_template_by_id(
         db.close()
 
 
-@router.post("/", response_model=dict, summary="创建新的算法模板")
+@router.post("", response_model=dict, summary="创建新的算法模板")
 async def create_algo_template(
     template_data: AlgoTemplateCreate,
     user_id: str = Header(..., alias="user_id", description="用户ID"),

@@ -15,7 +15,7 @@ router = APIRouter()
 
 
 
-@router.post("/", summary="创建算子权限")
+@router.post("", summary="创建算子权限")
 def create_permission_api(request_data: OperatorPermissionCreateRequest, db: Session = Depends(get_sync_session)):
 
     try:
@@ -102,7 +102,7 @@ def create_permission_api(request_data: OperatorPermissionCreateRequest, db: Ses
 
 
 
-@router.get("/", summary="获取权限列表")
+@router.get("", summary="获取权限列表")
 def read_permissions_api(skip: int = 0, limit: int = 100, db: Session = Depends(get_sync_session)):
 
     try:

@@ -171,25 +171,17 @@ def fix_quoted_strings(values_part):
                 in_string = True
                 string_content = ""
             elif char == "'" and in_string:
-
+                # When encountering single quotes, check if they are escaped single quotes
                 if i + 1 < len(values_part) and values_part[i + 1] == "'":
-
-                    string_content += "''"
+                    # This is the escaped single quote "", stored as a single single quote
+                    string_content += "'"
                     i += 1
                 else:
-
+                    # string_end
                     in_string = False
-
-                    if ("''" in string_content or 
-                        "href=" in string_content or 
-                        len(string_content) > 100 or
-                        any(c in string_content for c in ['<', '>', '"', '\\'])):
-
-                        dollar_tag = f"$tag{len(result)}$"
-                        current_token += f"{dollar_tag}{string_content}{dollar_tag}"
-                    else:
-
-                        current_token += f"'{string_content}'"
+                    # Always use single quotes and handle the internal single quote escape
+                    escaped_content = string_content.replace("'", "''")
+                    current_token += f"'{escaped_content}'"
                     string_content = ""
             elif in_string:
                 string_content += char

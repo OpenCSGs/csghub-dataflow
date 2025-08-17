@@ -1,6 +1,9 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Path
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Path,Header
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional, Annotated
+import base64
+from pathlib import Path
+from data_celery.utils import get_project_root
 
 from data_server.database.session import get_sync_session
 
@@ -21,7 +24,7 @@ router = APIRouter()
 
 
 
-@router.post("/", summary="create_operator")
+@router.post("", summary="create_operator")
 def create_operator_api(
     operator_data: OperatorCreateRequest,
     db: Session = Depends(get_sync_session)
@@ -36,7 +39,7 @@ def create_operator_api(
         db.close()
 
 
-@router.get("/", summary="GET_LIST_OF_OPERATORS")
+@router.get("", summary="GET_LIST_OF_OPERATORS")
 def read_operators_api(
     skip: int = 0,
     limit: int = 100,
@@ -45,7 +48,27 @@ def read_operators_api(
 
     try:
         operators = get_operators(db, skip, limit)
-        return response_success(data=operators, msg="获取算子列表成功")
+        operators_data = []
+        project_root = get_project_root()
+        for op in operators:
+            op_dict = op.__dict__
+            pic_base64 = None
+            mime_type = None
+            if op.icon:
+                try:
+                    filename = Path(op.icon).name
+                    image_path = project_root / 'attach' / 'operator' / filename
+                    if image_path.exists() and image_path.is_file():
+                        with open(image_path, "rb") as image_file:
+                            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+                        pic_base64 = encoded_string
+                except Exception:
+                    # Ignore errors for individual images
+                    pass
+            op_dict['pic_base64'] = pic_base64
+            operators_data.append(op_dict)
+
+        return response_success(data=operators_data, msg="获取算子列表成功")
     except Exception as e:
         return response_fail(msg=f"获取算子列表失败: {str(e)}")
     finally:
@@ -126,7 +149,7 @@ def get_operator_config_select_option_by_id_api(
         db.close()
 
 
-@router.post("/config_select_options/", summary="添加下拉框选项")
+@router.post("/config_select_options", summary="添加下拉框选项")
 def create_operator_config_select_option_api(
     option: OperatorConfigSelectOptionsCreate,
     db: Session = Depends(get_sync_session)
@@ -148,6 +171,22 @@ def get_operators_grouped_by_type_api(
 
     try:
         grouped_operators = get_operators_grouped_by_type(db)
+        project_root = get_project_root()
+        for group in grouped_operators:
+            for op in group['list']:
+                pic_base64 = None
+                icon = op.get('icon')
+                if icon:
+                    try:
+                        filename = Path(icon).name
+                        image_path = project_root / 'attach' / 'operator' / filename
+                        if image_path.exists() and image_path.is_file():
+                            with open(image_path, "rb") as image_file:
+                                encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+                            pic_base64 = encoded_string
+                    except Exception:
+                        pass
+                op['pic_base64'] = pic_base64
         return response_success(data=grouped_operators, msg="获取分组算子列表成功")
     except Exception as e:
         return response_fail(msg=f"获取分组算子列表失败: {str(e)}")
@@ -155,7 +194,7 @@ def get_operators_grouped_by_type_api(
         db.close()
 
 # find_operator_by_uuid_orgs
-@router.get("/types/grouped-by-condition/", summary="根据算子分类和权限返回算子数据")
+@router.get("/types/grouped-by-condition", summary="根据算子分类和权限返回算子数据")
 def get_operators_grouped_by_condition_api(
     payload: Dict = Depends(get_validated_token_payload),
     db: Session = Depends(get_sync_session),
@@ -174,8 +213,28 @@ def get_operators_grouped_by_condition_api(
             return response_fail("Token中缺少用户信息 (uuid)")
 
         grouped_operators = get_operators_grouped_by_condition(db, user_id, paths)
+        project_root = get_project_root()
+        for group in grouped_operators:
+            for op in group['list']:
+                pic_base64 = None
+                icon = op.get('icon')
+                if icon:
+                    try:
+                        filename = Path(icon).name
+                        image_path = project_root / 'attach' / 'operator' / filename
+                        if image_path.exists() and image_path.is_file():
+                            with open(image_path, "rb") as image_file:
+                                encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+                            pic_base64 = encoded_string
+                    except Exception:
+                        pass
+                op['pic_base64'] = pic_base64
         return response_success(data=grouped_operators, msg="获取分组算子列表成功")
     except Exception as e:
         return response_fail(msg=f"获取分组算子列表失败: {str(e)}")
     finally:
         db.close()
+
+@router.get("/isAdmin/torf")
+def get_isAdmin_true_or_false(isadmin: str = Header(..., alias="isadmin", description="是否管理员")):
+    return response_success(data={"isadmin":isadmin})

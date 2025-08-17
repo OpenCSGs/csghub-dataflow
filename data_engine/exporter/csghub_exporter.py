@@ -4,10 +4,8 @@ from typing import List
 from pycsghub.cmd.repo_types import RepoType
 from pycsghub.upload_large_folder.main import upload_large_folder_internal
 
-#from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
 from data_engine.exporter.base_exporter import Exporter
 import os
-import uuid
 import re
 from loguru import logger
 from pycsghub.repository import Repository
@@ -161,7 +159,7 @@ class ExporterCSGHUB(Exporter):
             )
             r.upload()
             logger.info(f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
-            # insert_pipline_job_run_task_log_info(job_uid, f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
+            #insert_pipline_job_run_task_log_info(job_uid, f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
             if os.path.exists(self.repo_work_dir):
                 logger.info(f'Remove {self.repo_work_dir}')
                 shutil.rmtree(self.repo_work_dir)

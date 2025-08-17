@@ -29,5 +29,6 @@ api_router.include_router(operator.router, prefix="/operator", tags=["算子相�
 api_router.include_router(operator_permission.router, prefix="/operator_permission", tags=["算子权限相关接口"])
 
 api_router.include_router(op_pic_upload.op_pic_router, prefix="/internal_api", tags=["文件上传接口"])
+api_router.include_router(op_pic_upload.image_getter_router, tags=["文件获取接口"])
 
 api_router.include_router(algo_templates.router, prefix="/algo_templates", tags=["算法模板相关接口"])
