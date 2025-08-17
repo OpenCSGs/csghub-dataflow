@@ -57,7 +57,7 @@ def load_samples():
             with open(readme_path, encoding='utf-8') as stream:
                 content = stream.read()
         else:
-            with open(readme_path) as stream:  # 在 Linux 和 macOS 下不显式指定编码
+            with open(readme_path) as stream:
                 content = stream.read()
         plan.readme = content
 

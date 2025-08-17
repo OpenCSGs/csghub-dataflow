@@ -30,45 +30,7 @@ class NlpcdaZhMapper(Mapper):
                  replace_equivalent_num: bool = False,
                  *args,
                  **kwargs):
-        """
-        Initialization method. All augmentation methods use default parameters
-        in default. We recommend you to only use 1-3 augmentation methods at a
-        time. Otherwise, the semantics of samples might be changed
-        significantly. **Notice**: some augmentation method might not work for
-        some special texts, so there might be no augmented texts generated.
 
-        :param sequential: whether combine all augmentation methods to a
-            sequence. If it's True, a sample will be augmented by all opened
-            augmentation methods sequentially. If it's False, each opened
-            augmentation method would generate its augmented samples
-            independently.
-        :param aug_num: number of augmented samples to be generated. If
-            `sequential` is True, there will be total aug_num augmented samples
-            generated. If it's False, there will be (aug_num *
-            #opened_aug_method) augmented samples generated.
-        :param keep_original_sample: whether to keep the original sample. If
-            it's set to False, there will be only generated texts in the final
-            datasets and the original texts will be removed. It's True in
-            default.
-        :param replace_similar_word: whether to open the augmentation method of
-            replacing random words with their similar words in the original
-            texts. e.g. "这里一共有5种不同的数据增强方法" --> "这边一共有5种不同的数据增强方法"
-        :param replace_homophone_char: whether to open the augmentation method
-            of replacing random characters with their homophones in the
-            original texts. e.g. "这里一共有5种不同的数据增强方法" --> "这里一共有5种不同的濖据增强方法"
-        :param delete_random_char: whether to open the augmentation method of
-            deleting random characters from the original texts. e.g.
-            "这里一共有5种不同的数据增强方法" --> "这里一共有5种不同的数据增强"
-        :param swap_random_char: whether to open the augmentation method of
-            swapping random contiguous characters in the original texts. e.g.
-            "这里一共有5种不同的数据增强方法" --> "这里一共有5种不同的数据强增方法"
-        :param replace_equivalent_num: whether to open the augmentation method
-            of replacing random numbers with their equivalent representations
-            in the original texts. **Notice**: Only for numbers for now. e.g.
-            "这里一共有5种不同的数据增强方法" --> "这里一共有伍种不同的数据增强方法"
-        :param args: extra args
-        :param kwargs: extra args
-        """
         super().__init__(*args, **kwargs)
 
         self.aug_num = aug_num

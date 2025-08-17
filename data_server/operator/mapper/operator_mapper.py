@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from data_server.operator.schemas import OperatorResponse, OperatorConfigResponse, OperatorConfigSelectOptionsResponse
+from loguru import logger
 
 
 def get_operator(db: Session, operator_id: int) -> Optional[OperatorResponse]:
@@ -93,49 +94,40 @@ def update_operator(db: Session, operator_id: int, operator_data: dict) -> Optio
     
 
     configs_data = operator_data.pop("configs", None)
-    
+
 
     for key, value in operator_data.items():
         setattr(db_operator, key, value)
     
     db_operator.updated_at = datetime.now()
-    
 
     db_configs = []
     if configs_data is not None:
         for config_data in configs_data:
-
             config_id = config_data.get("id")
             if config_id:
-
                 existing_config = db.query(OperatorConfig).filter(
                     OperatorConfig.id == config_id,
                     OperatorConfig.operator_id == operator_id
                 ).first()
                 
                 if not existing_config:
-
                     raise ValueError(f"算子配置ID {config_id} 不存在")
-
 
                 for key, value in config_data.items():
                     if key != "id" and key != "operator_id":
-
                         if key == "select_options" and value is None:
                             continue
-
                         print(f"更新字段 {key}: {value} (类型: {type(value)})")
                         old_value = getattr(existing_config, key, None)
                         print(f"原值: {old_value}")
                         setattr(existing_config, key, value)
                         new_value = getattr(existing_config, key, None)
                         print(f"新值: {new_value}")
-                
 
                 db.add(existing_config)
                 db_configs.append(existing_config)
             else:
-
                 new_config_data = config_data.copy()
                 new_config_data["operator_id"] = operator_id
                 db_config = OperatorConfig(**new_config_data)
@@ -144,11 +136,9 @@ def update_operator(db: Session, operator_id: int, operator_data: dict) -> Optio
     
     db.commit()
     db.refresh(db_operator)
-    
 
     configs = db.query(OperatorConfig).filter(OperatorConfig.operator_id == operator_id).all()
     config_responses = [OperatorConfigResponse.model_validate(config) for config in configs]
-    
 
     response = OperatorResponse.model_validate(db_operator)
     response.configs = config_responses
@@ -200,7 +190,7 @@ def create_operator_config_select_option(db: Session, option_data):
 def get_operators_grouped_by_type(db: Session) -> List[Dict[str, Any]]:
 
 
-    operators = db.query(OperatorInfo).filter(OperatorInfo.is_enabled == True).all()
+    operators = db.query(OperatorInfo).all()
 
 
     operator_types = ["Mapper", "Filter", "Deduplicator", "Selector", "Formatter"]
@@ -300,10 +290,10 @@ def get_operators_grouped_by_condition(db: Session, uuid: str, paths: List[str])
 
 
     if not all_permitted_ids:
-        operators = []
+        # if_there_is_no_permission_display_all_operators
+        operators = db.query(OperatorInfo).order_by(OperatorInfo.id).all()
     else:
         operators = db.query(OperatorInfo).filter(
-            OperatorInfo.is_enabled == True,
             OperatorInfo.id.in_(list(all_permitted_ids))
         ).order_by(OperatorInfo.id).all()
 

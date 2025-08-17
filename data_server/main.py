@@ -135,13 +135,6 @@ async def log_requests(request: Request, call_next):
 
 app.include_router(api_router)
 
-# Add a static file service to access uploaded files
-from pathlib import Path
-uploads_dir = Path(os.path.join(get_project_root(), 'attach'))
-# logger.info(f"Uploads directory: {uploads_dir}")
-uploads_dir.mkdir(parents=True, exist_ok=True)
-# For requests starting with "/api/v1/dataflow/real_static_files", remove it and concatenate them to the "uploads_dir" path to access the files
-app.mount("/api/v1/dataflow/real_static_files", StaticFiles(directory=str(uploads_dir)), name="data_flow_static")
 
 # Sets all CORS enabled origins
 app.add_middleware(

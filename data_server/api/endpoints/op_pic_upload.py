@@ -1,12 +1,16 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, status, Request
 from typing import Dict, Any
 import os
+import base64
+from pathlib import Path
 from loguru import logger
 from data_server.utils.file_storage import file_storage_manager
 from data_server.schemas.responses import response_success, response_fail
+from data_celery.utils import get_project_root
 
 
 op_pic_router = APIRouter()
+image_getter_router = APIRouter()
 
 
 @op_pic_router.post("/internal_api/upload", summary="上传operator图片")
@@ -78,3 +82,32 @@ async def delete_uploaded_file_by_name(filename: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"删除文件失败: {str(e)}")
         return response_fail(msg=f"删除文件失败: {str(e)}")
+
+
+@image_getter_router.get("/real_static_files/{category}/{filename}", summary="obtain_the_base64_encoding_of_the_image")
+async def get_image_base64(category: str, filename: str):
+    try:
+        project_root = get_project_root()
+        image_path = Path(project_root) / 'attach' / category / filename
+        
+        if not image_path.exists() or not image_path.is_file():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+
+        with open(image_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
+        
+        file_extension = filename.split('.')[-1].lower()
+        mime_type = f"image/{file_extension}"
+        if file_extension == 'svg':
+            mime_type = "image/svg+xml"
+
+        base64_image = encoded_string
+        
+        return response_success(data={base64_image})
+
+    except HTTPException as http_exc:
+        logger.warning(f"failed-to-obtain-the-picture: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.error(f"base64_encoding_failed: {str(e)}")
+        return response_fail(msg=f"failed_to_obtain_the_picture: {str(e)}")
