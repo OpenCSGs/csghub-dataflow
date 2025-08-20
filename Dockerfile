@@ -43,6 +43,4 @@ RUN git config --global --add safe.directory '*'
 
 # Start fastapi API Server
 EXPOSE 8000
-# CMD ["df-server"]
-CMD ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
