@@ -197,7 +197,7 @@ def get_process_resource_usage_task(worker_name:str,current_ip:str):
 
 def get_process_resource_usage(redis_celery,job_uuid,process_id):
     try:
-        # print(1)
+
         process = psutil.Process(int(process_id))
         if process.is_running():
             cpu_usage = process.cpu_percent(interval=1)

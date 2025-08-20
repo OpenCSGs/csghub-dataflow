@@ -291,7 +291,7 @@ def get_operators_grouped_by_condition(db: Session, uuid: str, paths: List[str])
 
     if not all_permitted_ids:
         # if_there_is_no_permission_display_all_operators
-        operators = db.query(OperatorInfo).order_by(OperatorInfo.id).all()
+        operators = db.query(OperatorInfo).filter(OperatorInfo.is_public.is_(True)).order_by(OperatorInfo.id).all()
     else:
         operators = db.query(OperatorInfo).filter(
             OperatorInfo.id.in_(list(all_permitted_ids))

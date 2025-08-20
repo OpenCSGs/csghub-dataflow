@@ -10,20 +10,20 @@
 #
 # Youku-mPLUG-pretrain Data-Juicer format:
 # {'videos': ['videos/pretrain/14111Y1211b-1134b18bAE55bFE7Jbb7135YE3aY54EaB14ba7CbAa1AbACB24527A.flv'],  # noqa: E501
-#  'text': '<__dj__video> 妈妈给宝宝听胎心，看看宝宝是怎么做的，太调皮了 <|__dj__eoc|>'}
+
 #
 # Youku-mPLUG-classification Data-Juicer format:
 # {'videos': ['videos/classification/14111B1211bFBCBCJYF48B55b7523C51F3-8b3a5YbCa5817aBb38a5YAC-241F71J.mp4'],  # noqa: E501
-#  'text': '<__dj__video> 兔宝宝刚出生，为什么兔妈妈要把它们吃掉？看完涨见识了 <|__dj__eoc|>',
-#  'label': '宠物'}
+
+
 #
 # Youku-mPLUG-retrieval Data-Juicer format:
 # {'videos': ['videos/retrieval/14111B1211bA1F31-E-2YB57--C518FCEBC553abJYFa5541a31C8a57522AYJbYF4aTdfofa112.mp4'],  # noqa: E501
-#  'text': '<__dj__video> 身穿黑色上衣戴着头盔的女子在路上骑着摩托车四周还停放了一些车 <|__dj__eoc|>'}
+
 #
 # Youku-mPLUG-captioning Data-Juicer format:
 # {'videos': ['videos/caption/14111B1211bEJB-1b3b-J3b7b8Y213BJ32-521a1EA8a53-3aBA72aA-4-2-CF1EJ8aTdfofa114.mp4'],  # noqa: E501
-#  'text': '<__dj__video> 穿白色球服的女生高高跳起，接住了球。 <|__dj__eoc|> <__dj__video> 一排穿红色短袖的女生正在接受颁奖。 <|__dj__eoc|>']}  # noqa: E501
+
 #
 # Youku-mPLUG format:
 #   - 4 types: pretrain, classification, retrieval, captioning
@@ -32,20 +32,20 @@
 #
 # Youku-mPLUG-pretrain format:
 # {'video_id:FILE': 'videos/pretrain/14111Y1211b-1134b18bAE55bFE7Jbb7135YE3aY54EaB14ba7CbAa1AbACB24527A.flv',  # noqa: E501
-#  'title': '妈妈给宝宝听胎心，看看宝宝是怎么做的，太调皮了'}
+
 #
 # Youku-mPLUG-classification format:
 # {'video_id:FILE': 'videos/classification/14111B1211bFBCBCJYF48B55b7523C51F3-8b3a5YbCa5817aBb38a5YAC-241F71J.mp4',  # noqa: E501
-#  'title': '兔宝宝刚出生，为什么兔妈妈要把它们吃掉？看完涨见识了',
-#  'label': '宠物'}
+
+
 #
 # Youku-mPLUG-retrieval format:
 # {'clip_name:FILE': 'videos/retrieval/14111B1211bA1F31-E-2YB57--C518FCEBC553abJYFa5541a31C8a57522AYJbYF4aTdfofa112.mp4',  # noqa: E501
-#  'caption': '身穿黑色上衣戴着头盔的女子在路上骑着摩托车四周还停放了一些车'}
+
 #
 # Youku-mPLUG-captioning format:
 # {'video_id:FILE': 'videos/caption/14111B1211bEJB-1b3b-J3b7b8Y213BJ32-521a1EA8a53-3aBA72aA-4-2-CF1EJ8aTdfofa114.mp4',  # noqa: E501
-#  'golden_caption': '穿白色球服的女生高高跳起，接住了球。']}
+
 #
 # Reference:
 # https://modelscope.cn/datasets/modelscope/Youku-AliceMind/summary

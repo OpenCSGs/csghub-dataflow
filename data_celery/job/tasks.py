@@ -37,7 +37,7 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
             if job_obj is not None and job_obj.job_celery_uuid is not None and job_obj.job_celery_uuid != "":
                 job_celery_uuid = job_obj.job_celery_uuid
                 break
-            # time.sleep(1)
+            time.sleep(1)
         if job_celery_uuid == "":
             insert_pipline_job_run_task_log_error(job_uuid, f"not found job celery uuid : {job_uuid}")
             return False

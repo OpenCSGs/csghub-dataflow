@@ -17,3 +17,5 @@ apscheduler
 thrift_sasl
 python-multipart
 gevent
+sqlparse==0.5.2
+openpyxl

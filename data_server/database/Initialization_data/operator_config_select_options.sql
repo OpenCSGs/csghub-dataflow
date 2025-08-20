@@ -1,18 +1,18 @@
 /*
  Navicat Premium Dump SQL
 
- Source Server         : data-flow
+ Source Server         : pg-local-docker
  Source Server Type    : PostgreSQL
- Source Server Version : 150003 (150003)
- Source Host           : net-power.9free.com.cn:18119
+ Source Server Version : 150010 (150010)
+ Source Host           : localhost:5433
  Source Catalog        : data_flow
  Source Schema         : public
 
  Target Server Type    : PostgreSQL
- Target Server Version : 150003 (150003)
+ Target Server Version : 150010 (150010)
  File Encoding         : 65001
 
- Date: 13/08/2025 17:11:07
+ Date: 20/08/2025 15:50:39
 */
 
 
@@ -20,8 +20,11 @@
 -- Table structure for operator_config_select_options
 -- ----------------------------
 DROP TABLE IF EXISTS "public"."operator_config_select_options";
+-- Drop and recreate sequence to ensure clean state
+DROP SEQUENCE IF EXISTS operator_config_select_options_id_seq;
+CREATE SEQUENCE operator_config_select_options_id_seq;
 CREATE TABLE "public"."operator_config_select_options" (
-  "id" int8 NOT NULL DEFAULT nextval('operator_config_select_options_copy_id_seq'::regclass),
+  "id" int8 NOT NULL DEFAULT nextval('operator_config_select_options_id_seq'::regclass),
   "name" varchar(255) COLLATE "pg_catalog"."default",
   "is_enable" bool,
   "sort" int4,
@@ -47,7 +50,6 @@ INSERT INTO "public"."operator_config_select_options" VALUES (11, 'hk2t', 'f', 0
 INSERT INTO "public"."operator_config_select_options" VALUES (12, 't2hk', 'f', 0, '2025-07-25 16:26:07.400241', '2025-07-25 16:26:07.400241');
 INSERT INTO "public"."operator_config_select_options" VALUES (13, 't2jp', 'f', 0, '2025-07-25 16:26:11.456982', '2025-07-25 16:26:11.456982');
 INSERT INTO "public"."operator_config_select_options" VALUES (14, 'jp2t', 'f', 0, '2025-07-25 16:26:15.851434', '2025-07-25 16:26:15.851434');
-INSERT INTO "public"."operator_config_select_options" VALUES (15, 'en', 'f', 0, '2025-07-25 16:26:46.455569', '2025-07-25 16:26:46.455569');
 INSERT INTO "public"."operator_config_select_options" VALUES (16, 'zh', 'f', 0, '2025-07-25 16:26:52.044461', '2025-07-25 16:26:52.044461');
 INSERT INTO "public"."operator_config_select_options" VALUES (18, 'alibaba-pai/pai-qwen1_5-7b-doc2qa', 'f', 0, '2025-07-28 18:05:10.083942', '2025-07-28 18:05:10.083942');
 INSERT INTO "public"."operator_config_select_options" VALUES (19, 'NFC', 'f', 0, '2025-07-28 21:16:14.158499', '2025-07-28 21:16:14.158499');
@@ -72,16 +74,26 @@ INSERT INTO "public"."operator_config_select_options" VALUES (38, 'openai/clip-v
 INSERT INTO "public"."operator_config_select_options" VALUES (39, 'amrul-hzz/watermark_detector', 'f', 0, '2025-08-04 09:47:52.553982', '2025-08-04 09:47:52.553982');
 INSERT INTO "public"."operator_config_select_options" VALUES (40, 'google/owlvit-base-patch32', 'f', 0, '2025-08-04 09:53:12.245911', '2025-08-04 09:53:12.245911');
 INSERT INTO "public"."operator_config_select_options" VALUES (28, 'all', 'f', 0, '2025-07-29 16:49:26.670396', '2025-07-29 16:49:26.670396');
+INSERT INTO "public"."operator_config_select_options" VALUES (15, 'en', 'f', 0, '2025-07-25 16:26:46.455569', '2025-07-25 16:26:46.455569');
+INSERT INTO "public"."operator_config_select_options" VALUES (41, 'http', 'f', 0, '2025-08-20 15:35:07.926455', '2025-08-20 15:35:07.926455');
+INSERT INTO "public"."operator_config_select_options" VALUES (42, 'www', 'f', 0, '2025-08-20 15:35:12.062195', '2025-08-20 15:35:12.062195');
+INSERT INTO "public"."operator_config_select_options" VALUES (43, '.com', 'f', 0, '2025-08-20 15:35:16.184091', '2025-08-20 15:35:16.184091');
+INSERT INTO "public"."operator_config_select_options" VALUES (44, 'href', 'f', 0, '2025-08-20 15:35:21.075133', '2025-08-20 15:35:21.075133');
+INSERT INTO "public"."operator_config_select_options" VALUES (45, '//', 'f', 0, '2025-08-20 15:35:25.794735', '2025-08-20 15:35:25.794735');
 
-ALTER SEQUENCE "public"."operator_config_select_options" START WITH 1000;
 -- ----------------------------
 -- Indexes structure for table operator_config_select_options
 -- ----------------------------
-CREATE INDEX "ix_operator_config_select_options_copy_id" ON "public"."operator_config_select_options" USING btree (
+CREATE INDEX "ix_operator_config_select_options_id" ON "public"."operator_config_select_options" USING btree (
   "id" "pg_catalog"."int8_ops" ASC NULLS LAST
 );
 
 -- ----------------------------
 -- Primary Key structure for table operator_config_select_options
 -- ----------------------------
-ALTER TABLE "public"."operator_config_select_options" ADD CONSTRAINT "operator_config_select_options_copy_pkey" PRIMARY KEY ("id");
+ALTER TABLE "public"."operator_config_select_options" ADD CONSTRAINT "operator_config_select_options_pkey" PRIMARY KEY ("id");
+
+-- Set sequence owner and starting value
+ALTER SEQUENCE operator_config_select_options_id_seq OWNED BY operator_config_select_options.id;
+-- Set sequence to current max ID, with is_called=true so next value will be max+1
+ALTER SEQUENCE operator_config_select_options_id_seq RESTART WITH 1000;

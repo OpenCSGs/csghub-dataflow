@@ -12,8 +12,8 @@ class Job(Base):
     job_name = Column(String(255), nullable=False, comment="任务名称，用户可读的任务标识")
     uuid = Column(String(100), comment="任务唯一标识")
     job_celery_uuid = Column(String(100), comment="celery任务调度唯一标识")
-    task_run_host = Column(String(30), comment="任务执行的服务器")
-    job_celery_work_name = Column(String(30), comment="任务执行的服务器名称")
+    task_run_host = Column(String(100), comment="任务执行的服务器")
+    job_celery_work_name = Column(String(255), comment="任务执行的服务器名称")
 
     job_source = Column(String(50), comment="任务来源类型：'pipeline'(流水线任务) 或 'tool'(工具任务)")
     job_type = Column(String(50), comment="任务业务类型：'data_refine'(数据精炼)、'data_generation'(数据生成)、'data_enhancement'(数据增强)等")
