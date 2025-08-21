@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         #     id='celery_status_scheduled_task',
         #     name='celery_status_scheduled_task Task',
         #     replace_existing=True
-        # )
+        #
         # _scheduler.start()
         # logger.info("APScheduler started with scheduled task (every 3 seconds)")
 

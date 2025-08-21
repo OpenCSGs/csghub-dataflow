@@ -17,9 +17,9 @@ demo_path = os.path.dirname(os.path.abspath(__file__))
 project_path = os.path.dirname(os.path.dirname(demo_path))
 
 
-# 图片本地路径转换为 base64 格式
+
 def covert_image_to_base64(image_path):
-    # 获得文件后缀名
+
     ext = image_path.split(".")[-1]
     if ext not in ["gif", "jpeg", "png"]:
         ext = "jpeg"
@@ -31,7 +31,7 @@ def covert_image_to_base64(image_path):
         # Convert bytes to string
         base64_data = encoded_string.decode("utf-8")
 
-        # 生成base64编码的地址
+
         base64_url = f"data:image/{ext};base64,{base64_data}"
         return base64_url
 
@@ -109,11 +109,11 @@ def show_code(op_name):
 
     init_signature = inspect.signature(op_class.__init__)
 
-    # 输出每个参数的名字和默认值
+
     default_params = dict()
     for name, parameter in init_signature.parameters.items():
         if name in ['self', 'args', 'kwargs']:
-            continue  # 跳过 'self' 参数
+            continue
         if parameter.default is not inspect.Parameter.empty:
             default_params[name] = parameter.default
 
@@ -141,9 +141,9 @@ def clear_directory(directory=cache_dir):
             continue
         item_path = os.path.join(directory, item)
         if os.path.isfile(item_path) or os.path.islink(item_path):
-            os.remove(item_path)  # 删除文件或链接
+            os.remove(item_path)
         elif os.path.isdir(item_path):
-            shutil.rmtree(item_path)  # 递归删除目录
+            shutil.rmtree(item_path)
 
 
 def copy_func(file):

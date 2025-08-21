@@ -177,7 +177,8 @@ def retreive_log(job_id: int, user_id, session: Session, isadmin=False):
     return {"session_log": file_content}
 
 
-def create_new_job(job_cfg, user_id, user_name, user_token,yaml_config):
+# def create_new_job(job_cfg, user_id, user_name, user_token,yaml_config):
+def create_new_job(job_cfg, user_id, user_name, user_token):
     # replace space to underscore in project name, as the space will lead to job run error
     job = Job(job_name=job_cfg.project_name.replace(" ", "_"), data_source=job_cfg.dataset_path,
               data_target=job_cfg.export_path,

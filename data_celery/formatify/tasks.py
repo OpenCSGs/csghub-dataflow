@@ -28,17 +28,19 @@ from pycsghub.utils import (build_csg_headers,
 from data_engine.utils.env import GetHubEndpoint
 @celery_app.task
 def format_task(task_id: int, user_name: str, user_token: str):
+
     tmp_path: str = None
     db_session: Session = None
     format_task: DataFormatTask = None
+
     try:
         db_session: Session = get_sync_session()
         format_task: DataFormatTask = FormatifyManager.get_formatify_task(db_session, task_id)
         tmp_path = get_format_folder_path(format_task.task_uid)
-        insert_formatity_task_log_info(format_task.task_uid, f"Create a temporary directory：{tmp_path}")
+        insert_formatity_task_log_info(format_task.task_uid, f"Create temporary directory：{tmp_path}")
         ensure_directory_exists(tmp_path)
 
-        insert_formatity_task_log_info(format_task.task_uid, f"Start downloading the source directory...")
+        insert_formatity_task_log_info(format_task.task_uid, f"Start downloading directory....")
         ingesterCSGHUB = load_ingester(
             dataset_path=tmp_path,
             repo_id=format_task.from_csg_hub_repo_id,
@@ -47,9 +49,16 @@ def format_task(task_id: int, user_name: str, user_token: str):
             user_token=user_token,
         )
         ingester_result = ingesterCSGHUB.ingest()
-        insert_formatity_task_log_info(format_task.task_uid, f"Download of the source directory completed... Directory address：{ingester_result}")
+        insert_formatity_task_log_info(format_task.task_uid, f"Download directory completed... Directory address：{ingester_result}")
         work_dir = Path(tmp_path).joinpath('work')
-        insert_formatity_task_log_info(format_task.task_uid, f"Start converting files...")
+        file_bool = search_files(tmp_path,[format_task.from_data_type])
+
+        if not file_bool:
+            insert_formatity_task_log_info(format_task.task_uid, f"file not found. task ended....")
+            format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
+            db_session.commit()
+            return
+        insert_formatity_task_log_info(format_task.task_uid, f"Start converting file...")
 
         format_task_func(
             tmp_path=ingester_result,
@@ -57,8 +66,8 @@ def format_task(task_id: int, user_name: str, user_token: str):
             to_type=format_task.to_data_type,
             task_uid=format_task.task_uid,
         )
-        insert_formatity_task_log_info(format_task.task_uid, f"File conversion completed...")
-        insert_formatity_task_log_info(format_task.task_uid, f"Start uploading the target directory...")
+        insert_formatity_task_log_info(format_task.task_uid, f"Conversion file complete....")
+        insert_formatity_task_log_info(format_task.task_uid, f"Start uploading directory...")
 
         exporter = load_exporter(
             export_path=ingester_result,
@@ -78,13 +87,13 @@ def format_task(task_id: int, user_name: str, user_token: str):
         traceback.print_exc()
         format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
         db_session.commit()
-        insert_formatity_task_log_error(format_task.task_uid, f"The conversion task failed.: {str(e)}")
+        insert_formatity_task_log_error(format_task.task_uid, f"Conversion task failed: {str(e)}")
     finally:
         pass
 
         if tmp_path:
             shutil.rmtree(tmp_path)
-            insert_formatity_task_log_info(format_task.task_uid, f"Delete the temporary directory：{tmp_path}")
+            insert_formatity_task_log_info(format_task.task_uid, f"Delete temporary directory：{tmp_path}")
 
 
 def format_task_func(
@@ -94,7 +103,7 @@ def format_task_func(
         task_uid: str
 ):
     insert_formatity_task_log_info(task_uid,
-                                   f"Convert directory：{tmp_path}，Source file type：{getFormatTypeName(from_type)}，Target file type：{getFormatTypeName(to_type)}")
+                                   f"Change the table of contents：{tmp_path}，Source file type：{getFormatTypeName(from_type)}，Source file type：{getFormatTypeName(to_type)}")
     match from_type:
         case DataFormatTypeEnum.Excel.value:
             match to_type:
@@ -131,11 +140,12 @@ def convert_excel_to_csv(file_path: str, task_uid):
             df = pd.read_excel(file_path)
             new_file = os.path.splitext(file_path)[0] + '.csv'
             df.to_csv(new_file, index=False)
-            insert_formatity_task_log_info(task_uid, f'The conversion of the file {new_file} was successful.')
+            insert_formatity_task_log_info(task_uid, f'convert file {new_file} succeed')
             os.remove(file_path)
             return True
         except Exception as e:
-            insert_formatity_task_log_error(task_uid, f"An error occurred while converting the file {file_path}: {e}")
+            print(f"convert file {file_path} error: {e}")
+            insert_formatity_task_log_error(task_uid, f"convert file {file_path} error: {e}")
             return False
     else:
         return True
@@ -143,16 +153,17 @@ def convert_excel_to_csv(file_path: str, task_uid):
 
 def convert_excel_to_json(file_path: str, task_uid):
     if file_path.lower().endswith(('.xlsx', '.xls')):
-        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
         try:
             df = pd.read_excel(file_path)
             new_file = os.path.splitext(file_path)[0] + '.json'
             df.to_json(new_file, orient='records', force_ascii=False)
-            insert_formatity_task_log_info(task_uid, f'The file {new_file} has been converted successfully.')
+            insert_formatity_task_log_info(task_uid, f'convert file {new_file} succeed')
             os.remove(file_path)
             return True
         except Exception as e:
-            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
+            print(f"convert file {file_path} error: {e}")
+            insert_formatity_task_log_error(task_uid, f"convert file {file_path} error: {e}")
 
             return False
     else:
@@ -162,16 +173,17 @@ def convert_excel_to_json(file_path: str, task_uid):
 
 def convert_excel_to_parquet(file_path: str, task_uid):
     if file_path.lower().endswith(('.xlsx', '.xls')):
-        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
         try:
             df = pd.read_excel(file_path)
             new_file = os.path.splitext(file_path)[0] + '.parquet'
             df.to_parquet(new_file + '.parquet', index=False)
-            insert_formatity_task_log_info(task_uid, f'The file {new_file} has been converted successfully.')
+            insert_formatity_task_log_info(task_uid, f'convert file {new_file} succeed')
             os.remove(file_path)
             return True
         except Exception as e:
-            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
+            print(f"convert file {file_path} error: {e}")
+            insert_formatity_task_log_error(task_uid, f"convert file {file_path} error: {e}")
             return False
     else:
         return True
@@ -179,7 +191,7 @@ def convert_excel_to_parquet(file_path: str, task_uid):
 
 def convert_word_to_markdown(file_path: str, task_uid):
     if file_path.lower().endswith(('.docx', '.doc')):
-        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
         try:
             with open(file_path, "rb") as docx_file:
                 result = mammoth.convert_to_html(docx_file)
@@ -188,11 +200,12 @@ def convert_word_to_markdown(file_path: str, task_uid):
             markdown_file_path = os.path.splitext(file_path)[0] + '.md'
             with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
                 md_file.write(markdown_content)
-            insert_formatity_task_log_info(task_uid, f'The file {markdown_file_path} has been converted successfully.')
+            insert_formatity_task_log_info(task_uid, f'convert file {markdown_file_path} succeed')
             os.remove(file_path)
             return True
         except Exception as e:
-            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
+            print(f"convert file {file_path} error: {e}")
+            insert_formatity_task_log_error(task_uid, f"convert file {file_path} error: {e}")
             return False
     else:
 
@@ -201,12 +214,12 @@ def convert_word_to_markdown(file_path: str, task_uid):
 
 def convert_ppt_to_markdown(file_path: str, task_uid):
     if file_path.lower().endswith(('.pptx', '.ppt')):
-        insert_formatity_task_log_info(task_uid, f'Source file address: {file_path}')
+        insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
         try:
             prs = Presentation(file_path)
             markdown_content = ""
             for i, slide in enumerate(prs.slides):
-                markdown_content += f" PPT {i + 1}\n\n"
+                markdown_content += f" lantern slide {i + 1}\n\n"
                 for shape in slide.shapes:
                     if hasattr(shape, "text") and shape.text.strip():
                         text_content = shape.text.strip()
@@ -218,12 +231,63 @@ def convert_ppt_to_markdown(file_path: str, task_uid):
             markdown_file_path = os.path.splitext(file_path)[0] + '.md'
             with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
                 md_file.write(markdown_content)
-            insert_formatity_task_log_info(task_uid, f'The file {markdown_file_path} has been converted successfully.')
+            insert_formatity_task_log_info(task_uid, f'convert file {markdown_file_path} succeed')
             os.remove(file_path)
             return True
         except Exception as e:
-            insert_formatity_task_log_error(task_uid, f"When converting the file {file_path}, an error occurred: {e}")
+            print(f"convert file {file_path} error: {e}")
+            insert_formatity_task_log_error(task_uid, f"convert file {file_path} error: {e}")
             return False
     else:
 
         return True
+
+
+from typing import List, Dict, Tuple
+
+def search_files(folder_path: str, types: List[int]) -> Tuple[bool, List[str]]:
+
+    type_map: Dict[int, List[str]] = {
+        0: ['.ppt', '.pptx'],  # PPT
+        1: ['.doc', '.docx'],  # Word
+        3: ['.xls', '.xlsx']  # Excel
+    }
+
+
+    target_extensions = set()
+    for file_type in types:
+        if file_type in type_map:
+            for ext in type_map[file_type]:
+                target_extensions.add(ext.lower())
+
+
+    found_files: List[str] = []
+
+    def traverse(current_path: str) -> None:
+
+        try:
+
+            entries = os.listdir(current_path)
+
+            for entry in entries:
+                entry_path = os.path.join(current_path, entry)
+
+                if os.path.isdir(entry_path):
+
+                    traverse(entry_path)
+                elif os.path.isfile(entry_path):
+
+                    file_ext = os.path.splitext(entry)[1].lower()
+                    if file_ext in target_extensions:
+                        found_files.append(entry_path)
+
+        except PermissionError:
+            print(f"No permission to access the folder: {current_path}")
+        except Exception as e:
+            print(f"Processing path {current_path} error: {str(e)}")
+
+
+    traverse(folder_path)
+
+
+    return bool(len(found_files) > 0)

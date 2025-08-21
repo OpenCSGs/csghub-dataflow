@@ -34,11 +34,6 @@ This project inherits the [Apache License 2.0](LICENSE) from Data Juicer.
 docker build -t dataflow . -f Dockerfile
 ```
 
-## Building data-flow-celery from Source
-
-```
-docker build -t dataflow-celery . -f Dockerfile-celery
-```
 
 ## Prerequisites
 
@@ -80,6 +75,7 @@ docker run -d --name dataflow-redis \
 
 docker run -d --name dataflow-api -p 8000:8000 \
    -v /home/apidata:/data/dataflow_data \
+   -c "uvicorn data_server.main:app --host 0.0.0.0 --port 8000" \
    -e DATA_DIR=/data/dataflow_data \
    -e CSGHUB_ENDPOINT=https://hub.opencsg.com \
    -e MAX_WORKERS=99 \
@@ -107,6 +103,7 @@ docker run -d --name dataflow-api -p 8000:8000 \
 
 docker run -d --name celery-work -p 8001:8001 \
    -v /home/celery-data:/data/dataflow_celery \
+   -c "celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent" \
    -e DATA_DIR=/data/dataflow_celery \
    -e CSGHUB_ENDPOINT=https://hub.opencsg.com \
    -e MAX_WORKERS=99 \
@@ -146,14 +143,6 @@ uvicorn data_server.main:app --reload
 ## Run data-flow-celery server in development mode locally
 
 ```bash
-# Create virtual python 3.10 environment
-conda create -n  dataflow python=3.10
-
-# Install dependencies
-pip install '.[dist]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install '.[tools]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install '.[sci]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install -r docker/requirements.txt
 
 # Run the celery server locally
 celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent

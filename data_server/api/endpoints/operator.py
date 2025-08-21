@@ -68,6 +68,7 @@ def read_operators_api(
             op_dict['pic_base64'] = pic_base64
             operators_data.append(op_dict)
 
+        operators_data.sort(key=lambda x: x['id'])
         return response_success(data=operators_data, msg="获取算子列表成功")
     except Exception as e:
         return response_fail(msg=f"获取算子列表失败: {str(e)}")
@@ -237,4 +238,8 @@ def get_operators_grouped_by_condition_api(
 
 @router.get("/isAdmin/torf")
 def get_isAdmin_true_or_false(isadmin: str = Header(..., alias="isadmin", description="是否管理员")):
+    if isadmin == "false":
+        isadmin = False
+    else:
+        isadmin = True
     return response_success(data={"isadmin":isadmin})

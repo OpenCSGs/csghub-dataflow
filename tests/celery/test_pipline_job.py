@@ -9,7 +9,7 @@ import pytz
 if __name__ == '__main__':
     print("main")
     # #
-    job_uuid = "fa469c70-a572-4c5f-81f8-3d95d7b04809"
+    job_uuid = "2fef1013-81fd-480e-92d9-be692ba0c8dc"
     session = get_sync_session()
     job: Job = session.query(Job).filter(Job.uuid == job_uuid).first()
     result_pipline_job = run_pipline_job.delay(job_uuid,str(54),"z275748353","9eba3d0173eb48ed99bb6952233bbb50")

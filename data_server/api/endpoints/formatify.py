@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from typing import Annotated, Union
 from loguru import logger
 from data_server.database.session import get_sync_session
-from data_server.schemas.responses import response_success, response_fail
+from data_server.schemas.responses import response_success, response_fail,response_fail400
 from data_server.formatify.FormatifyModels import DataFormatTypeEnum, DataFormatTaskStatusEnum, DataFormatTask
 from data_server.formatify.schemas import DataFormatTaskRequest
 from data_server.formatify.FormatifyManager import (create_formatify_task, search_formatify_task,
                                                     update_formatify_task, delete_formatify_task,
                                                     get_formatify_task, stop_formatify_task)
+from pycsghub.snapshot_download import snapshot_download
+import os
 from sqlalchemy import func
 router = APIRouter()
 

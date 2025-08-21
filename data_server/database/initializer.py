@@ -1,255 +1,98 @@
-
-
 import os
-import glob
-import re
+import sqlparse
 from loguru import logger
+from data_celery.utils import get_project_root
 from sqlalchemy import text
-from .session import get_sync_session
+from data_server.database.session import get_sync_session
 
-
-def _execute_sql_file(sql_file):
-    logger.info(f"Executing initialization script: {os.path.basename(sql_file)}")
+def extract_insert_statements(sql_file_path: str) -> list[str]:
+    """
+    Extracts all INSERT INTO statements from a given SQL file using sqlparse.
+    """
     try:
-        with open(sql_file, 'r', encoding='utf-8') as f:
-            sql_content = f.read()
-        
-        insert_statements = extract_insert_statements(sql_content)
-        successful_count = 0
-        skipped_count = 0
-        
-        for statement in insert_statements:
-            if statement.strip():
-                with get_sync_session() as session:
-                    try:
-                        with session.begin():
-                            processed_statement = preprocess_sql_statement(statement)
-                            session.execute(text(processed_statement))
-                        successful_count += 1
-                    except Exception as e:
-                        if ("duplicate key" in str(e).lower() or 
-                            "already exists" in str(e).lower() or
-                            "unique constraint" in str(e).lower() or
-                            "重复键" in str(e) or
-                            "唯一约束" in str(e) or
-                            "已经存在" in str(e)):
-                            logger.debug(f"Skipping duplicate data in {os.path.basename(sql_file)}: {str(e)[:100]}...")
-                            skipped_count += 1
-                            continue
-                        elif "syntax error" in str(e).lower() or "unterminated" in str(e).lower():
-                            logger.warning(f"Skipping malformed SQL statement in {os.path.basename(sql_file)}: {str(e)[:100]}...")
-                            logger.debug(f"Problematic statement: {statement[:300]}...")
-                            skipped_count += 1
-                            continue
-                        else:
-                            logger.error(f"Error executing statement in {os.path.basename(sql_file)}: {e}")
-                            logger.error(f"Failed statement: {statement[:200]}...")
-                            continue
-        
-        logger.info(f"Processed {os.path.basename(sql_file)}: {successful_count} successful, {skipped_count} skipped")
+        with open(sql_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            parsed = sqlparse.parse(content)
+            insert_statements = [
+                str(statement).strip() for statement in parsed if statement.get_type() == 'INSERT'
+            ]
+            return insert_statements
+    except FileNotFoundError:
+        logger.error(f"Initialization file not found: {sql_file_path}")
+        return []
     except Exception as e:
-        logger.error(f"Error processing file {sql_file}: {e}")
+        logger.error(f"An error occurred while reading {sql_file_path}: {e}")
+        return []
+
+def extract_sequence_statements(sql_file_path: str) -> list[str]:
+    """
+    Extracts sequence-related statements (setval, ALTER SEQUENCE) from a SQL file.
+    """
+    try:
+        with open(sql_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            parsed = sqlparse.parse(content)
+            sequence_statements = []
+            for statement in parsed:
+                stmt_str = str(statement).strip().lower()
+                if 'setval' in stmt_str or 'alter sequence' in stmt_str:
+                    sequence_statements.append(str(statement).strip())
+            return sequence_statements
+    except FileNotFoundError:
+        logger.error(f"Initialization file not found: {sql_file_path}")
+        return []
+    except Exception as e:
+        logger.error(f"An error occurred while reading {sql_file_path}: {e}")
+        return []
 
 def initialize_table(table_name: str):
     """
-    Initializes a single table by finding and executing its corresponding .sql file.
+    Initializes a table by executing INSERT statements and then sequence resets from its .sql file.
     """
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        init_data_dir = os.path.join(current_dir, "Initialization_data")
-        
-        if not os.path.exists(init_data_dir):
-            logger.warning(f"Initialization data directory not found: {init_data_dir}")
-            return
+    project_root = get_project_root()
+    sql_file_path = os.path.join(project_root, 'data_server', 'database', 'Initialization_data', f'{table_name}.sql')
 
-        # Find the sql file corresponding to the table name
-        # Look for exact match: table_name.sql
-        target_filename = f"{table_name}.sql"
-        sql_file = os.path.join(init_data_dir, target_filename)
-        
-        if not os.path.exists(sql_file):
-            sql_file = None
+    logger.info(f"Looking for initialization file: {sql_file_path}")
 
-        if sql_file:
-            _execute_sql_file(sql_file)
-        else:
-            logger.warning(f"No SQL initialization file found for table: {table_name}")
+    insert_statements = extract_insert_statements(sql_file_path)
 
-    except Exception as e:
-        logger.error(f"Failed to initialize table {table_name}: {e}")
-        raise
+    if not insert_statements:
+        logger.warning(f"No INSERT statements found for table '{table_name}' in {sql_file_path}. Skipping data insertion.")
+    else:
+        logger.info(f"Found {len(insert_statements)} INSERT statements for table '{table_name}'. Executing now.")
+        with get_sync_session() as session:
+            success_count = 0
+            for statement in insert_statements:
+                try:
+                    session.execute(text(statement))
+                    session.commit()
+                    success_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to execute INSERT for '{table_name}'. Rolling back.")
+                    logger.error(f"Statement: {statement}")
+                    logger.error(f"Error: {e}")
+                    session.rollback()
 
-def execute_initialization_scripts():
-    """
-    Execute all SQL scripts for database initialization.
-    """
-    try:
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        init_data_dir = os.path.join(current_dir, "Initialization_data")
-        
-        if not os.path.exists(init_data_dir):
-            logger.warning(f"Initialization data directory not found: {init_data_dir}")
-            return
-        
-        sql_files = glob.glob(os.path.join(init_data_dir, "*.sql"))
-        
-        if not sql_files:
-            logger.info("No SQL initialization files found")
-            return
-        
-        logger.info(f"Found {len(sql_files)} SQL initialization files for full initialization.")
-        
-        for sql_file in sorted(sql_files):
-            _execute_sql_file(sql_file)
-                
-        logger.info("Database full initialization scan completed successfully")
-                
-    except Exception as e:
-        logger.error(f"Failed to execute initialization scripts: {e}")
-        raise
-
-
-def preprocess_sql_statement(statement):
-
-    try:
-
-
-        
-
-        if not statement.upper().strip().startswith('INSERT INTO'):
-            return statement
-        
-
-        # INSERT INTO "table" VALUES (val1, val2, 'complex_string', val4, ...);
-        
-
-        values_match = re.search(r'VALUES\s*\((.*)\);?\s*$', statement, re.IGNORECASE | re.DOTALL)
-        if not values_match:
-            return statement
-        
-        values_part = values_match.group(1)
-        
-
-
-        fixed_values = fix_quoted_strings(values_part).replace('\\n', '\n')
-        
-
-        table_part = statement[:values_match.start()]
-        fixed_statement = f"{table_part}VALUES ({fixed_values});"
-        
-        return fixed_statement
-        
-    except Exception as e:
-        logger.warning(f"Error preprocessing SQL statement: {e}")
-        return statement
-
-
-def fix_quoted_strings(values_part):
-
-    try:
-
-
-        
-        result = []
-        i = 0
-        current_token = ""
-        in_string = False
-        string_content = ""
-        paren_depth = 0
-        
-        while i < len(values_part):
-            char = values_part[i]
-            
-            if char == '(' and not in_string:
-                paren_depth += 1
-                current_token += char
-            elif char == ')' and not in_string:
-                paren_depth -= 1
-                current_token += char
-            elif char == "'" and not in_string:
-
-                in_string = True
-                string_content = ""
-            elif char == "'" and in_string:
-                # When encountering single quotes, check if they are escaped single quotes
-                if i + 1 < len(values_part) and values_part[i + 1] == "'":
-                    # This is the escaped single quote "", stored as a single single quote
-                    string_content += "'"
-                    i += 1
-                else:
-                    # string_end
-                    in_string = False
-                    # Always use single quotes and handle the internal single quote escape
-                    escaped_content = string_content.replace("'", "''")
-                    current_token += f"'{escaped_content}'"
-                    string_content = ""
-            elif in_string:
-                string_content += char
-            elif char == ',' and paren_depth == 0 and not in_string:
-                result.append(current_token.strip())
-                current_token = ""
+            if success_count == len(insert_statements):
+                logger.info(f"Successfully executed all {success_count} INSERTs for table '{table_name}'.")
             else:
-                current_token += char
-            
-            i += 1
-        
+                logger.warning(f"Executed {success_count}/{len(insert_statements)} INSERTs for '{table_name}'.")
 
-        if current_token.strip():
-            result.append(current_token.strip())
-        
-        return ', '.join(result)
-        
-    except Exception as e:
-        logger.warning(f"Error fixing quoted strings: {e}")
-        return values_part
+    # After inserting data, handle sequence updates
+    sequence_statements = extract_sequence_statements(sql_file_path)
+    if not sequence_statements:
+        logger.info(f"No sequence statements found for table '{table_name}'.")
+        return
 
-
-def extract_insert_statements(sql_content):
-
-
-    sql_content = re.sub(r'--.*?\n', '\n', sql_content)
-    sql_content = re.sub(r'/\*.*?\*/', '', sql_content, flags=re.DOTALL)
-    
-
-    insert_statements = []
-    lines = sql_content.split('\n')
-    current_statement = ""
-    in_insert = False
-    paren_count = 0
-    quote_count = 0
-    
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-            
-
-        if line.upper().startswith('INSERT INTO'):
-            in_insert = True
-            current_statement = line
-
-            paren_count = line.count('(') - line.count(')')
-            quote_count = line.count("'") % 2
-            
-
-            if line.endswith(';') and paren_count == 0 and quote_count == 0:
-                insert_statements.append(current_statement)
-                current_statement = ""
-                in_insert = False
-        elif in_insert:
-
-            current_statement += " " + line
-            paren_count += line.count('(') - line.count(')')
-            quote_count = (quote_count + line.count("'")) % 2
-            
-
-            if line.endswith(';') and paren_count == 0 and quote_count == 0:
-                insert_statements.append(current_statement)
-                current_statement = ""
-                in_insert = False
-    
-
-    if current_statement and in_insert:
-        insert_statements.append(current_statement)
-    
-    return insert_statements
+    logger.info(f"Found {len(sequence_statements)} sequence statements for '{table_name}'. Executing now.")
+    with get_sync_session() as session:
+        for statement in sequence_statements:
+            try:
+                session.execute(text(statement))
+                session.commit()
+                logger.info(f"Successfully executed sequence statement for '{table_name}'.")
+            except Exception as e:
+                logger.error(f"Failed to execute sequence statement for '{table_name}'. Rolling back.")
+                logger.error(f"Statement: {statement}")
+                logger.error(f"Error: {e}")
+                session.rollback()

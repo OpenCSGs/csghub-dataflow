@@ -15,6 +15,7 @@ class OperatorInfoResponse(BaseModel):
     icon: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    is_public: Optional[bool] = None
 
     @field_serializer('created_at', 'updated_at')
     def serialize_dt(self, dt: Optional[datetime], _info):
@@ -111,6 +112,7 @@ class OperatorUpdateRequest(BaseModel):
     before_cleaning: Optional[str] = None
     after_cleaning: Optional[str] = None
     icon: Optional[str] = None
+    is_public: Optional[bool] = None
     configs: Optional[List[OperatorConfigRequest]] = None
 
 class OperatorConfigSelectOptionsCreate(BaseModel):

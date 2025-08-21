@@ -18,6 +18,7 @@ class OperatorInfo(Base):
     icon = Column(Text)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    is_public = Column(Boolean, default=True)
 
 class OperatorConfig(Base):
     __tablename__ = "operator_config"

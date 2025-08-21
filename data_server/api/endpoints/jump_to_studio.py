@@ -9,7 +9,7 @@ from data_server.schemas.responses import response_success
 router = APIRouter()
 
 
-BASE_STUDIO_URL = os.getenv("STUDIO_JUMP_URL", "https://opencsg.com/user/login1/")
+BASE_STUDIO_URL = os.getenv("STUDIO_JUMP_URL", "http://192.168.10.72:8080")
 
 
 @router.post("/jump-to-studio", tags=["studio"])
@@ -21,10 +21,10 @@ async def jump_to_studio(
     """Jump to studio with credentials from headers."""
 
     if user_name:
-        target_url = f"{BASE_STUDIO_URL}/user/login1/?email={user_name}@qq.com"
+        target_url = f"{BASE_STUDIO_URL}/user/login_verfy/?email={user_name}@qq.com"
     else:
-        target_url = f"{BASE_STUDIO_URL}/user/login1/?email=z275748353@qq.com"
-    
+        target_url = f"{BASE_STUDIO_URL}/user/login_verfy/?email=z275748353@qq.com"
+
     # Prepare the JSON payload with credentials from headers
     payload = {
         "authorization": authorization,
@@ -39,11 +39,14 @@ async def jump_to_studio(
         'Content-Type': 'application/json'
     }
 
+    print(f"final_url:{target_url}")
+    print(f"payload:{payload}")
     try:
         async with httpx.AsyncClient() as client:
             # Send the payload in the JSON body of the POST request
-            # response = await client.post(target_url, data=payload)
-            # response.raise_for_status()  # Raise an exception for 4xx/5xx responses
+            response = await client.post(target_url, data=payload)
+            response.raise_for_status()  # Raise an exception for 4xx/5xx responses
+            target_url = f"{BASE_STUDIO_URL}/user/login_reques/?email={user_name}@qq.com"
             return response_success(data=target_url)
     except httpx.RequestError as exc:
         logger.error(f"Request to studio failed: {exc}")

@@ -110,7 +110,12 @@ def response_fail401(msg: str = ""):
         'code': 401,
     }
     return res
-
+def response_fail400(msg: str = ""):
+    res = {
+        'msg': msg,
+        'code': 400,
+    }
+    return res
 def response_success(data: Any = None, msg: str = ""):
     res = {
         'msg': msg,

@@ -48,9 +48,9 @@ services:
         celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet -n $$NODENAME
       "
     volumes:
-      - /root/dataflow/dataflow-v2/celery-data:/data/dataflow_celery
+      - /root/dataflow/dataflow-v2/apidata:/data/dataflow_data
     environment:
-      - DATA_DIR=/data/dataflow_celery
+      - DATA_DIR=/data/dataflow_data
       - CSGHUB_ENDPOINT=https://hub.opencsg-stg.com
       - MAX_WORKERS=99
       - RAY_ADDRESS=auto
@@ -78,6 +78,10 @@ services:
   dataflow_api_server:
     restart: unless-stopped
     image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250816
+    command: >
+      sh -c "
+        uvicorn data_server.main:app --host 0.0.0.0 --port 8000
+      "
     volumes:
       - /root/dataflow/dataflow-v2/apidata:/data/dataflow_data
     environment:
