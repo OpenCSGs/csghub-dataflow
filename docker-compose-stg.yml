@@ -40,7 +40,7 @@ services:
 
   dataflow_celery_worker:
     restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow-celery:20250816
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250821
     command: >
       sh -c "
         MILLISECOND_TIMESTAMP=$$(date +%s%3N);
@@ -77,7 +77,7 @@ services:
 
   dataflow_api_server:
     restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250816
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250821
     command: >
       sh -c "
         uvicorn data_server.main:app --host 0.0.0.0 --port 8000
