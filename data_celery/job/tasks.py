@@ -151,8 +151,14 @@ def run_pipline_job_task(config,job,session,user_id, user_name, user_token):
     with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmpfile:
         tmpfile.write(yaml_content)
         temp_dir_str = tmpfile.name
-    cfg = init_configs(['--config', temp_dir_str, '--user_id', user_id,
-                        '--user_name', user_name, '--user_token', user_token],redirect=False)
+
+    try:
+        cfg = init_configs(['--config', temp_dir_str, '--user_id', user_id,
+                            '--user_name', user_name, '--user_token', user_token], redirect=False)
+    except:
+        insert_pipline_job_run_task_log_error(job.uuid, f"{job.uuid} :Config initialization failed")
+        raise
+
     # return
     temp_filename = os.path.basename(temp_dir_str)
 
@@ -164,8 +170,10 @@ def run_pipline_job_task(config,job,session,user_id, user_name, user_token):
         os.remove(temp_work_file)
     except FileNotFoundError:
         insert_pipline_job_run_task_log_error(job.uuid, f"{job.uuid} :not exists yaml config - {temp_work_file}")
+        raise
     except PermissionError:
         insert_pipline_job_run_task_log_error(job.uuid, f"{job.uuid} :Permission denied. You cannot remove - {temp_work_file}")
+        raise
 
     with open(config_file, mode='w') as file:
         file.write(config.yaml())

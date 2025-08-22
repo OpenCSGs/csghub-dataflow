@@ -155,7 +155,7 @@ INSERT INTO "public"."operator_config" VALUES (30, 17, 'swap_random_word', 'chec
 INSERT INTO "public"."operator_config" VALUES (92, 26, 'ignore_pattern', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:04:52.926481', '2025-07-29 17:04:52.926481');
 INSERT INTO "public"."operator_config" VALUES (97, 26, 'tokenizer_model', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:04:52.926481', '2025-07-29 17:04:52.926481');
 INSERT INTO "public"."operator_config" VALUES (63, 46, 'target_value', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:46:52.665485', '2025-07-29 16:46:52.665485');
-INSERT INTO "public"."operator_config" VALUES (101, 19, 'ignore_pattern', 'input', NULL, '\p{P}', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:05:32.168602', '2025-07-29 17:05:32.168602');
+INSERT INTO "public"."operator_config" VALUES (101, 19, 'ignore_pattern', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:05:32.168602', '2025-07-29 17:05:32.168602');
 INSERT INTO "public"."operator_config" VALUES (68, 48, 'tokenization', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:47:06.922281', '2025-07-29 16:47:06.922281');
 INSERT INTO "public"."operator_config" VALUES (48, 37, 'tokenization', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:43:33.224115', '2025-07-29 16:43:33.224115');
 INSERT INTO "public"."operator_config" VALUES (31, 17, 'delete_random_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:06:37.159089', '2025-07-28 22:06:37.159089');

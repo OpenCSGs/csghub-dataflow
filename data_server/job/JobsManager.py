@@ -223,20 +223,23 @@ def create_pipline_new_job(job_cfg, user_id, user_name, user_token,yaml_config):
     with get_sync_session() as session:
         with session.begin():
             session.add(job)
+            if job_cfg.is_run:
+                job_celery_uid = run_pipline_task(task_uuid, user_id, user_name, user_token, job_cfg.task_run_time)
+                job.job_celery_uuid = job_celery_uid
             session.commit()
-    print(f"job.yaml_config is:{job.yaml_config}")
-    if job_cfg.is_run:
-
-        with get_sync_session() as session:
-            with session.begin():
-                job_obj = session.query(Job).filter(Job.uuid == task_uuid).one_or_none()
-                if  job_obj is not None:
-                    job_celery_uid = run_pipline_task(task_uuid, user_id, user_name, user_token,job_cfg.task_run_time)
-                    job_obj.job_celery_uuid = job_celery_uid
-                    logger.info(f"create_pipline_new_job job_celery_uid is:{job_celery_uid}")
-                    session.commit()
-                else:
-                    logger.info(f"create_pipline_new_job job_obj is None")
+    # print(f"job.yaml_config is:{job.yaml_config}")
+    # if job_cfg.is_run:
+    #
+    #     with get_sync_session() as session:
+    #         with session.begin():
+    #             job_obj = session.query(Job).filter(Job.uuid == task_uuid).one_or_none()
+    #             if  job_obj is not None:
+    #                 job_celery_uid = run_pipline_task(task_uuid, user_id, user_name, user_token,job_cfg.task_run_time)
+    #                 job_obj.job_celery_uuid = job_celery_uid
+    #                 logger.info(f"create_pipline_new_job job_celery_uid is:{job_celery_uid}")
+    #                 session.commit()
+    #             else:
+    #                 logger.info(f"create_pipline_new_job job_obj is None")
     result = {"job_id": job.job_id,
               "job_name": job.job_name, "status": job.status}
 

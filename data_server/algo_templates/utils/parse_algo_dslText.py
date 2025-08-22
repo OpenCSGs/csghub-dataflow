@@ -76,6 +76,37 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
                 except Exception as e:
                     print(f"查询operator_config_select_options失败: {e}")
                     pass
+            # handle_string_array_format_like_"['1','2']"_or_"[''1'', ''2'']"
+            elif param_value and isinstance(param_value, str) and param_value.startswith('[') and param_value.endswith(']'):
+                try:
+                    import ast
+                    # try_to_parse_the_string_array
+                    # First, handle the double single quote escape format [" 1 ", "2"] -> [" 1 ", "2"]
+                    normalized_value = param_value.replace("''", "'")
+                    parsed_list = ast.literal_eval(normalized_value)
+                    if isinstance(parsed_list, list):
+                        from data_server.operator.mapper.operator_mapper import get_operator_config_select_option_by_id
+                        from data_server.database.session import get_sync_session
+                        converted_list = []
+                        for item in parsed_list:
+                            if isinstance(item, str) and item.isdigit():
+                                try:
+                                    db = get_sync_session()
+                                    option_record = get_operator_config_select_option_by_id(db, int(item))
+                                    if option_record and hasattr(option_record, 'name'):
+                                        converted_list.append(option_record.name)
+                                    else:
+                                        converted_list.append(item)
+                                    db.close()
+                                except Exception as e:
+                                    print(f"查询operator_config_select_options失败: {e}")
+                                    converted_list.append(item)
+                            else:
+                                converted_list.append(item)
+                        param_value = converted_list
+                except (ValueError, SyntaxError) as e:
+                    print(f"解析字符串数组失败: {e}")
+                    pass
             # handle_the_numeric_id_of_list_type
             elif param_value and isinstance(param_value, list):
                 from data_server.operator.mapper.operator_mapper import get_operator_config_select_option_by_id
@@ -135,8 +166,13 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
         return f"{param_name}: {list_content}"
     
     # regular_expressions_match_lists_in_string_format
-    pattern = r"(\s+\w+):\s*'(\[.*?\])'"
-    yaml_str = re.sub(pattern, convert_string_list_to_yaml, yaml_str)
+    # 匹配单引号包裹的字符串数组：'[...]'
+    pattern1 = r"(\s+\w+):\s*'(\[.*?\])'"
+    yaml_str = re.sub(pattern1, convert_string_list_to_yaml, yaml_str)
+    
+    # 匹配双引号包裹的字符串数组："[...]"
+    pattern2 = r'(\s+\w+):\s*"(\[.*?\])"'
+    yaml_str = re.sub(pattern2, convert_string_list_to_yaml, yaml_str)
 
     yaml_str = yaml_str.replace(": {}", ":")
     
@@ -207,7 +243,7 @@ process:
         default_value: '18'
         is_required: false
         is_spinner: false
-        final_value: '18'
+        final_value: '[''41'', ''42'', ''43'', ''44'', ''45'']'
         display_name: 模型名称
 edges: []
 

@@ -45,7 +45,7 @@ services:
       sh -c "
         MILLISECOND_TIMESTAMP=$$(date +%s%3N);
         NODENAME=worker_$$MILLISECOND_TIMESTAMP@$$(hostname -f);
-        celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet -n $$NODENAME
+        celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent -n $$NODENAME
       "
     volumes:
       - /root/dataflow/dataflow-v2/apidata:/data/dataflow_data
