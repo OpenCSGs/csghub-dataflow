@@ -214,7 +214,7 @@ async def read_task_resource_info(id: int,
 
 @router.post("", response_model=responses.JobCreate, description="Create the dataflow job")
 def create_job(
-    config:  Union[Recipe, Tool],
+    config:  Union[Tool],
     user_id: Annotated[str | None, Header(alias="user_id")] = None,
     user_name: Annotated[str | None, Header(alias="user_name")] = None,
     user_token: Annotated[str | None, Header(alias="user_token")] = None
