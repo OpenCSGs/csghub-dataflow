@@ -101,6 +101,11 @@ class Op(BaseModelExtended):
 
 class Recipe(BaseModelExtended):
     # For orgnized purpose
+    # params: Optional[list[Param]] = None
+    # mem_required: Optional[int | str] = 0
+    # cpu_required: Optional[int] = 1
+    # accelerator:Optional[Union[Literal["cpu"], Literal["gpu"]]] = None
+
     name: Optional[str] = ""
     description: Optional[str] = None
     template_id: Optional[str] = None

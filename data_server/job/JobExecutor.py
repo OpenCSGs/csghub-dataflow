@@ -26,16 +26,16 @@ def run_executor(config, job_id, job_name, user_id, user_name, user_token):
         else:
             data_path = os.path.join(
                 GetDataTopPath(), job_name + "_" + uuid_str)
+
             dataset_path = os.path.join(data_path, 'input')
-            export_path = os.path.join(
-                data_path, 'output', '_df_dataset.jsonl')
+            export_path = os.path.join(data_path, 'output', '_df_dataset.jsonl')
             config.dataset_path = dataset_path
             config.export_path = export_path
 
         repo_id = config.repo_id
         work_dir = os.path.dirname(config.export_path)
         config.branch=config.branch if config.branch and len(config.branch) > 0 else 'main'
-
+        # print(user_name, 100 * "*3")
         if config.job_source == "tool":
             # handle tool jobs
             params = ExecutedParams(

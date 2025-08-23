@@ -40,6 +40,7 @@ class ToolExecutor:
                     redirect=self.tool_def.executor_type == 'default')
 
     def run(self):
+
         """
         Running the dataset process pipeline.
 
@@ -48,7 +49,9 @@ class ToolExecutor:
         """
         # 1. setup tool
         logger.info('Preparing tool...')
+
         tool_obj: TOOL = load_tool(self.tool_def, self.executed_params)
+
         with TRACE_HELPER_TOOL.trace_block(
             "start"
         ):

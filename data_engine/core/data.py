@@ -204,7 +204,7 @@ class NestedDataset(Dataset, DJDataset):
         except:  # noqa: E722
             logger.error(f'An error occurred during Op [{op._name}].')
             traceback.print_exc()
-            exit(1)
+            # exit(1)
         finally:
             if checkpointer and dataset is not self:
                 logger.info('Writing checkpoint of dataset processed by '

@@ -34,7 +34,6 @@ def create_formatify_task(db_session: Session, dataFormatTask: DataFormatTaskReq
 
     db_session.add(data_format_task_db)
     db_session.commit()
-    # print(100*'*')
     task_celery_uid = run_format_task(data_format_task_db.id, user_name, user_token)
     data_format_task_db.task_celery_uid = task_celery_uid
     data_format_task_db.task_status = DataFormatTaskStatusEnum.EXECUTING.value

@@ -141,7 +141,9 @@ def read_permissions_by_operator_api(operator_id: int, db: Session = Depends(get
 def read_permissions_by_user_api(uuid: str, db: Session = Depends(get_sync_session)):
 
     try:
+
         permissions = get_permissions_by_user(db, uuid)
+
         return response_success(data=permissions, msg="获取用户权限成功")
     except Exception as e:
         return response_fail(msg=f"获取用户权限失败: {str(e)}")

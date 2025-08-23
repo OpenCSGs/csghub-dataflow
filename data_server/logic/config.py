@@ -118,6 +118,7 @@ def build_tools(userid: str = None, isadmin: bool = False):
             sub_type=str(tool_name.split("_")[-2]).capitalize(),
             type=str(tool_name.split("_")[-1]).capitalize(),
             params=params,
+            # accelerator='cpu'
         )
         if tool_class.io_requirement:
             tools[tool_name].io_requirement=tool_class.io_requirement

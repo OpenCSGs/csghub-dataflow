@@ -631,12 +631,15 @@ def update_op_process(cfg, parser):
         action.dest for action in parser._actions
         if hasattr(action, 'dest') and isinstance(action, ActionTypeHint)
     ])
-
-    temp_args = namespace_to_arg_list(temp_cfg,
-                                      includes=recognized_args,
-                                      excludes=['config'])
-    temp_args = ['--config', temp_cfg.config[0].absolute] + temp_args
-    temp_parser.parse_args(temp_args)
+    try:
+        temp_args = namespace_to_arg_list(temp_cfg,
+                                          includes=recognized_args,
+                                          excludes=['config'])
+        temp_args = ['--config', temp_cfg.config[0].absolute] + temp_args
+        temp_parser.parse_args(temp_args)
+    except:
+        logger.error('Config initialization failed')
+        raise "Config initialization failed"
     return cfg
 
 
