@@ -55,7 +55,7 @@ class Analysis(TOOL):
             temp_name = tmpfile.name
         cfg = init_configs(['--config', temp_name, '--user_id', self.executed_params.user_id,
                             '--user_name', self.executed_params.user_name, '--user_token', self.executed_params.user_token, '--np', str(self.tool_def.np),
-                            '--dataset_path', self.tool_def.dataset_path, '--export_path', self.tool_def.export_path])
+                            '--dataset_path', self.tool_def.dataset_path, '--export_path', self.tool_def.export_path,'--text_keys',self.text_key])
         os.remove(temp_name)  # Delete temp file
 
         # cfg.dataset_path = self.tool_def.dataset_path
