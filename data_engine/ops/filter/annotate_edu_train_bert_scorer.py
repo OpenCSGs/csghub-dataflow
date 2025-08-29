@@ -21,18 +21,18 @@ OP_NAME = 'annotate_edu_train_bert_scorer'
 class AnnotateEduTrainBertScorer(Filter):
     def __init__(self,
          auth_token: DataType.STRING = "",
+         model_url: DataType.STRING = "https://esupw2o6m6f4.space.opencsg.com/rerank",
          *args,
          **kwargs):
         super().__init__(*args, **kwargs)
         self.auth_token = auth_token
-
+        self.model_url = model_url
 
     def compute_stats(self, sample, context=False):
         score_field = f"{self.text_key}_score"
         content = sample[self.text_key]
         sample[score_field] = 0
 
-        url = "https://esupw2o6m6f4.space.opencsg.com/rerank"
         # auth_token = "9acc3ea387b5479607bdeb5386af6e3483fbf070"
         data = {
             "query": "What is Deep Learning?",
@@ -44,19 +44,19 @@ class AnnotateEduTrainBertScorer(Filter):
             "truncate": False,
             "truncation_direction": "right"
         }
-        score = self.get_score_from_model(url,self.auth_token, data)
+        score = self.get_score_from_model(self.model_url,self.auth_token, data)
         if score is not None:
             sample[score_field] = score
         return sample
 
-    def get_score_from_model(self,url, auth_token, data):
+    def get_score_from_model(self,model_url, auth_token, data):
 
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {auth_token}'
         }
 
-        response = requests.post(url, json=data, headers=headers)
+        response = requests.post(model_url, json=data, headers=headers)
 
         if response.status_code == 200:
             try:
@@ -86,4 +86,5 @@ class AnnotateEduTrainBertScorer(Filter):
     def init_params(cls):
         return [
             Param("auth_token", DataType.STRING, {}, ""),
+            Param("model_url", DataType.STRING, {}, "https://esupw2o6m6f4.space.opencsg.com/rerank"),
         ]

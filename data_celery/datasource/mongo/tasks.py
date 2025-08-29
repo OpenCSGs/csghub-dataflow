@@ -52,7 +52,7 @@ def collection_mongo_task(task_uid: str,user_name: str,user_token: str):
             collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
             insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} has no associated datasource.")
             return False
-        if collection_task.datasource.source_type != DataSourceTypeEnum.MYSQL.value:
+        if collection_task.datasource.source_type != DataSourceTypeEnum.MONGODB.value:
             collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
             insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} is not a MySQL task.")
             return False

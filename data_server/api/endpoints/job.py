@@ -123,7 +123,7 @@ async def read_log(id: int,
                    session: Session = Depends(get_sync_session)):
     try:
         log = retreive_log(job_id=id, user_id=user_id,
-                           session=session, isadmin=isadmin, )
+                           session=session, isadmin=isadmin )
         if not log:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -214,11 +214,26 @@ async def read_task_resource_info(id: int,
 
 @router.post("", response_model=responses.JobCreate, description="Create the dataflow job")
 def create_job(
+
     config:  Union[Tool],
+
+    # config:  Union[Recipe, Tool],
+    # config:  Union[Tool,Recipe],
+    # config: Union[Tool],
+
     user_id: Annotated[str | None, Header(alias="user_id")] = None,
     user_name: Annotated[str | None, Header(alias="user_name")] = None,
     user_token: Annotated[str | None, Header(alias="user_token")] = None
 ):
+    # print(user_id)
+    # print(user_name)
+    # print(user_token)
+    # print(config)
+    if isinstance(config, Recipe):
+        print("匹配到 Recipe 类")
+        # 处理 Recipe 逻辑（如解析 process 字段）
+    elif isinstance(config, Tool):
+        print("匹配到 Tool 类")
     try:
         result = create_new_job(
             job_cfg=config, user_id=user_id, user_name=user_name, user_token=user_token)
