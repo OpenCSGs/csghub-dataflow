@@ -69,6 +69,7 @@ class TOOL:
         )
 
         # whether the model can be accelerated using cuda
+
         _accelerator = self.tool_def.accelerator if self.tool_def.accelerator else None
         if _accelerator is not None:
             self.accelerator = _accelerator
@@ -91,7 +92,7 @@ class TOOL:
             # 0. ingest data
             self.tool_def.dataset_path = self.ingester.ingest()
             logger.info(f'Data ingested from {self.tool_def.dataset_path}')
-
+        print('_accelerator', 100 * '*5')
         # 1. data process
         with TRACE_HELPER_TOOL.trace_block(
             "run",
@@ -103,9 +104,11 @@ class TOOL:
                 "operation_name": self._name,
             }
         ):
+
             logger.info('Processing tool...')
             tstart = time.time()
             target_path: Path = self.process()
+            print('_accelerator', 100 * '-5')
             tend = time.time()
             logger.info(f'Tool are done in {tend - tstart:.3f}s.')
 
