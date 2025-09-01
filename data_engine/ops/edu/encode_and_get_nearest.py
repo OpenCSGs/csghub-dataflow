@@ -6,18 +6,18 @@ from datasets import Dataset
 from pydantic import Field
 import requests
 
-from ..base_op import OPERATORS, Sample, Selector
+from ..base_op import OPERATORS, Sample, Selector,Param,DataType
 
 
 OP_NAME = 'encode_and_get_nearest_mapper'
 # 编码为嵌入向量
-def get_embeddings(texts: List[str], url: str = "https://ev19h0o3sv7k.space.opencsg.com/embed"):
+def get_embeddings(texts: List[str], model_url):
     """
     Call API service to get text embeddings
 
     Args:
         texts (List[str]): List of texts to encode
-        url (str): API address, defaults to hardcoded address
+        model_url (str): API address, defaults to hardcoded address
 
     Returns:
         List[List[float]]: List of embedding vectors
@@ -32,14 +32,14 @@ def get_embeddings(texts: List[str], url: str = "https://ev19h0o3sv7k.space.open
         "normalize": True
     }
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(model_url, json=payload)
         response.raise_for_status()  # Raise exception for HTTP errors
         embeddings = response.json()  # List of embeddings
     except requests.RequestException as e:
         raise requests.RequestException(f"Error calling API: {e}")
     return embeddings
 
-def encode_texts(texts: List[str], url: str = "https://ev19h0o3sv7k.space.opencsg.com/embed") -> List[List[float]]:
+def encode_texts(texts: List[str], model_url) -> List[List[float]]:
     """
     Encode multiple texts into embedding vectors
 
@@ -50,7 +50,7 @@ def encode_texts(texts: List[str], url: str = "https://ev19h0o3sv7k.space.opencs
     Returns:
         List[List[float]]: List of embedding vectors
     """
-    return get_embeddings(texts, url=url)
+    return get_embeddings(texts, model_url=model_url)
 
 
 class FaissNearestNeighbour:
@@ -158,6 +158,7 @@ class EncodeAndGetNearestSelector(Selector):
     """Encode texts and find nearest neighbours using Faiss."""
 
     def __init__(self,
+                 model_url: str = "https://ev19h0o3sv7k.space.opencsg.com/embed",
                  *args,
                  **kwargs):
         """
@@ -168,6 +169,7 @@ class EncodeAndGetNearestSelector(Selector):
         """
         super().__init__(*args, **kwargs)
         self.first_prompt = []
+        self.model_url = model_url
 
     def process(self, dataset):
         if len(dataset) <= 0:
@@ -176,7 +178,7 @@ class EncodeAndGetNearestSelector(Selector):
 
         first_prompt_list = dataset["first_prompt"].tolist()
 
-        embeddings = encode_texts(first_prompt_list)
+        embeddings = encode_texts(first_prompt_list,self.model_url)
         dataset['embedding'] = embeddings
 
         nearest_neighbour = FaissNearestNeighbour()
@@ -202,3 +204,10 @@ class EncodeAndGetNearestSelector(Selector):
                    "如['What is artificial intelligence?', 'How does machine learning work?']",
             after="数据集增加了embedding、nn_indices和nn_scores字段，包含文本的向量表示和最近邻信息"
         )
+
+    @classmethod
+    @property
+    def init_params(cls):
+        return [
+            Param("model_url", DataType.STRING, {}, "https://ev19h0o3sv7k.space.opencsg.com/embed"),
+        ]

@@ -35,7 +35,6 @@ def run_executor(config, job_id, job_name, user_id, user_name, user_token):
         repo_id = config.repo_id
         work_dir = os.path.dirname(config.export_path)
         config.branch=config.branch if config.branch and len(config.branch) > 0 else 'main'
-        # print(user_name, 100 * "*3")
         if config.job_source == "tool":
             # handle tool jobs
             params = ExecutedParams(
