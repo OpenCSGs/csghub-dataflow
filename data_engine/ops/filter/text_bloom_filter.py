@@ -64,11 +64,7 @@ class TextBloomFilter(Filter):
         return sample
 
     def process(self, sample):
-
-        if True in self.flags:
-            return not sample[Fields.stats][StatsKeys.bloom]
-        else:
-            return False
+        return not sample[Fields.stats][StatsKeys.bloom]
 
     @classmethod
     @property

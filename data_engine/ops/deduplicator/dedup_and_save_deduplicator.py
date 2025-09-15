@@ -2,7 +2,7 @@ import networkx as nx
 import numpy as np
 from loguru import logger
 
-from data_engine.utils.constant import HashKeys
+from data_engine.utils.constant import HashKeys, Fields, StatsKeys
 from ..base_op import OPERATORS, Deduplicator, Sample, Param, DataType
 
 OP_NAME = 'dedup_and_save_deduplicator'
@@ -17,15 +17,17 @@ class DedupAndSaveDeduplicator(Deduplicator):
     """
 
     def __init__(self, 
-                 similarity_threshold: float = 0.95,
+                 similarity_threshold: float = 0.5,
                  nn_indices_key: str = 'nn_indices',
                  nn_scores_key: str = 'nn_scores',
+                 fields_to_filter: list = None,
                  *args, 
                  **kwargs):
         super().__init__(*args, **kwargs)
         self.similarity_threshold = similarity_threshold
         self.nn_indices_key = nn_indices_key
         self.nn_scores_key = nn_scores_key
+        self.fields_to_filter = fields_to_filter or ['embedding', 'nn_indices', 'nn_scores', 'text', 'instruction', 'response']
 
     def compute_hash(self, sample):
         # This method is a placeholder to fit the framework.
@@ -33,15 +35,20 @@ class DedupAndSaveDeduplicator(Deduplicator):
         if self.nn_indices_key not in sample or self.nn_scores_key not in sample:
             sample[self.nn_indices_key] = [[]]
             sample[self.nn_scores_key] = [[]]
-        sample[HashKeys.similarity_hash] = f"similarity_data_{id(sample)}"
+        # Do not create the similarity_hash field because the actual deduplication logic does not require it
+        # sample[HashKeys.similarity_hash] = f"similarity_data_{id(sample)}"
         return sample
 
     def process(self, dataset, show_num=0):
+        print(f"[dedup_and_save_deduplicator] Input: {len(dataset)} samples")
+        
         if len(dataset) <= 1:
+            print(f"[dedup_and_save_deduplicator] Output: {len(dataset)} samples (no deduplication needed)")
             return dataset, {}
 
         # Convert dataset to pandas DataFrame for easier graph processing
         df = dataset.to_pandas()
+        print(f"[dedup_and_save_deduplicator] Processing similarity graph with threshold: {self.similarity_threshold}")
 
         # Create a graph and add all samples as nodes
         G = nx.Graph()
@@ -77,6 +84,7 @@ class DedupAndSaveDeduplicator(Deduplicator):
 
         # Filter the original dataset to keep only the selected samples
         filtered_dataset = dataset.select(indices_to_keep)
+        print(f"[dedup_and_save_deduplicator] Output: {len(filtered_dataset)} samples after deduplication (removed {len(dataset) - len(filtered_dataset)} duplicates)")
 
         # For tracing, sample some duplicate pairs from components with more than one member
         dup_pairs = {}
@@ -89,7 +97,28 @@ class DedupAndSaveDeduplicator(Deduplicator):
                     dup_pairs[group_key] = [dataset[i] for i in sorted_component[:2]]
                     processed_components += 1
 
-        return filtered_dataset, dup_pairs
+        print(f"[dedup_and_save_deduplicator] Found {len(connected_components)} connected components")
+
+        # Unified processing of field filtering - Move the specified field to stats
+        def move_fields_to_stats(sample):
+            if Fields.stats not in sample:
+                sample[Fields.stats] = {}
+
+            # move_the_specified_field_to_stats
+            for field in self.fields_to_filter:
+                if field in sample:
+                    # Obtain the corresponding StatsKeys constant based on the field name
+                    stats_key = getattr(StatsKeys, field, field)
+                    sample[Fields.stats][stats_key] = sample[field]
+                    del sample[field]
+            
+            return sample
+
+        # applicationFieldFiltering
+        final_dataset = filtered_dataset.map(move_fields_to_stats)
+        print(f"[dedup_and_save_deduplicator] Filtered fields {self.fields_to_filter} to stats")
+        
+        return final_dataset, dup_pairs
 
     @classmethod
     @property
@@ -119,7 +148,8 @@ class DedupAndSaveDeduplicator(Deduplicator):
     @property
     def init_params(cls):
         return [
-            Param("similarity_threshold", DataType.FLOAT, {}, 0.95),
+            Param("similarity_threshold", DataType.FLOAT, {}, 0.5),
             Param("nn_indices_key", DataType.STRING, {}, "nn_indices"),
             Param("nn_scores_key", DataType.STRING, {}, "nn_scores"),
+            Param("fields_to_filter", DataType.LIST, {}, ["embedding", "nn_indices", "nn_scores", "text", "instruction", "response"]),
         ]

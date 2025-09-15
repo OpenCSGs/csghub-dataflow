@@ -46,7 +46,7 @@ class Analysis(TOOL):
         template_path = os.path.join(
             base_dir, TEMPLATE_DIR, self.tempalte_path)
         
-        with open(template_path) as stream:
+        with open(template_path,encoding='utf-8') as stream:
             recipe: Recipe = Recipe.parse_yaml(stream)
             recipe_content = recipe.yaml(
                 exclude=exclude_fields_config)

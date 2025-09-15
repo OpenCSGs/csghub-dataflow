@@ -1,6 +1,6 @@
 # yapf: disable
-from . import (alphanumeric_filter, audio_duration_filter,
-               audio_nmf_snr_filter, audio_size_filter,
+from . import (alphanumeric_filter, annotate_edu_train_bert_scorer,
+               audio_duration_filter, audio_nmf_snr_filter, audio_size_filter,
                average_line_length_filter, character_repetition_filter,
                flagged_words_filter, image_aesthetics_filter,
                image_aspect_ratio_filter, image_face_ratio_filter,
@@ -11,7 +11,8 @@ from . import (alphanumeric_filter, audio_duration_filter,
                phrase_grounding_recall_filter, special_characters_filter,
                specified_field_filter, specified_numeric_field_filter,
                stopwords_filter, suffix_filter, text_action_filter,
-               text_entity_dependency_filter, text_length_filter,
+               text_bloom_filter, text_entity_dependency_filter,
+               text_high_score_filter, text_length_filter,
                token_num_filter, video_aesthetics_filter,
                video_aspect_ratio_filter, video_duration_filter,
                video_frames_text_similarity_filter, video_motion_score_filter,
@@ -20,6 +21,7 @@ from . import (alphanumeric_filter, audio_duration_filter,
                video_watermark_filter, word_repetition_filter,
                words_num_filter)
 from .alphanumeric_filter import AlphanumericFilter
+from .annotate_edu_train_bert_scorer import AnnotateEduTrainBertScorer
 from .audio_duration_filter import AudioDurationFilter
 from .audio_nmf_snr_filter import AudioNMFSNRFilter
 from .audio_size_filter import AudioSizeFilter
@@ -45,7 +47,9 @@ from .specified_numeric_field_filter import SpecifiedNumericFieldFilter
 from .stopwords_filter import StopWordsFilter
 from .suffix_filter import SuffixFilter
 from .text_action_filter import TextActionFilter
+from .text_bloom_filter import TextBloomFilter
 from .text_entity_dependency_filter import TextEntityDependencyFilter
+from .text_high_score_filter import TextHighScoreFilter
 from .text_length_filter import TextLengthFilter
 from .token_num_filter import TokenNumFilter
 from .video_aesthetics_filter import VideoAestheticsFilter
@@ -81,6 +85,7 @@ __all__ = [
     'TextEntityDependencyFilter',
     'VideoResolutionFilter',
     'AlphanumericFilter',
+    'AnnotateEduTrainBertScorer',
     'ImageWatermarkFilter',
     'ImageAestheticsFilter',
     'AudioSizeFilter',
@@ -89,6 +94,8 @@ __all__ = [
     'ImageShapeFilter',
     'VideoDurationFilter',
     'TextActionFilter',
+    'TextBloomFilter',
+    'TextHighScoreFilter',
     'VideoOcrAreaRatioFilter',
     'VideoNSFWFilter',
     'SpecialCharactersFilter',

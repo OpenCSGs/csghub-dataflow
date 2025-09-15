@@ -34,6 +34,9 @@ def main(data_path,
         sorted_file_list = sorted(file_list, key=lambda x: os.path.basename(x))
 
     mix_path = ''
+    while len(weights) < len(sorted_file_list):
+        weights.append(weights[0])
+    weights = weights[:len(sorted_file_list)]
     for weight, file in zip(weights, sorted_file_list):
         mix_path += (' ' + weight + ' ' + file)
 

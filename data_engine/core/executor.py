@@ -71,14 +71,27 @@ class Executor:
         logger.info('Setting up data ingester...')
         insert_pipline_job_run_task_log_info(self.job_uid,
                                              'Setting up data ingester...')
-        # Only have one embeded ingester: from csghub
-        self.ingester = load_ingester(
-            dataset_path = self.cfg.dataset_path, 
-            repo_id = self.cfg.repo_id,
-            branch = self.cfg.branch,
-            user_name = self.user_name,
-            user_token = self.user_token
-        )
+        
+        # Check if this is the specific output_only tool by tool name
+        tool_name = getattr(self.cfg, 'tool_name', '')
+        is_specific_output_only = (tool_name == 'template_executor_06_common_internal')
+
+        # normal_logic
+        if not is_specific_output_only:
+            # Only have one embeded ingester: from csghub
+            self.ingester = load_ingester(
+                dataset_path = self.cfg.dataset_path, 
+                repo_id = self.cfg.repo_id,
+                branch = self.cfg.branch,
+                user_name = self.user_name,
+                user_token = self.user_token
+            )
+        # skip_create_ingester
+        else:
+            logger.info('Skipping ingester setup for output_only tool')
+            insert_pipline_job_run_task_log_info(self.job_uid,
+                                                 'Skipping ingester setup for output_only tool')
+            self.ingester = None
         # assign src_path as dataset_path to format creation
 
         # whether to use checkpoint mechanism. If it's true, Executor will
@@ -193,44 +206,62 @@ class Executor:
         :return: processed dataset.
         """
         # 0. ingest data
-        with TRACE_HELPER.trace_block(
-            "ingest",
-            parent=get_telemetry_envelope_metadata(),
-        ):
-            self.src_path = self.ingester.ingest()
-            logger.info(f'Data ingested from {self.src_path}')
+        # Skip data ingestion for specific output_only tool
+        if self.ingester is not None:
+            with TRACE_HELPER.trace_block(
+                "ingest",
+                parent=get_telemetry_envelope_metadata(),
+            ):
+                self.src_path = self.ingester.ingest()
+                logger.info(f'Data ingested from {self.src_path}')
+                insert_pipline_job_run_task_log_info(self.job_uid,
+                                                     f'Data ingested from {self.src_path}')
+        else:
+            logger.info('Skipping data ingestion for output_only tool')
             insert_pipline_job_run_task_log_info(self.job_uid,
-                                                 f'Data ingested from {self.src_path}')
+                                                 'Skipping data ingestion for output_only tool')
+            self.src_path = None
         # set src_path to format, let format continue it's job
 
-        # 1. setup formatter
-        with TRACE_HELPER.trace_block(
-            "format",
-            parent=get_telemetry_envelope_metadata(),
-        ):
-            logger.info('Setting up data formatter...')
-            insert_pipline_job_run_task_log_info(self.job_uid,
-                                                 'Setting up data formatter...')
-            self.formatter = load_formatter(
-                self.src_path,
-                self.cfg.generated_dataset_config,
-                self.cfg.text_keys, self.cfg.suffixes,
-                self.cfg.add_suffix
-            )
+        # 1. setup formatter and load data (skip for output_only tools)
+        if self.ingester is not None:
+            with TRACE_HELPER.trace_block(
+                "format",
+                parent=get_telemetry_envelope_metadata(),
+            ):
+                logger.info('Setting up data formatter...')
+                insert_pipline_job_run_task_log_info(self.job_uid,
+                                                     'Setting up data formatter...')
+                self.formatter = load_formatter(
+                    self.src_path,
+                    self.cfg.generated_dataset_config,
+                    self.cfg.text_keys, self.cfg.suffixes,
+                    self.cfg.add_suffix
+                )
 
-            # 2. format data
-            if self.cfg.use_checkpoint and self.ckpt_manager.ckpt_available:
-                logger.info('Loading dataset from checkpoint...')
-                insert_pipline_job_run_task_log_info(self.job_uid,
-                                                     'Loading dataset from checkpoint...')
-                dataset = self.ckpt_manager.load_ckpt()
-            else:
-                logger.info('Loading dataset from data formatter...')
-                insert_pipline_job_run_task_log_info(self.job_uid,
-                                                     'Loading dataset from data formatter...')
-                if load_data_np is None:
-                    load_data_np = self.cfg.np
-                dataset = self.formatter.load_dataset(load_data_np, self.cfg)
+                # 2. format data
+                if self.cfg.use_checkpoint and self.ckpt_manager.ckpt_available:
+                    logger.info('Loading dataset from checkpoint...')
+                    insert_pipline_job_run_task_log_info(self.job_uid,
+                                                         'Loading dataset from checkpoint...')
+                    dataset = self.ckpt_manager.load_ckpt()
+                else:
+                    logger.info('Loading dataset from data formatter...')
+                    insert_pipline_job_run_task_log_info(self.job_uid,
+                                                         'Loading dataset from data formatter...')
+                    if load_data_np is None:
+                        load_data_np = self.cfg.np
+                    dataset = self.formatter.load_dataset(load_data_np, self.cfg)
+        else:
+            logger.info('Skipping data formatting and loading for output_only tool')
+            insert_pipline_job_run_task_log_info(self.job_uid,
+                                                 'Skipping data formatting and loading for output_only tool')
+            # Create an empty dataset for output_only tools
+            import datasets
+            # Create an empty Arrow table with basic schema
+            empty_table = datasets.Dataset.from_dict({})
+            from data_engine.core.data import NestedDataset
+            dataset = NestedDataset(empty_table)
 
         # 3. extract processes
         logger.info('Preparing process operators...')
@@ -242,10 +273,11 @@ class Executor:
         # 4. data process
         # - If tracer is open, trace each op after it's processed
         # - If checkpoint is open, clean the cache files after each process
+        dataset_count = len(dataset) if dataset is not None else 0
         with TRACE_HELPER.trace_block(
             "run",
             parent=get_telemetry_envelope_metadata(),
-            extraAttributes={"dataset_count": len(dataset)}
+            extraAttributes={"dataset_count": dataset_count}
         ):
             logger.info('Processing data...')
             insert_pipline_job_run_task_log_info(self.job_uid,

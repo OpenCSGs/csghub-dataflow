@@ -12,7 +12,7 @@
  Target Server Version : 150010 (150010)
  File Encoding         : 65001
 
- Date: 27/08/2025 11:50:53
+ Date: 04/09/2025 17:37:57
 */
 
 
@@ -117,10 +117,9 @@ INSERT INTO "public"."operator_config" VALUES (109, 28, 'select_num', 'number', 
 INSERT INTO "public"."operator_config" VALUES (85, 24, 'lang', 'select', '[15, 16]', '15', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:56:11.800614', '2025-07-29 16:56:11.800614');
 INSERT INTO "public"."operator_config" VALUES (111, 29, 'lower_percentile', 'slider', NULL, '0', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067');
 INSERT INTO "public"."operator_config" VALUES (118, 30, 'reverse', 'checkbox', NULL, 'true', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:06:02.760052', '2025-07-29 17:06:02.760052');
-INSERT INTO "public"."operator_config" VALUES (126, 54, 'min_score', 'number', NULL, '0.6', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:27:30.814927', '2025-08-13 15:27:30.814927');
-INSERT INTO "public"."operator_config" VALUES (127, 54, 'max_score', 'number', NULL, '2', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:27:30.814927', '2025-08-13 15:27:30.814927');
 INSERT INTO "public"."operator_config" VALUES (128, 55, 'hash_func', 'input', NULL, 'md5', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:34:00.021752', '2025-08-13 15:34:00.021752');
 INSERT INTO "public"."operator_config" VALUES (91, 26, 'lowercase', 'checkbox', NULL, 'true', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:04:52.926481', '2025-07-29 17:04:52.926481');
+INSERT INTO "public"."operator_config" VALUES (126, 54, 'min_score', 'number', NULL, '0.0', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:27:30.814927', '2025-08-13 15:27:30.814927');
 INSERT INTO "public"."operator_config" VALUES (107, 27, 'reverse', 'checkbox', NULL, 'true', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:05:42.414523', '2025-07-29 17:05:42.414523');
 INSERT INTO "public"."operator_config" VALUES (42, 34, 'ignore_special_character', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 09:27:45.064897', '2025-07-29 09:27:45.064897');
 INSERT INTO "public"."operator_config" VALUES (70, 48, 'use_words_aug', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:47:06.922281', '2025-07-29 16:47:06.922281');
@@ -169,23 +168,27 @@ INSERT INTO "public"."operator_config" VALUES (24, 16, 'keyboard_error_char', 'c
 INSERT INTO "public"."operator_config" VALUES (25, 16, 'ocr_error_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576');
 INSERT INTO "public"."operator_config" VALUES (27, 16, 'swap_random_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576');
 INSERT INTO "public"."operator_config" VALUES (28, 16, 'insert_random_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576');
-INSERT INTO "public"."operator_config" VALUES (135, 56, 'model', 'input', NULL, 'THUDM/LongWriter-glm4-9b', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:03:24.74757', '2025-08-25 17:03:24.74757');
-INSERT INTO "public"."operator_config" VALUES (136, 56, 'auth_token', 'input', NULL, '9acc3ea387b5479607bdeb5386af6e3483fbf070', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:03:24.74757', '2025-08-25 17:03:24.74757');
-INSERT INTO "public"."operator_config" VALUES (134, 56, 'model_url', 'input', NULL, 'https://euqnoct5ophc.space.opencsg.com/v1/chat/completions', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:03:24.74757', '2025-08-25 17:03:24.74757');
+INSERT INTO "public"."operator_config" VALUES (135, 56, 'model', 'input', NULL, 'qwen-plus', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:03:24.74757', '2025-08-25 17:03:24.74757');
+INSERT INTO "public"."operator_config" VALUES (136, 56, 'auth_token', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:03:24.74757', '2025-08-25 17:03:24.74757');
+INSERT INTO "public"."operator_config" VALUES (134, 56, 'model_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:03:24.74757', '2025-08-25 17:03:24.74757');
 INSERT INTO "public"."operator_config" VALUES (137, 56, 'content', 'input', NULL, '网页摘录：“{web_text}”。以 WikiHow 的风格写一篇长而非常详细的教程，教程与此网页摘录有相关性。教程中需要包括对每个步骤的深入解释以及它如何帮助实现预期结果。你可以自由补充其他相关知识。确保清晰性和实用性，让读者能够轻松遵循教程完成任务。内容中不应包含广告或涉及隐私的信息。不要使用图像。请直接开始撰写教程。', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:03:24.74757', '2025-08-25 17:03:24.74757');
-INSERT INTO "public"."operator_config" VALUES (138, 58, 'model_url', 'input', NULL, 'https://ev19h0o3sv7k.space.opencsg.com/embed', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:21:40.857468', '2025-08-25 17:21:40.857468');
-INSERT INTO "public"."operator_config" VALUES (125, 54, 'score_field', 'input', NULL, 'score', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:27:30.814927', '2025-08-13 15:27:30.814927');
 INSERT INTO "public"."operator_config" VALUES (129, 55, 'initial_capacity', 'number', NULL, '100', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:34:00.021752', '2025-08-13 15:34:00.021752');
 INSERT INTO "public"."operator_config" VALUES (130, 56, 'web_text_max_len', 'number', NULL, '800', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:36:12.930816', '2025-08-13 15:36:12.930816');
-INSERT INTO "public"."operator_config" VALUES (131, 57, 'is_drop', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:37:25.159622', '2025-08-13 15:37:25.159622');
 INSERT INTO "public"."operator_config" VALUES (132, 59, 'auth_token', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 16:47:28.412958', '2025-08-25 16:47:28.412958');
-INSERT INTO "public"."operator_config" VALUES (133, 59, 'model_url', 'input', NULL, 'https://esupw2o6m6f4.space.opencsg.com/rerank', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 16:47:28.412958', '2025-08-25 16:47:28.412958');
-INSERT INTO "public"."operator_config" VALUES (141, 60, 'nn_scores_key', 'input', NULL, 'nn_scores', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 09:29:15.606577', '2025-08-26 09:29:15.606577');
-INSERT INTO "public"."operator_config" VALUES (139, 60, 'similarity_threshold', 'number', NULL, '0.95', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 09:29:15.606577', '2025-08-26 09:29:15.606577');
-INSERT INTO "public"."operator_config" VALUES (140, 60, 'nn_indices_key', 'input', NULL, 'nn_indices', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 09:29:15.606577', '2025-08-26 09:29:15.606577');
-INSERT INTO "public"."operator_config" VALUES (142, 61, 'api_key', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881');
-INSERT INTO "public"."operator_config" VALUES (143, 61, 'model', 'input', NULL, 'qwen-plus', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881');
-INSERT INTO "public"."operator_config" VALUES (144, 61, 'base_key', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881');
+INSERT INTO "public"."operator_config" VALUES (143, 61, 'model_name', 'input', NULL, 'qwen-plus', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881');
+INSERT INTO "public"."operator_config" VALUES (142, 61, 'auth_token', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881');
+INSERT INTO "public"."operator_config" VALUES (145, 59, 'model_name', 'input', NULL, 'text-embedding-v4', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-09-02 10:34:57.837909', '2025-09-02 10:34:57.837909');
+INSERT INTO "public"."operator_config" VALUES (125, 54, 'score_field', 'input', NULL, 'text_score', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:27:30.814927', '2025-08-13 15:27:30.814927');
+INSERT INTO "public"."operator_config" VALUES (146, 59, 'dimensions', 'number', NULL, '1024', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-09-02 11:15:27.916868', '2025-09-02 11:15:27.916868');
+INSERT INTO "public"."operator_config" VALUES (144, 61, 'model_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881');
+INSERT INTO "public"."operator_config" VALUES (147, 58, 'auth_token', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-09-03 17:37:59.237331', '2025-09-03 17:37:59.237331');
+INSERT INTO "public"."operator_config" VALUES (148, 58, 'model_name', 'input', NULL, 'text-embedding-v4', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-09-03 17:37:59.237331', '2025-09-03 17:37:59.237331');
+INSERT INTO "public"."operator_config" VALUES (149, 58, 'dimensions', 'number', NULL, '1024', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-09-03 17:37:59.237331', '2025-09-03 17:37:59.237331');
+INSERT INTO "public"."operator_config" VALUES (133, 59, 'model_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 16:47:28.412958', '2025-08-25 16:47:28.412958');
+INSERT INTO "public"."operator_config" VALUES (139, 60, 'similarity_threshold', 'number', NULL, '0.5', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 09:29:15.606577', '2025-08-26 09:29:15.606577');
+INSERT INTO "public"."operator_config" VALUES (138, 58, 'model_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 17:21:40.857468', '2025-08-25 17:21:40.857468');
+INSERT INTO "public"."operator_config" VALUES (150, 59, 'query_text', 'input', NULL, 'What is Deep Learning?', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-09-04 16:45:26.540275', '2025-09-04 16:45:26.540275');
+INSERT INTO "public"."operator_config" VALUES (127, 54, 'max_score', 'number', NULL, '5.0', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-13 15:27:30.814927', '2025-08-13 15:27:30.814927');
 
 -- ----------------------------
 -- Indexes structure for table operator_config
