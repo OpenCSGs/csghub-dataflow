@@ -84,6 +84,7 @@ class Param(BaseModelExtended):
                 Literal["BOOLEAN"], Literal["DICTIONARY"], Literal["TUPLE"], Literal["LIST"], Literal["PositiveFloat"], Literal["ClosedUnitInterval"], Literal["from_2_to_20"]]] = None
     option_values: Optional[list[Option]] = None
     value: Optional[Any] = None
+    tempVal: Optional[Any] = None
 
 
 class Op(BaseModelExtended):
@@ -104,7 +105,7 @@ class Recipe(BaseModelExtended):
     # params: Optional[list[Param]] = None
     # mem_required: Optional[int | str] = 0
     # cpu_required: Optional[int] = 1
-    # accelerator:Optional[Union[Literal["cpu"], Literal["gpu"]]] = None
+    # accelerator:Optional[Union[Literal["cpu"], Literal["gpu"]]] = "cpu"
 
     name: Optional[str] = ""
     description: Optional[str] = None

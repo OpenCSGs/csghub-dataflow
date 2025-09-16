@@ -1,0 +1,24 @@
+name: '教育价值评估并打分'
+description: '利用大模型对一部分文本进行教育价值评估并打分，根据分数区间进行过滤。'
+type: 'data_refine'
+buildin: true
+project_name: 'dataflow-demo-process'
+dataset_path: '/path/to/your/dataset'
+export_path: '/path/to/your/dataset.jsonl'
+np: 1
+open_tracer: false
+trace_num: 3
+process:
+  - annotate_edu_train_bert_scorer_mapper:
+      auth_token: ''
+      model_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      model_name: 'text-embedding-v4'
+      dimensions: 1024
+      query_text: 'What is Deep Learning?'
+  - text_high_score_filter:
+      score_field: 'text_score'
+      min_score: 0
+      max_score: 5
+  - text_bloom_filter:
+      hash_func: md5
+      initial_capacity: 100

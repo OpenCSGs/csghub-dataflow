@@ -35,7 +35,6 @@ def task(key: str, url: str, prompt: str, model: str, base_url=None):
     # ************************************************
     # Create the SmartScraperGraph instance and run it
     # ************************************************
-
     smart_scraper_graph = SmartScraperGraph(
         prompt=prompt,
         # also accepts a string with the already downloaded HTML code

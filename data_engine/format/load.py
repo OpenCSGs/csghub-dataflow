@@ -7,6 +7,7 @@ def load_formatter(dataset_path,
                    text_keys=None,
                    suffixes=[],
                    add_suffix=False,
+                    max_samples=None,
                    **kwargs) -> BaseFormatter:
     """
     Load mixture formatter for multiple different data formats with an optional
@@ -37,5 +38,6 @@ def load_formatter(dataset_path,
                                  text_keys=text_keys,
                                  suffixes=suffixes,
                                  add_suffix=add_suffix,
+                                 max_samples=max_samples,
                                  **kwargs)
     return formatter

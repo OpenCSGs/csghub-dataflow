@@ -73,6 +73,10 @@ def init_configs(args=None,redirect=True):
                         type=str,
                         default='hello_world',
                         help='Name of your data process project.')
+    parser.add_argument('--tool_name',
+                        type=str,
+                        default='',
+                        help='Name of the tool being executed.')
     parser.add_argument(
         '--executor_type',
         type=str,

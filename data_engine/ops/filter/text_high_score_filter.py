@@ -8,9 +8,9 @@ OP_NAME = 'text_high_score_filter'
 class TextHighScoreFilter(Filter):
 
     def __init__(self,
-                 score_field: str = 'score',
-                 min_score: float = 0.6,
-                 max_score: float = 2.0,
+                 score_field: str = 'text_score',
+                 min_score: float = 0.0,
+                 max_score: float = 5.0,
                  *args,
                  **kwarg):
         super().__init__(*args, **kwarg)
@@ -49,7 +49,7 @@ class TextHighScoreFilter(Filter):
     @property
     def init_params(cls):
         return [
-            Param("score_field", DataType.STRING, {}, 'score'),
-            Param("min_score", DataType.FLOAT, {}, 0.6),
-            Param("max_score", DataType.FLOAT, {}, 2.0),
+            Param("score_field", DataType.STRING, {}, 'text_score'),
+            Param("min_score", DataType.FLOAT, {}, 0),
+            Param("max_score", DataType.FLOAT, {}, 5.0),
         ]

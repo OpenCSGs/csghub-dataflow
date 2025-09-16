@@ -134,6 +134,11 @@ class StatsKeysConstant(object):
     bloom = 'bloom'
     high_score = 'high_score'
     embedding = 'embedding'
+    nn_indices = 'nn_indices'
+    nn_scores = 'nn_scores'
+    text = 'text'
+    instruction = 'instruction'
+    response = 'response'
 
     # image
     aspect_ratios = 'aspect_ratios'

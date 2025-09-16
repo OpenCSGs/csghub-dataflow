@@ -24,6 +24,7 @@ class ToolExecutor:
         """
         self.tool_def = tool_def
         self.executed_params = params
+
         logger.info(f'Using user_id={self.executed_params.user_id}, '
                     f'user_name={self.executed_params.user_name}, '
                     f'user_token={"xxxxxx" if self.executed_params.user_token is not None and len(self.executed_params.user_token)>0 else None}')
@@ -49,7 +50,6 @@ class ToolExecutor:
         """
         # 1. setup tool
         logger.info('Preparing tool...')
-
         tool_obj: TOOL = load_tool(self.tool_def, self.executed_params)
 
         with TRACE_HELPER_TOOL.trace_block(

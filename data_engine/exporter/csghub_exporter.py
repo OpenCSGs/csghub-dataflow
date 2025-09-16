@@ -200,6 +200,8 @@ class ExporterCSGHUB(Exporter):
         for b in valid_branches:
             if origin_branch == "main" and re.match(r"^v\d+", b):
                 numStr = b.split(".")[0][1:]
+                if not numStr.isdigit():
+                    continue
                 num = int(numStr)
                 latestNum = max(latestNum, num)
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):

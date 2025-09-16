@@ -4,9 +4,10 @@
 
 from data_engine.ops.base_op import OPERATORS, Filter, Sample
 from data_engine.utils.constant import Fields
+from loguru import logger
 
 
-@OPERATORS.register_module('gather_generated_data')
+@OPERATORS.register_module('gather_generated_data_filter')
 class TextGatherFilter(Filter):
     """
     Identify the entities in the text which are independent with other token,
@@ -25,8 +26,10 @@ class TextGatherFilter(Filter):
         self.hash_set = set()
 
     def compute_stats(self, sample, context=False):
+
         # Return early if conversation already exists
         if "conversation" in sample:
+            logger.info(f"[gather_generated_data_filter] conversation already exists, returning original sample")
             return sample
 
         # Clean prompt and answer fields
@@ -52,14 +55,14 @@ class TextGatherFilter(Filter):
         # Set drop flag
         sample[Fields.stats]['is_drop'] = is_duplicate or not sample['conversation']
         self.is_drop = sample[Fields.stats]['is_drop']
-
+        
         return sample
 
     def process(self, sample):
-        if self.is_drop:
-            return not sample[Fields.stats]['is_drop']
-        else:
-            return False
+        # Return True to keep the sample, False to filter it out
+        keep_sample = not sample[Fields.stats]['is_drop']
+        logger.info(f"[gather_generated_data_filter] Output: keep_sample={keep_sample}")
+        return keep_sample
 
     @classmethod
     @property
