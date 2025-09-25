@@ -95,7 +95,7 @@ services:
       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
       - JSON_LOG=1
       - LABEL_STUDIO_HOST=0.0.0.0
-      - CSG_HUB_ENDPOINT= https://hub.opencsg.com
+      - CSGHUB_ENDPOINT= https://hub.opencsg.com
       - LABEL_STUDIO_PORT=8002
   #    - LOG_LEVEL=DEBUG
     volumes:
