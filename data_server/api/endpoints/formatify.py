@@ -66,9 +66,9 @@ async def get_task_statistics(db: Session = Depends(get_sync_session)):
 
 @router.post("/formatify/create", response_model=dict)
 async def create_formatify_task_api(dataFormatTask: DataFormatTaskRequest,
-                                    user_id: Annotated[str | None, Header(alias="user_id")] = None,
-                                    user_name: Annotated[str | None, Header(alias="user_name")] = None,
-                                    user_token: Annotated[str | None, Header(alias="user_token")] = None
+                                    user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+                                    user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+                                    user_token: Annotated[str | None, Header(alias="User-Token")] = None
                                     ):
     """
     Create a format conversion task
@@ -91,7 +91,7 @@ async def create_formatify_task_api(dataFormatTask: DataFormatTaskRequest,
 
 
 @router.get("/formatify/list", response_model=dict)
-async def formatify_list(user_id: Annotated[str | None, Header(alias="user_id")] = None,
+async def formatify_list(user_id: Annotated[str | None, Header(alias="User-Id")] = None,
                          isadmin: Annotated[bool | None, Header(alias="isadmin")] = None,
                          name: str = None,
                          page: int = 1, pageSize: int = 20,

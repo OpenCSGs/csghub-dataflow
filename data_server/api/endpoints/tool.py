@@ -8,7 +8,7 @@ router = APIRouter()
 
 @router.get("")
 async def tools(
-    user_id: Annotated[str | None, Header(alias="user_id")] = None, 
+    user_id: Annotated[str | None, Header(alias="User-Id")] = None, 
     isadmin: Annotated[bool | None, Header(alias="isadmin")] = None
 ) -> dict[str, Tool]:
     try:
