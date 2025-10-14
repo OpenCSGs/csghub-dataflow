@@ -33,7 +33,7 @@ class AlgoTemplateListResponse(BaseModel):
 
 @router.get("", response_model=dict, summary="获取算法模板列表")
 async def get_algo_templates(
-    user_id: str = Header(..., alias="user_id", description="用户ID"),
+    user_id: str = Header(..., alias="User-Id", description="用户ID"),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(10, ge=1, le=100000000, description="每页数量"),
     buildin: bool = Query(None,description="是否为内置模版过滤"),
@@ -42,7 +42,7 @@ async def get_algo_templates(
 
     try:
         if not user_id:
-            return response_fail(msg="请求头中缺少用户信息 (user_id)")
+            return response_fail(msg="请求头中缺少用户信息 (User-Id)")
 
         templates, total = get_templates_by_query(
             db, user_id, page, page_size, buildin
@@ -72,14 +72,14 @@ async def get_algo_templates(
 
 @router.get("/{template_id}", response_model=dict, summary="根据模板id获取单个算法模板详情")
 async def get_algo_template_by_id(
-    user_id: str = Header(..., alias="user_id", description="用户ID"),
+    user_id: str = Header(..., alias="User-Id", description="用户ID"),
     template_id: int = Path(..., description="模板ID"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
         if not user_id:
-            return response_fail(msg="请求头中缺少用户信息 (user_id)")
+            return response_fail(msg="请求头中缺少用户信息 (User-Id)")
 
 
         template = get_template_by_id(db, template_id, user_id)
@@ -104,13 +104,13 @@ async def get_algo_template_by_id(
 @router.post("", response_model=dict, summary="创建新的算法模板")
 async def create_algo_template(
     template_data: AlgoTemplateCreate,
-    user_id: str = Header(..., alias="user_id", description="用户ID"),
+    user_id: str = Header(..., alias="User-Id", description="用户ID"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
         if not user_id:
-            return response_fail(msg="请求头中缺少用户信息 (user_id)")
+            return response_fail(msg="请求头中缺少用户信息 (User_Id)")
             
 
         template_dict = template_data.model_dump(exclude_none=True)
@@ -140,7 +140,7 @@ async def create_algo_template(
 
 @router.put("/{template_id}", response_model=dict, summary="更新算法模板")
 async def update_algo_template(
-    user_id: str = Header(..., alias="user_id", description="用户ID"),
+    user_id: str = Header(..., alias="User-Id", description="用户ID"),
     template_id: int = Path(..., description="模板ID"),
     template_data: AlgoTemplateUpdate = None,
     db: Session = Depends(get_sync_session)
@@ -148,7 +148,7 @@ async def update_algo_template(
 
     try:
         if not user_id:
-            return response_fail(msg="请求头中缺少用户信息 (user_id)")
+            return response_fail(msg="请求头中缺少用户信息 (User-Id)")
 
 
         current_template = get_template_by_id(db, template_id, user_id)
@@ -186,14 +186,14 @@ async def update_algo_template(
 
 @router.delete("/{template_id}", response_model=dict, summary="删除算法模板")
 async def delete_algo_template(
-    user_id: str = Header(..., alias="user_id", description="用户ID"),
+    user_id: str = Header(..., alias="User-Id", description="用户ID"),
     template_id: int = Path(..., description="模板ID"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
         if not user_id:
-            return response_fail(msg="请求头中缺少用户信息 (user_id)")
+            return response_fail(msg="请求头中缺少用户信息 (User-Id)")
 
 
         success = delete_template_by_id(db, template_id, user_id)
@@ -225,14 +225,14 @@ async def get_algo_template_type():
 
 @router.get("/get/ByName", response_model=dict, summary="根据模版名称获取算法模板列表")
 async def get_algo_template_by_name(
-    user_id: str = Header(..., alias="user_id", description="用户ID"),
+    user_id: str = Header(..., alias="User-Id", description="用户ID"),
     template_name: str = Query(..., description="模板名称"),
     db: Session = Depends(get_sync_session)
 ):
 
     try:
         if not user_id:
-            return response_fail(msg="请求头中缺少用户信息 (user_id)")
+            return response_fail(msg="请求头中缺少用户信息 (User_Id)")
 
 
         template = find_repeat_name(db, template_name, user_id)

@@ -15,8 +15,8 @@ BASE_STUDIO_URL = os.getenv("STUDIO_JUMP_URL", "http://192.168.2.6:8080")
 @router.post("/jump-to-studio", tags=["studio"])
 async def jump_to_studio(
     authorization: Optional[str] = Header(None, alias="authorization"),
-    user_token: Optional[str] = Header(None, alias="user_token"),
-    user_name: Optional[str] = Header(None, alias="user_name"),
+    user_token: Optional[str] = Header(None, alias="User-Token"),
+    user_name: Optional[str] = Header(None, alias="User-Name"),
 ):
     """Jump to studio with credentials from headers."""
 
