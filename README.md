@@ -41,7 +41,7 @@ Launch postgres container
 ```bash
 docker run -d --name dataflow-pg \
    -p 5433:5432 \
-   -v /home/pgdata:/var/lib/postgresql/data \
+   -v /tmp/data_flow/pgdata:/var/lib/postgresql/data \
    -e POSTGRES_DB=data_flow \
    -e POSTGRES_USER=postgres \
    -e POSTGRES_PASSWORD=postgres \
@@ -53,7 +53,7 @@ Launch mongoDB container
 ```bash
 docker run -d --name dataflow-mongo \
    -p 27017:27017 \
-   -v /home/mongodata:/data/db \
+   -v /tmp/data_flow/mongodata:/data/db \
    -e MONGO_INITDB_ROOT_USERNAME=root \
    -e MONGO_INITDB_ROOT_PASSWORD=example \
    opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
@@ -63,8 +63,8 @@ Launch redis container
 
 ```bash
 docker run -d --name dataflow-redis \
-   -p 6379:6379 \
-   -v /home/redisdata:/data \
+   -p 16379:6379 \
+   -v /tmp/data_flow/redisdata:/data \
    opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
 ```
 
@@ -73,14 +73,14 @@ docker run -d --name dataflow-redis \
 ```bash
 
 docker run -d --name dataflow-api -p 8000:8000 \
-   -v /home/apidata:/data/dataflow_data \
+   -v /tmp/data_flow/apidata:/data/dataflow_data \
    -c "uvicorn data_server.main:app --host 0.0.0.0 --port 8000" \
    -e DATA_DIR=/data/dataflow_data \
    -e CSGHUB_ENDPOINT=https://hub.opencsg.com \
    -e MAX_WORKERS=99 \
    -e RAY_ADDRESS=auto \
    -e RAY_ENABLE=False \
-   -e RAY_LOG_DIR=/home/output \
+   -e RAY_LOG_DIR=/data/ray_output \
    -e API_SERVER=0.0.0.0 \
    -e API_PORT=8000 \
    -e ENABLE_OPENTELEMETRY=False \
@@ -90,7 +90,7 @@ docker run -d --name dataflow-api -p 8000:8000 \
    -e DATABASE_HOSTNAME=127.0.0.1 \
    -e DATABASE_PORT=5433 \
    -e STUDIO_JUMP_URL=https://data-label.opencsg.com \
-   -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
+   -e REDIS_HOST_URL=redis://127.0.0.1:16379 \
    -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
    dataflow
 
@@ -101,14 +101,14 @@ docker run -d --name dataflow-api -p 8000:8000 \
 ```bash
 
 docker run -d --name celery-work -p 8001:8001 \
-   -v /home/celery-data:/data/dataflow_celery \
+   -v /tmp/data_flow/celery-data:/data/dataflow_celery \
    -c "celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent" \
    -e DATA_DIR=/data/dataflow_celery \
    -e CSGHUB_ENDPOINT=https://hub.opencsg.com \
    -e MAX_WORKERS=99 \
    -e RAY_ADDRESS=auto \
    -e RAY_ENABLE=False \
-   -e RAY_LOG_DIR=/home/output \
+   -e RAY_LOG_DIR=/data/ray_output \
    -e API_SERVER=0.0.0.0 \
    -e API_PORT=8001 \
    -e ENABLE_OPENTELEMETRY=False \
@@ -117,7 +117,7 @@ docker run -d --name celery-work -p 8001:8001 \
    -e DATABASE_PASSWORD=postgres \
    -e DATABASE_HOSTNAME=127.0.0.1 \
    -e DATABASE_PORT=5433 \
-   -e REDIS_HOST_URL=redis://127.0.0.1:6379 \
+   -e REDIS_HOST_URL=redis://127.0.0.1:16379 \
    -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
    dataflow-celery
 
