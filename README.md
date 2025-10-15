@@ -140,10 +140,12 @@ conda create -n  dataflow python=3.10
 ```bash
 
 # Install dependencies
-pip install '.[dist]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install '.[tools]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install '.[sci]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
-pip install -r docker/requirements.txt
+#pip install '.[dist]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+#pip install '.[tools]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+#pip install '.[sci]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
+#pip install -r docker/requirements.txt
+
+uv pip install -r docker/dataflow_requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 # Run the server locally
 uvicorn data_server.main:app --reload
