@@ -34,7 +34,6 @@ This project inherits the [Apache License 2.0](LICENSE) from Data Juicer.
 docker build -t dataflow . -f Dockerfile
 ```
 
-
 ## Prerequisites
 
 Launch postgres container
@@ -126,9 +125,19 @@ docker run -d --name celery-work -p 8001:8001 \
 
 ## Run data-flow server in development mode locally
 
+### Create a Virtual Environment
+
 ```bash
-# Create virtual python 3.10 environment
+uv venv --python 3.10
+
+source .venv/bin/activate
+
+# or
+
 conda create -n  dataflow python=3.10
+```
+
+```bash
 
 # Install dependencies
 pip install '.[dist]' -i https://pypi.tuna.tsinghua.edu.cn/simple/
