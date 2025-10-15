@@ -111,6 +111,7 @@ services:
       - dataflow_celery_worker
     networks:
       - csg-network
+
   dataflow_label_studio:
     stdin_open: true
     tty: true
