@@ -6,7 +6,7 @@ from data_server.api.api_router import api_router
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from loguru import logger
-from data_server.agent.deps import init_managers, cleanup_managers
+# from data_server.agent.deps import init_managers, cleanup_managers
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from data_celery.main import celery_app
@@ -43,8 +43,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # logger.info("S3 storage initialized successfully")
 
         # Initialize managers (DB, Connection, Team)
-        await init_managers()
-        logger.info("Managers initialized successfully")
+        # await init_managers()
+        # logger.info("Managers initialized successfully")
 
         # _scheduler = BackgroundScheduler()
         # _scheduler.add_job(
@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
         logger.info("Cleaning up application resources...")
-        await cleanup_managers()
+        # await cleanup_managers()
         logger.info("Application shutdown complete")
     except Exception as e:
         logger.error(f"Error during shutdown: {str(e)}")
