@@ -80,7 +80,7 @@ docker run -d --name dataflow-api -p 8000:8000 \
    -e MAX_WORKERS=99 \
    -e RAY_ADDRESS=auto \
    -e RAY_ENABLE=False \
-   -e RAY_LOG_DIR=/tmp/data_flow/output \
+   -e RAY_LOG_DIR=/data/ray_output \
    -e API_SERVER=0.0.0.0 \
    -e API_PORT=8000 \
    -e ENABLE_OPENTELEMETRY=False \
@@ -108,7 +108,7 @@ docker run -d --name celery-work -p 8001:8001 \
    -e MAX_WORKERS=99 \
    -e RAY_ADDRESS=auto \
    -e RAY_ENABLE=False \
-   -e RAY_LOG_DIR=/tmp/data_flow/output \
+   -e RAY_LOG_DIR=/data/ray_output \
    -e API_SERVER=0.0.0.0 \
    -e API_PORT=8001 \
    -e ENABLE_OPENTELEMETRY=False \
