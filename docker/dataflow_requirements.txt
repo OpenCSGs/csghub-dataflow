@@ -332,3 +332,4 @@ openpyxl==3.1.5
 pybloom_live==4.0.0
 text_dedup==0.4.0
 setproctitle==1.3.6
+xlrd>=2.0.1
