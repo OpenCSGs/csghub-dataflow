@@ -32,6 +32,10 @@ This project inherits the [Apache License 2.0](LICENSE) from Data Juicer.
 
 ```
 docker build -t dataflow . -f Dockerfile
+
+docker buildx build --provenance false --platform linux/amd64 -t dataflow . -f Dockerfile
+
+docker buildx build --provenance false --platform linux/arm64 -t dataflow . -f Dockerfile
 ```
 
 ## Prerequisites
