@@ -27,8 +27,13 @@ RUN apt install git-lfs && git lfs install && apt clean && rm -rf /var/lib/apt/l
 COPY . .
 
 ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+ENV UV_EXTRA_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
+
 # Install deps
-RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
+# RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
+RUN pip install --no-cache-dir -r docker/dataflow_requirements.txt
+
 # compile code
 # RUN python -m compileall .
 # RUN find ./ -name "*.py" -delete
