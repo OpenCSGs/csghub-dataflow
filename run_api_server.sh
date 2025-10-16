@@ -15,11 +15,4 @@ export STUDIO_JUMP_URL=https://opencsg.com
 
 export MAX_WORKERS=99
 
-MILLISECOND_TIMESTAMP=$(date +%s%3N)
-HOSTNAME=$(hostname -f)
-NODENAME="worker_${MILLISECOND_TIMESTAMP}_${HOSTNAME}"
-
-# celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet -n $NODENAME
-
-NODENAME=$HOSTNAME
-celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent -n $NODENAME
+uvicorn data_server.main:app --reload

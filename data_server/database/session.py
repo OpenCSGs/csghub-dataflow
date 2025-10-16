@@ -33,9 +33,9 @@ def sqlalchemy_database_uri() -> URL:
     db_user_name = os.getenv('DATABASE_USERNAME', "postgres")
     db_user_pwd = os.getenv('DATABASE_PASSWORD', "postgres")
     db_host_name = os.getenv('DATABASE_HOSTNAME', "127.0.0.1")
-    db_host_port = os.getenv('DATABASE_PORT', 5433)
-
+    db_host_port = os.getenv('DATABASE_PORT', 5432)
     db_name = os.getenv('DATABASE_DB', "data_flow")
+
     print(f"connect to {db_user_name}:{db_user_pwd}@{db_host_name}:{db_host_port}/{db_name}")
     return URL.create(
         # drivername="postgresql+asyncpg",
