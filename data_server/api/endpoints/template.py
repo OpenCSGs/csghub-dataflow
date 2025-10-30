@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.get("", response_model_exclude_none=True)
 async def templates(
-    user_id: Annotated[str | None, Header(alias="user_id")] = None, 
+    user_id: Annotated[str | None, Header(alias="User-Id")] = None, 
     isadmin: Annotated[bool | None, Header(alias="isadmin")] = None
 ) -> list[Recipe]:
     try:
@@ -25,7 +25,7 @@ async def templates(
 @router.post("")
 async def create_template(
     template: Recipe, 
-    user_id: Annotated[str | None, Header(alias="user_id")] = None
+    user_id: Annotated[str | None, Header(alias="User-Id")] = None
 ):
     try:
         """
@@ -57,7 +57,7 @@ async def create_template(
 @router.delete("/{template_id}")
 async def remove_template(
     template_id: str, 
-    user_id: Annotated[str | None, Header(alias="user_id")] = None, 
+    user_id: Annotated[str | None, Header(alias="User-Id")] = None, 
     isadmin: Annotated[bool | None, Header(alias="isadmin")] = None
 ):
     try:
