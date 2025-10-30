@@ -14,26 +14,32 @@ ENV JAVA_HOME=/opt/jdk
 
 WORKDIR /dataflow
 
-
-RUN echo "deb http://mirrors.aliyun.com/debian bookworm main contrib non-free" > /etc/apt/sources.list && \
-    echo "deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list && \
-    echo "deb http://mirrors.aliyun.com/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list
+RUN if [ "$BUILD_CN" = "true" ]; then \
+      echo "deb http://mirrors.aliyun.com/debian bookworm main contrib non-free" > /etc/apt/sources.list; \
+      echo "deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list; \
+      echo "deb http://mirrors.aliyun.com/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list; \
+    fi
 
 # install 3rd-party system dependencies
 # RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  libpq-dev -y
-RUN apt-get update && apt-get install libpq-dev libgl1-mesa-glx -y
-RUN apt install git-lfs && git lfs install && apt clean && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y \
+      libpq-dev \
+      libgl1-mesa-glx \
+      git-lfs && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    git lfs install
 
 # install data-flow then
 COPY . .
 
-ENV PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-ENV UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-ENV UV_EXTRA_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/
-
 # Install deps
 # RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
-RUN pip install --no-cache-dir -r docker/dataflow_requirements.txt
+RUN if [ "$BUILD_CN" = "true" ]; then \
+      pip install --no-cache-dir -r docker/dataflow_requirements.txt -i https://mirrors.aliyun.com/pypi/simple/; \
+    else \
+      pip install --no-cache-dir -r docker/dataflow_requirements.txt; \
+    fi
 
 # compile code
 # RUN python -m compileall .
@@ -43,9 +49,9 @@ RUN pip install --no-cache-dir -r docker/dataflow_requirements.txt
 #ENV PLAYWRIGHT_DOWNLOAD_HOST=https://storage.aliyun.com/playwright
 #RUN playwright install --with-deps
 
-RUN git config --global user.email "dataflow@opencsg.com"
-RUN git config --global user.name "dataflow"
-RUN git config --global --add safe.directory '*'
+RUN git config --global user.email "dataflow@opencsg.com" && \
+    git config --global user.name "dataflow" && \
+    git config --global --add safe.directory '*'
 
 # Start fastapi API Server
 EXPOSE 8000

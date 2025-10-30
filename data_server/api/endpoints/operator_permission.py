@@ -48,7 +48,7 @@ def create_permission_api(request_data: OperatorPermissionCreateRequest, db: Ses
             if org.path not in existing_org_paths:
                 new_permissions_data.append({
                     "operator_id": operator_id,
-                    "name": org.name,
+                    "name": org.name if org.name is not None else "",
                     "path": org.path,
                     "role_type": 2,
                 })

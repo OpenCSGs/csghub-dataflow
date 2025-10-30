@@ -1,5 +1,6 @@
 import yaml
 from collections import deque, defaultdict
+from loguru import logger
 
 
 def convert_raw_to_processed(raw_yaml: str) -> str:
@@ -27,6 +28,12 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
         source = edge['source']
         target = edge['target']
 
+        if source not in id_to_node:
+            logger.error(f"edges中引用的source节点 '{source}' 不存在于process中！")
+            raise ValueError(f"edges中引用的source节点 '{source}' 不存在于process中！")
+        if target not in id_to_node:
+            logger.error(f"edges中引用的target节点 '{target}' 不存在于process中！")
+            raise ValueError(f"edges中引用的target节点 '{target}' 不存在于process中！")
 
         adj[source].append(target)
         in_degree[target] += 1

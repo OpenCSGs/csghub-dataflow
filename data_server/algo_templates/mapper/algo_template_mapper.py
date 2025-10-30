@@ -104,7 +104,8 @@ def delete_template_by_id(db: Session, template_id: int, user_id: str) -> bool:
 
     template = db.query(AlgoTemplate).filter(
         AlgoTemplate.id == template_id,
-        AlgoTemplate.user_id == user_id
+        AlgoTemplate.user_id == user_id,
+        AlgoTemplate.buildin == False
     ).first()
     
     if not template:

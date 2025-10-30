@@ -133,7 +133,7 @@ async def create_algo_template(
         
     except Exception as e:
         logger.error(f"创建算法模板失败: {e}")
-        return response_fail(msg="创建失败")
+        return response_fail(msg="创建模版失败:" + str(e))
     finally:
         db.close()
 
@@ -179,7 +179,7 @@ async def update_algo_template(
         
     except Exception as e:
         logger.error(f"更新算法模板失败: {e}")
-        return response_fail(msg="更新失败")
+        return response_fail(msg="算法更新失败:" + str(e))
     finally:
         db.close()
 

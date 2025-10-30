@@ -142,7 +142,7 @@ class UserPermission(BaseModel):
     username: Optional[str] = None
 
 class OrgPermission(BaseModel):
-    name: str
+    name: Optional[str] = None
     path: str
 
 class OperatorPermissionCreateRequest(BaseModel):
