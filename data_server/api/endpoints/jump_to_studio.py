@@ -4,26 +4,28 @@ from fastapi import APIRouter, Header
 from loguru import logger
 from typing import Optional
 
-from data_server.schemas.responses import response_success
+from data_server.schemas.responses import response_success, response_fail
 
 router = APIRouter()
-
 
 BASE_STUDIO_URL = os.getenv("STUDIO_JUMP_URL", "http://192.168.2.6:8080")
 
 
 @router.post("/jump-to-studio", tags=["studio"])
 async def jump_to_studio(
-    authorization: Optional[str] = Header(None, alias="authorization"),
-    user_token: Optional[str] = Header(None, alias="User-Token"),
-    user_name: Optional[str] = Header(None, alias="User-Name"),
+        authorization: Optional[str] = Header(None, alias="Authorization"),
+        user_token: Optional[str] = Header(None, alias="User-Token"),
+        user_name: Optional[str] = Header(None, alias="User-Name"),
+        user_email: Optional[str] = Header(None, alias="User-Email"),
 ):
     """Jump to studio with credentials from headers."""
 
-    if user_name:
-        target_url = f"{BASE_STUDIO_URL}/user/login_verfy/?email={user_name}@qq.com"
-    else:
-        target_url = f"{BASE_STUDIO_URL}/user/login_verfy/?email=z275748353@qq.com"
+    if not user_email:
+        logger.error("Missing User-Email header")
+        return response_fail(msg="缺少 User-Email 请求头")
+
+    email = user_email
+    target_url = f"{BASE_STUDIO_URL}/user/login_verfy/?email={email}"
 
     # Prepare the JSON payload with credentials from headers
     payload = {
@@ -46,7 +48,7 @@ async def jump_to_studio(
             # Send the payload in the JSON body of the POST request
             response = await client.post(target_url, data=payload)
             response.raise_for_status()  # Raise an exception for 4xx/5xx responses
-            target_url = f"{BASE_STUDIO_URL}/user/login_reques/?email={user_name}@qq.com"
+            target_url = f"{BASE_STUDIO_URL}/user/login_reques/?email={email}"
             return response_success(data=target_url)
     except httpx.RequestError as exc:
         logger.error(f"Request to studio failed: {exc}")
