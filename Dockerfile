@@ -1,7 +1,6 @@
-ARG BUILD_CN=false
-
-FROM docker.io/python:3.10.14
-
+ARG PYTHON_IMAGE=docker.io/python:3.10.14
+FROM ${PYTHON_IMAGE}
+# FROM python:3.10.14
 # prepare the java env
 WORKDIR /opt
 # download jdk
