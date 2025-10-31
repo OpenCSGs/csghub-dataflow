@@ -34,10 +34,10 @@ RUN if [ "$BUILD_CN" = "true" ]; then \
 # install data-flow then
 COPY . .
 
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 # Install deps
-# RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
 RUN if [ "$BUILD_CN" = "true" ]; then \
-      pip install --no-cache-dir -r docker/dataflow_requirements.txt -i https://mirrors.aliyun.com/pypi/simple/; \
+      pip install --no-cache-dir -r docker/dataflow_requirements.txt -i ${PIP_INDEX_URL}; \
     else \
       pip install --no-cache-dir -r docker/dataflow_requirements.txt; \
     fi
