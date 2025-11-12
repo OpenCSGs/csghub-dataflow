@@ -64,7 +64,7 @@ async def job_list(
         query: Optional[str] = None,
         page: int = 1,
         page_size: int = 20,
-        user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+        user_id: Annotated[str | None, Header(alias="user_id")] = None,
         isadmin: Annotated[bool | None, Header(alias="isadmin")] = None,
         session: Session = Depends(get_sync_session)):
     try:
@@ -92,7 +92,7 @@ async def job_list(
 @router.get("/{id}", description="Get the details of the job by id")
 async def read_job(id: int,
                    user_id: Annotated[str | None,
-                                      Header(alias="User-Id")] = None,
+                                      Header(alias="user_id")] = None,
                    isadmin: Annotated[bool | None,
                                       Header(alias="isadmin")] = None,
                    session: Session = Depends(get_sync_session)):
@@ -117,7 +117,7 @@ async def read_job(id: int,
 @router.get("/log/{id}", description="Get the log of the job by id")
 async def read_log(id: int,
                    user_id: Annotated[str | None,
-                                      Header(alias="User-Id")] = None,
+                                      Header(alias="user_id")] = None,
                    isadmin: Annotated[bool | None,
                                       Header(alias="isadmin")] = None,
                    session: Session = Depends(get_sync_session)):
@@ -141,14 +141,15 @@ async def read_log(id: int,
 
 @router.get("/pipline_job_log/{id}", response_model=dict,description="Get the log of the job by id")
 async def read_pipline_job_log(id: int,
-                               user_id: Annotated[str | None,Header(alias="User-Id")] = None,
+                               user_id: Annotated[str | None,Header(alias="user_id")] = None,
+                               isadmin: Annotated[bool | None,Header(alias="isadmin")] = None,
                                page: int = 1,
                                page_size: int = 20,
                                level: str = "",
                                ops_name: str =  "",
                                session: Session = Depends(get_sync_session)):
     try:
-        job = get_job_data(job_id=id, user_id=user_id, session=session)
+        job = get_job_data(job_id=id, user_id=user_id, session=session, isadmin=isadmin)
         if not job:
             return response_fail(msg="job not exist")
         log_list = get_pipline_job_log_List(task_uid=job.uuid, page=page, page_size=page_size, level=level, ops_name=ops_name)
@@ -162,7 +163,7 @@ async def read_pipline_job_log(id: int,
 @router.post("/pipline_job_operators_status", response_model=dict,description="Get the operators_status of the job by id")
 async def read_pipline_job_operators_status(
                                operators: OperatorIdentifier,
-                               user_id: Annotated[str | None,Header(alias="User-Id")] = None,
+                               user_id: Annotated[str | None,Header(alias="user_id")] = None,
                                session: Session = Depends(get_sync_session)):
     try:
         job = get_job_data(job_id=operators.job_id, user_id=user_id, session=session)
@@ -175,7 +176,7 @@ async def read_pipline_job_operators_status(
 
 @router.get("/get_pipline_job_operators_status/{job_id}", response_model=dict,description="Get the operators_status of the job by id")
 async def get_pipline_job_operators_status_api(job_id: int,
-                               user_id: Annotated[str | None,Header(alias="User-Id")] = None,
+                               user_id: Annotated[str | None,Header(alias="user_id")] = None,
                                session: Session = Depends(get_sync_session)):
     try:
         job = get_job_data(job_id=job_id, user_id=user_id, session=session)
@@ -192,7 +193,7 @@ async def get_pipline_job_operators_status_api(job_id: int,
 @router.get("/resource/{id}", response_model=dict,description="Get the process resource of the job by id")
 async def read_task_resource_info(id: int,
                     user_id: Annotated[str | None,
-                    Header(alias="User-Id")] = None,
+                    Header(alias="user_id")] = None,
                     session: Session = Depends(get_sync_session)):
     try:
         job = get_job_data(job_id=id, user_id=user_id,session=session)
@@ -221,9 +222,9 @@ def create_job(
     # config:  Union[Tool,Recipe],
     # config: Union[Tool],
 
-    user_id: Annotated[str | None, Header(alias="User-Id")] = None,
-    user_name: Annotated[str | None, Header(alias="User-Name")] = None,
-    user_token: Annotated[str | None, Header(alias="User-Token")] = None
+    user_id: Annotated[str | None, Header(alias="user_id")] = None,
+    user_name: Annotated[str | None, Header(alias="user_name")] = None,
+    user_token: Annotated[str | None, Header(alias="user_token")] = None
 ):
     # print(user_id)
     # print(user_name)
@@ -248,9 +249,9 @@ def create_job(
 @router.post("/pipeline", response_model=dict,description="Create the dataflow job")
 def create_pipline_job(
     config:  Union[Recipe, Tool],
-    user_id: Annotated[str | None, Header(alias="User-Id")] = None,
-    user_name: Annotated[str | None, Header(alias="User-Name")] = None,
-    user_token: Annotated[str | None, Header(alias="User-Token")] = None
+    user_id: Annotated[str | None, Header(alias="user_id")] = None,
+    user_name: Annotated[str | None, Header(alias="user_name")] = None,
+    user_token: Annotated[str | None, Header(alias="user_token")] = None
 ):
     try:
         if config.job_source == "tool":
@@ -267,7 +268,7 @@ def create_pipline_job(
 
 @router.post("/stop_pipline_job", response_model=dict, description="stop the dataflow job")
 def stop_pipline_job(job_id: int,
-                     user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+                     user_id: Annotated[str | None, Header(alias="user_id")] = None,
                      session: Session = Depends(get_sync_session)):
     try:
         job = get_job_data(job_id=job_id, user_id=user_id, session=session)
@@ -294,9 +295,9 @@ def stop_pipline_job(job_id: int,
 
 @router.post("/job/execute/{job_id}", response_model=dict)
 async def run_pipline_job(job_id: int,
-                    user_id: Annotated[str | None, Header(alias="User-Id")] = None,
-                    user_name: Annotated[str | None, Header(alias="User-Name")] = None,
-                    user_token: Annotated[str | None, Header(alias="User-Token")] = None,
+                    user_id: Annotated[str | None, Header(alias="user_id")] = None,
+                    user_name: Annotated[str | None, Header(alias="user_name")] = None,
+                    user_token: Annotated[str | None, Header(alias="user_token")] = None,
                     execute_time: str | None = None,
                     session: Session = Depends(get_sync_session)
                    ):
@@ -319,7 +320,7 @@ async def run_pipline_job(job_id: int,
 def delete_job(
     id: int,
     user_id: Annotated[str | None,
-                       Header(alias="User-Id")] = None,
+                       Header(alias="user_id")] = None,
     isadmin: Annotated[bool | None,
                        Header(alias="isadmin")] = None,
     session: Session = Depends(get_sync_session)
