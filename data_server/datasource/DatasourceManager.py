@@ -36,6 +36,7 @@ def create_data_source(is_connection: bool, db_session: Session, datasource: Dat
         int: ID of the created data source
     """
     # create db model
+    extra_config = datasource.extra_config or {}
     data_source_db = DataSource(name=datasource.name,
                                 des=datasource.des,
                                 source_type=datasource.source_type,
@@ -44,8 +45,9 @@ def create_data_source(is_connection: bool, db_session: Session, datasource: Dat
                                 username=datasource.username,
                                 password=datasource.password,
                                 database=datasource.database,
+                                auth_type=datasource.auth_type,
                                 task_run_time=datasource.task_run_time,
-                                extra_config=json.dumps(datasource.extra_config, ensure_ascii=False, indent=4))
+                                extra_config=json.dumps(extra_config, ensure_ascii=False, indent=4))
     data_source_db.source_status = datasource.source_status
     data_source_db.owner_id = user_id
     db_session.add(data_source_db)
@@ -140,6 +142,8 @@ def update_data_source(db_session: Session, data_source_id: int, update_data: Da
         data_source.password = update_data.password
     if update_data.database is not None:
         data_source.database = update_data.database
+    if update_data.auth_type is not None:
+        data_source.auth_type = update_data.auth_type
     if update_data.extra_config is not None:
         data_source.extra_config = json.dumps(update_data.extra_config, ensure_ascii=False, indent=4)
     db_session.commit()

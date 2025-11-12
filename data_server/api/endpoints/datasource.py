@@ -1,4 +1,5 @@
 import datetime
+import asyncio
 
 from fastapi import FastAPI, APIRouter, HTTPException, status, Header, Depends,Body
 from sqlalchemy import func
@@ -93,9 +94,25 @@ async def create_datasource(datasource: DataSourceCreate, db: Session = Depends(
         if datasource.source_type not in [item.value for item in DataSourceTypeEnum]:
             return response_fail(msg="不支持的数据源类型")
         # user_id = 54
+        
+        # 处理分支信息：修正前端传递的分支信息
+        # 前端可能将用户填写的分支名错误地放在了 csg_hub_dataset_name 中
+        if datasource.extra_config is None:
+            datasource.extra_config = {}
+        
+        current_branch = datasource.extra_config.get("csg_hub_dataset_default_branch", "")
+        dataset_name = datasource.extra_config.get("csg_hub_dataset_name", "")
+        dataset_id = datasource.extra_config.get("csg_hub_dataset_id", "")
+        
+        # 如果用户选择了数据流向，且分支是 main，但 dataset_name 有值，使用 dataset_name 作为分支
+        if dataset_id and current_branch == "main" and dataset_name and dataset_name != "main" and dataset_name.strip():
+            datasource.extra_config["csg_hub_dataset_default_branch"] = dataset_name
 
         connector = get_datasource_connector(datasource)
-        if not connector.test_connection():
+        # Run the synchronized test_connection method in the thread pool
+        loop = asyncio.get_event_loop()
+        test_result = await loop.run_in_executor(None, connector.test_connection)
+        if not test_result.get('success', False):
             datasource.source_status = DataSourceStatusEnum.INACTIVE.value
         else:
             if datasource.is_run:
@@ -104,7 +121,7 @@ async def create_datasource(datasource: DataSourceCreate, db: Session = Depends(
                 datasource.source_status = DataSourceStatusEnum.WAITING.value
         if not user_id:
             return response_fail(msg="用户ID不能为空")
-        data_source_id = create_data_source(connector.test_connection(), db, datasource, int(user_id), user_name,
+        data_source_id = create_data_source(test_result, db, datasource, int(user_id), user_name,
                                             user_token)
         return response_success(data=data_source_id)
     except Exception as e:
@@ -145,7 +162,10 @@ async def test_datasource_connection(datasource: DataSourceCreate):
 
     try:
         connector = get_datasource_connector(datasource)
-        return response_success(data=connector.test_connection())
+        # Run the synchronized test_connection method in the thread pool to avoid blocking the event loop
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, connector.test_connection)
+        return response_success(data=result)
     except Exception as e:
         logger.error(f"test_datasource_connection: {str(e)}")
         return response_fail(msg=f"测试连接失败:{str(e)}")
@@ -154,6 +174,16 @@ async def test_datasource_connection(datasource: DataSourceCreate):
 @router.put("/datasource/edit/{datasource_id}", response_model=dict)
 async def update_datasource(datasource_id: int, datasource: DataSourceUpdate, db: Session = Depends(get_sync_session)):
     try:
+        # 处理分支信息：修正前端传递的分支信息（与创建接口相同的逻辑）
+        if datasource.extra_config is not None:
+            current_branch = datasource.extra_config.get("csg_hub_dataset_default_branch", "")
+            dataset_name = datasource.extra_config.get("csg_hub_dataset_name", "")
+            dataset_id = datasource.extra_config.get("csg_hub_dataset_id", "")
+            
+            # 如果用户选择了数据流向，且分支是 main，但 dataset_name 有值，使用 dataset_name 作为分支
+            if dataset_id and current_branch == "main" and dataset_name and dataset_name != "main" and dataset_name.strip():
+                datasource.extra_config["csg_hub_dataset_default_branch"] = dataset_name
+        
         data_source = update_data_source(db, datasource_id, datasource)
         if not data_source:
             return response_fail(msg="更新失败")
@@ -213,12 +243,14 @@ async def get_datasource_tables(datasource: DataSourceCreate):
     try:
         # if datasource.source_type == DataSourceTypeEnum.MONGODB.value:
 
-
         connector = get_datasource_connector(datasource)
-        if not connector.test_connection():
+        # test_the_connection_in_the_thread_pool
+        loop = asyncio.get_event_loop()
+        test_result = await loop.run_in_executor(None, connector.test_connection)
+        if not test_result.get('success', False):
             return response_fail(msg="数据源连接失败")
 
-        tables = connector.get_tables()
+        tables = await loop.run_in_executor(None, connector.get_tables)
         return response_success(data=tables)
     except Exception as e:
         logger.error(f"获取表列表失败: {str(e)}")
@@ -233,17 +265,16 @@ async def get_datasource_table_columns(datasource: DataSourceCreate, table_name:
             return response_fail(msg="MongoDB不支持获取表和字段列表")
 
         connector = get_datasource_connector(datasource)
-        if not connector.test_connection():
+        loop = asyncio.get_event_loop()
+        test_result = await loop.run_in_executor(None, connector.test_connection)
+        if not test_result.get('success', False):
             return response_fail(msg="数据源连接失败")
 
-        columns = connector.get_table_columns(table_name)
+        columns = await loop.run_in_executor(None, connector.get_table_columns, table_name)
         return response_success(data=columns)
     except Exception as e:
         logger.error(f"获取表字段失败: {str(e)}")
         return response_fail(msg=f"获取表字段失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"获取表字段失败: {str(e)}")
-        return response_fail(msg=f"获取字段失败: {str(e)}")
 
 
 @router.get("/datasource/info", response_model=dict)
@@ -266,8 +297,10 @@ async def get_datasource_tables_and_columns(datasource: DataSourceCreate):
             return response_fail(msg="MongoDB不支持获取表和字段列表")
 
         connector = get_datasource_connector(datasource)
-        if not connector.test_connection():
-            return response_fail(msg="数据源连接失败")
+        test_result = connector.test_connection()
+        if not test_result or not test_result.get("success", False):
+            error_msg = test_result.get("message", "Connection failed") if test_result else "Connection test returned None"
+            return response_fail(msg=f"数据源连接失败: {error_msg}")
 
         tables_and_columns = connector.get_tables_and_columns()
         return response_success(data=tables_and_columns)
