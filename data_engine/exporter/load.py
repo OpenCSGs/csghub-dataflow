@@ -15,7 +15,8 @@ def load_exporter(
     user_name: str=None,
     user_token: str=None,
     work_dir: str=None,
-    path_is_dir: bool=False
+    path_is_dir: bool=False,
+    auto_version: bool=False
 ) -> Exporter:
     return ExporterCSGHUB(
         export_path=export_path,
@@ -31,6 +32,7 @@ def load_exporter(
         user_name=user_name,
         user_token=user_token,
         work_dir=work_dir,
-        path_is_dir=path_is_dir
+        path_is_dir=path_is_dir,
+        auto_version=auto_version
     )
 

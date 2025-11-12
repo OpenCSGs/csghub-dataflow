@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 import datetime
+import json
 from enum import Enum
 from data_server.database.bean.base import Base
 
@@ -47,6 +48,38 @@ class DataSource(Base):
     updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now, comment='更新时间')
 
     def to_json(self):
+        # 处理 extra_config，确保正确解析并返回
+        extra_config_raw = self.extra_config
+        extra_config_dict = None
+        
+        # 解析 extra_config
+        if isinstance(extra_config_raw, str):
+            try:
+                extra_config_dict = json.loads(extra_config_raw)
+            except (json.JSONDecodeError, TypeError):
+                extra_config_dict = None
+        elif isinstance(extra_config_raw, dict):
+            extra_config_dict = extra_config_raw.copy()
+        
+        # 处理分支字段：保持 csg_hub_dataset_default_branch 原样（从数据库读取，不做修改），同时添加 csg_hub_dataset_branch
+        if extra_config_dict is not None:
+            # 获取 csg_hub_dataset_default_branch 的值（如果存在），用于设置 csg_hub_dataset_branch
+            # 保持 csg_hub_dataset_default_branch 原样，不做任何修改
+            branch_value = extra_config_dict.get("csg_hub_dataset_default_branch")
+            if not branch_value or (isinstance(branch_value, str) and branch_value.strip() == ""):
+                branch_value = "main"
+            
+            # 添加 csg_hub_dataset_branch 字段（从 csg_hub_dataset_default_branch 获取值，如果不存在则使用 main）
+            extra_config_dict["csg_hub_dataset_branch"] = branch_value
+            
+            # csg_hub_dataset_default_branch 保持原样，不做修改（如果数据库中有就返回，如果没有就不添加）
+            
+            # 将更新后的字典转换回 JSON 字符串格式返回
+            extra_config = json.dumps(extra_config_dict, ensure_ascii=False, indent=4)
+        else:
+            # 如果 extra_config 为空，保持原样返回空配置
+            extra_config = extra_config_raw if extra_config_raw else "{}"
+        
         return {
             "id": self.id,
             "name": self.name,
@@ -57,7 +90,7 @@ class DataSource(Base):
             "username": self.username,
             "password": self.password,
             "database": self.database,
-            "extra_config": self.extra_config,
+            "extra_config": extra_config,
             "source_status": self.source_status,
             "owner_id": self.owner_id,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
