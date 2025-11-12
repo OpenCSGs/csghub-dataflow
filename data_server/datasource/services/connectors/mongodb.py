@@ -1,27 +1,48 @@
 from pymongo import MongoClient
-from pymongo.errors import ConnectionFailure
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from data_server.datasource.schemas import DataSourceCreate
 
 class MongoDBConnector:
     def __init__(self, datasource:DataSourceCreate):
         self.datasource = datasource
+        # default_timeout_setting_milliseconds
+        self.timeout_ms = 5000  # 5s
 
     def test_connection(self):
+        client = None
         try:
             host = self.datasource.host
             uri = host
-            client = MongoClient(uri)
+            client = MongoClient(
+                uri,
+                serverSelectionTimeoutMS=self.timeout_ms,
+                connectTimeoutMS=self.timeout_ms,
+                socketTimeoutMS=self.timeout_ms
+            )
             client.server_info()
             return {"success": True, "message": "Connection successful"}
+        except ServerSelectionTimeoutError as e:
+            return {"error": False, "message": f"连接超时: {str(e)}"}
         except ConnectionFailure as e:
-            return {"success": False, "message": str(e)}
+            return {"error": False, "message": f"连接失败: {str(e)}"}
         except Exception as e:
-            return {"success": False, "message": str(e)}
+            return {"error": False, "message": f"未知错误: {str(e)}"}
+        finally:
+            if client:
+                client.close()
 
-    def execute_query(self, query):
+    def _get_client(self):
         host = self.datasource.host
         uri = host
-        client = MongoClient(uri)
+        return MongoClient(
+            uri,
+            serverSelectionTimeoutMS=self.timeout_ms,
+            connectTimeoutMS=self.timeout_ms,
+            socketTimeoutMS=self.timeout_ms
+        )
+
+    def execute_query(self, query):
+        client = self._get_client()
         db = client[self.datasource.database]
         try:
             collection = db[query['collection']]
@@ -40,9 +61,7 @@ class MongoDBConnector:
             client.close()
 
     def get_tables(self):
-        host = self.datasource.host
-        uri = host
-        client = MongoClient(uri)
+        client = self._get_client()
         try:
             db = client[self.datasource.database]
             return db.list_collection_names()
@@ -50,9 +69,7 @@ class MongoDBConnector:
             client.close()
 
     def get_tables_and_columns(self):
-        host = self.datasource.host
-        uri = host
-        client = MongoClient(uri)
+        client = self._get_client()
         try:
             db = client[self.datasource.database]
             collections = db.list_collection_names()
@@ -77,9 +94,7 @@ class MongoDBConnector:
         :param collection_name: Name of the collection
         :return: Number of documents
         """
-        host = self.datasource.host
-        uri = host
-        client = MongoClient(uri)
+        client = self._get_client()
         try:
             db = client[self.datasource.database]
             collection = db[collection_name]
@@ -102,9 +117,7 @@ class MongoDBConnector:
         Returns:
             list: List of query results, where each element is a dictionary containing all fields and values of the documents in the collection
         """
-        host = self.datasource.host
-        uri = host
-        client = MongoClient(uri)
+        client = self._get_client()
         try:
             db = client[self.datasource.database]
             collection = db[collection_name]
@@ -112,6 +125,8 @@ class MongoDBConnector:
             results = list(collection.find().skip(offset).limit(limit))
 
             return results
+        except ServerSelectionTimeoutError as e:
+            raise ConnectionError(f"MongoDB连接超时: {str(e)}")
         except ConnectionFailure as e:
             raise ConnectionError(f"Failed to connect to MongoDB: {str(e)}")
         except Exception as e:
