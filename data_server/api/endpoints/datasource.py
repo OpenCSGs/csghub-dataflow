@@ -85,9 +85,9 @@ async def get_task_statistics(db: Session = Depends(get_sync_session)):
 
 @router.post("/datasource/create", response_model=dict)
 async def create_datasource(datasource: DataSourceCreate, db: Session = Depends(get_sync_session),
-                            user_name: Annotated[str | None, Header(alias="user_name")] = None,
-                            user_id: Annotated[str | None, Header(alias="user_id")] = None,
-                            user_token: Annotated[str | None, Header(alias="user_token")] = None
+                            user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+                            user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+                            user_token: Annotated[str | None, Header(alias="User-Token")] = None
                             ):
 
     try:
@@ -131,7 +131,7 @@ async def create_datasource(datasource: DataSourceCreate, db: Session = Depends(
 
 @router.get("/datasource/list", response_model=dict)
 async def datasource_list(user_id: Annotated[str | None,
-Header(alias="user_id")] = None,
+Header(alias="User-Id")] = None,
                           isadmin: Annotated[bool | None,
                           Header(alias="isadmin")] = None,
                           page: int = 0, pageSize: int = 20,
@@ -213,8 +213,8 @@ async def delete_datasource(datasource_id: int, db: Session = Depends(get_sync_s
 async def datasource_run_task(datasource_id: int,
                               data: dict = Body(...),
                               db: Session = Depends(get_sync_session),
-                              user_name: Annotated[str | None, Header(alias="user_name")] = None,
-                              user_token: Annotated[str | None, Header(alias="user_token")] = None
+                              user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+                              user_token: Annotated[str | None, Header(alias="User-Token")] = None
                               ):
 
 
@@ -346,8 +346,8 @@ async def get_collection_task_details(task_id: int,
 
 @router.post("/tasks/execute/{task_id}", response_model=dict)
 async def run_task(task_id: int, db: Session = Depends(get_sync_session),
-                   user_name: Annotated[str | None, Header(alias="user_name")] = None,
-                   user_token: Annotated[str | None, Header(alias="user_token")] = None
+                   user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+                   user_token: Annotated[str | None, Header(alias="User-Token")] = None
                    ):
 
     try:
