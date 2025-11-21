@@ -210,7 +210,7 @@ def upload_to_csg_hub_server(csg_hub_dataset_id: str,
     try:
         # Upload to CSG Hub server
         ensure_directory_exists_remove(datasource_csg_hub_server_dir)
-        insert_datasource_run_task_log_error(collection_task.task_uid,
+        insert_datasource_run_task_log_info(collection_task.task_uid,
                                              f"Starting upload csg hub-server the task[{collection_task.task_uid}]...")
         exporter = load_exporter(
             export_path=datasource_temp_json_dir,
