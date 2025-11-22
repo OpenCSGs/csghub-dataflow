@@ -1,6 +1,5 @@
-ARG BUILD_CN=false
-
-FROM docker.io/python:3.10.14
+ARG PYTHON_IMAGE=docker.io/python:3.10.14
+FROM ${PYTHON_IMAGE}
 
 # prepare the java env
 WORKDIR /opt
@@ -15,15 +14,16 @@ ENV JAVA_HOME=/opt/jdk
 
 WORKDIR /dataflow
 
+# install 3rd-party system dependencies
+# RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  libpq-dev -y
+ARG BUILD_CN=false
 RUN if [ "$BUILD_CN" = "true" ]; then \
+      rm -rf /etc/apt/sources.list.d/debian.sources || true; \
       echo "deb http://mirrors.aliyun.com/debian bookworm main contrib non-free" > /etc/apt/sources.list; \
       echo "deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list; \
       echo "deb http://mirrors.aliyun.com/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list; \
-    fi
-
-# install 3rd-party system dependencies
-# RUN apt-get update && apt-get install ffmpeg libsm6 libxext6  libpq-dev -y
-RUN apt-get update && \
+    fi && \
+    apt-get update && \
     apt-get install --no-install-recommends -y \
       libpq-dev \
       libgl1-mesa-glx \
@@ -34,10 +34,10 @@ RUN apt-get update && \
 # install data-flow then
 COPY . .
 
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
 # Install deps
-# RUN pip install --no-cache-dir --use-deprecated=legacy-resolver -r docker/dataflow_requirements.txt
 RUN if [ "$BUILD_CN" = "true" ]; then \
-      pip install --no-cache-dir -r docker/dataflow_requirements.txt -i https://mirrors.aliyun.com/pypi/simple/; \
+      pip install --no-cache-dir -r docker/dataflow_requirements.txt -i ${PIP_INDEX_URL}; \
     else \
       pip install --no-cache-dir -r docker/dataflow_requirements.txt; \
     fi
@@ -56,4 +56,3 @@ RUN git config --global user.email "dataflow@opencsg.com" && \
 
 # Start fastapi API Server
 EXPOSE 8000
-
