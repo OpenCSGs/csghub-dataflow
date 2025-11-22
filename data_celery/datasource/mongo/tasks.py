@@ -11,7 +11,6 @@ from data_celery.utils import (ensure_directory_exists,
 from data_server.datasource.services.datasource import get_datasource_connector
 from data_celery.mongo_tools.tools import insert_datasource_run_task_log_info, insert_datasource_run_task_log_error
 from data_engine.exporter.load import load_exporter
-from pathlib import Path
 import pandas as pd
 from loguru import logger
 
@@ -256,46 +255,21 @@ def upload_to_csg_hub_server(csg_hub_dataset_id: str,
             branch=csg_hub_dataset_default_branch,
             user_name=user_name,
             user_token=user_token,
-            work_dir=datasource_csg_hub_server_dir
+            work_dir=datasource_csg_hub_server_dir,
+            path_is_dir=True
         )
-        upload_path: Path = Path(datasource_temp_json_dir)
-        # Check whether the uploaded directory exists and is not empty
-        if not os.path.exists(upload_path):
-            insert_datasource_run_task_log_error(collection_task.task_uid,
-                                                 f"the task[{collection_task.task_uid}] upload csg hub-server fail: upload path {upload_path} does not exist")
-            return False
-
-        # List all files in the upload directory for debugging
-        file_list = []
-        for root, dirs, files in os.walk(upload_path):
-            for file in files:
-                file_list.append(os.path.join(root, file))
-        insert_datasource_run_task_log_info(collection_task.task_uid,
-                                            f"Files to upload: {len(file_list)} files found in {upload_path}")
-        if len(file_list) == 0:
-            insert_datasource_run_task_log_error(collection_task.task_uid,
-                                                 f"the task[{collection_task.task_uid}] upload csg hub-server fail: upload path {upload_path} is empty")
-            return False
-
-        output_branch_name = exporter.export_from_files(upload_path)
-
-        if output_branch_name:
-            collection_task.csg_hub_branch = output_branch_name
+        exporter.export_large_folder()
+        if csg_hub_dataset_default_branch:
+            collection_task.csg_hub_branch = csg_hub_dataset_default_branch
             db_session.commit()
             insert_datasource_run_task_log_info(collection_task.task_uid,
                                                 f"the task[{collection_task.task_uid}] upload csg hub-server success...")
         else:
             insert_datasource_run_task_log_error(collection_task.task_uid,
-                                                 f"the task[{collection_task.task_uid}] upload csg hub-server fail: export_from_files returned None")
+                                                 f"the task[{collection_task.task_uid}] upload csg hub-server fail...")
     except Exception as e:
         logger.error(e)
-        error_msg = str(e)
-        # Check if this is a "nothing to commit" error
-        if "nothing to commit" in error_msg.lower() or "working tree clean" in error_msg.lower():
-            insert_datasource_run_task_log_error(collection_task.task_uid,
-                                                 f"the task[{collection_task.task_uid}] upload csg hub-server fail: No files to commit. This may happen if: 1) Files are already committed in the branch, 2) Files are ignored by .gitignore, 3) File paths are incorrect. Error: {error_msg}")
-        else:
-            insert_datasource_run_task_log_error(collection_task.task_uid,
-                                                 f"Task UID {collection_task.task_uid} Error occurred while uploading to CSG Hub server: {error_msg}")
+        insert_datasource_run_task_log_error(collection_task.task_uid,
+                                             f"Task UID {collection_task.task_uid} Error occurred while uploading to CSG Hub server: {e}")
         return False
     return True

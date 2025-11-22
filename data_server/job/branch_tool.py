@@ -37,21 +37,37 @@ class BranchTool:
             raise
 
     def find_next_version(self, origin_branch: str, valid_branches: List) -> str:
+        """
+        算子执行任务的版本生成逻辑：自动生成 v1, v2 等版本号
+        """
         latestNum = 0
+        
         for b in valid_branches:
             if origin_branch == "main" and re.match(r"^v\d+", b):
+                # 处理 main 分支的情况，查找 v1, v2, v3 等
                 numStr = b.split(".")[0][1:]
-                if numStr.isdigit():
-                    num = int(numStr)
-                    latestNum = max(latestNum, num)
+                if not numStr.isdigit():
+                    continue
+                num = int(numStr)
+                latestNum = max(latestNum, num)
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):
-                numStr = b[len(origin_branch)+1:]
-                if numStr.isdigit():
-                    num = int(numStr)
-                    latestNum = max(latestNum, num)
-
+                # 处理其他分支的情况，查找 origin_branch.1, origin_branch.2 等
+                numStr = b[len(origin_branch) + 1:]
+                if not numStr.isdigit():
+                    continue
+                num = int(numStr)
+                latestNum = max(latestNum, num)
+            else:
+                continue
+        
         if origin_branch == "main":
-            return f"v{latestNum + 1}" if latestNum > 0 else "v1"
+            if latestNum > 0:
+                return "v" + str(latestNum + 1)
+            else:
+                return "v1"
         else:
-            return f"{origin_branch}.{latestNum + 1}" if latestNum > 0 else f"{origin_branch}.1"
+            if latestNum > 0:
+                return origin_branch + "." + str(latestNum + 1)
+            else:
+                return origin_branch + ".1"
         

@@ -1,4 +1,3 @@
-import loguru
 from pyhive import hive
 from TCLIService.ttypes import TOperationState
 from data_server.datasource.schemas import DataSourceCreate
@@ -9,34 +8,78 @@ class HiveConnector:
         self.datasource = datasource
 
 
-    def get_connection(self):
-        return hive.Connection(
+    def get_connection(self, timeout=30):
+        """
+        Get Hive connection with timeout setting
+        Args:
+            timeout (int): Connection timeout in seconds, default 30 (not used by pyhive, kept for compatibility)
+        Returns:
+            hive.Connection: Hive connection object
+        """
+        # 处理 auth_type：pyhive 使用 'NOSASL' 表示无认证，'LDAP' 表示 LDAP 认证
+        auth_type = self.datasource.auth_type
+        if auth_type:
+            auth_type_upper = auth_type.upper()
+            if auth_type_upper in ['NONE', 'NOSASL']:
+                auth_type = 'NOSASL'
+            elif auth_type_upper == 'LDAP':
+                auth_type = 'LDAP'
+            else:
+                auth_type = 'NOSASL'
+        else:
+            auth_type = 'NOSASL'
+        
+        # 只有在 LDAP 认证时才需要密码
+        password = None
+        if auth_type == 'LDAP':
+            password = self.datasource.password
+        
+        conn = hive.Connection(
             host=self.datasource.host,
             port=self.datasource.port,
             username=self.datasource.username,
-            password=self.datasource.password if self.datasource.auth_type == 'LDAP' else None,
+            password=password,
             database=self.datasource.database,
-            auth=self.datasource.auth_type
+            auth=auth_type
         )
+        return conn
 
     def test_connection(self):
+        conn = None
+        cursor = None
         try:
-            conn = self.get_connection()
+            conn = self.get_connection(timeout=30)
             cursor = conn.cursor()
-            cursor.execute("SHOW TABLES")
+            # 使用简单的 SELECT 1 查询，避免 SHOW TABLES 可能的问题
+            cursor.execute("SELECT 1")
             result = cursor.fetchone()
-            return {"success": True, "message": "Connection successful"}
+            # 验证结果
+            if result and len(result) > 0:
+                return {"success": True, "message": "Connection successful"}
+            else:
+                return {"success": False, "message": "Connection test returned empty result"}
         except Exception as e:
             return {"success": False, "message": str(e)}
+        finally:
+            if cursor:
+                try:
+                    cursor.close()
+                except:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
 
     def execute_query(self, query):
-        conn = self.get_connection()
+        conn = self.get_connection(timeout=60)
         cursor = conn.cursor()
-
         try:
             cursor.execute(query)
-            if query.lower().startswith("select"):
-                return cursor.fetchall()
+            if query.lower().strip().startswith("select"):
+                results = cursor.fetchall()
+                return results
             else:
                 return {"status": "Query executed"}
         finally:
@@ -44,11 +87,12 @@ class HiveConnector:
             conn.close()
 
     def get_tables(self):
-        conn = self.get_connection()
+        conn = self.get_connection(timeout=60)
         cursor = conn.cursor()
         try:
             cursor.execute("SHOW TABLES")
-            return [row[0] for row in cursor.fetchall()]
+            results = cursor.fetchall()
+            return [row[0] for row in results]
         finally:
             cursor.close()
             conn.close()
@@ -59,27 +103,27 @@ class HiveConnector:
         Returns:
         list: A list containing table and field information, where each element is a dictionary including the table name and a list of fields.
         """
-        conn = self.get_connection()
+        conn = self.get_connection(timeout=60)
+        cursor = conn.cursor()
         try:
-            with conn.cursor() as cursor:
-                cursor.execute('SHOW TABLES')
-                results = cursor.fetchall()
-                tables_list = []
-                for row in results:
-                    loguru.logger.info(row)
-                    table_name = row[0]
-                    cursor.execute(f'DESCRIBE {table_name}')
-                    table_columns_results = cursor.fetchall()
-                    column_list = []
-                    for column in table_columns_results:
-                        column_list.append(column[0])
-                    table_info = {
-                        'table_name': table_name,
-                        'columns': column_list
-                    }
-                    tables_list.append(table_info)
-                return tables_list
+            cursor.execute('SHOW TABLES')
+            results = cursor.fetchall()
+            tables_list = []
+            for row in results:
+                table_name = row[0]
+                cursor.execute(f'DESCRIBE {table_name}')
+                table_columns_results = cursor.fetchall()
+                column_list = []
+                for column in table_columns_results:
+                    column_list.append(column[0])
+                table_info = {
+                    'table_name': table_name,
+                    'columns': column_list
+                }
+                tables_list.append(table_info)
+            return tables_list
         finally:
+            cursor.close()
             conn.close()
 
     def get_table_columns(self, table_name: str):
@@ -90,88 +134,83 @@ class HiveConnector:
         Returns:
         list: A list containing field names
         """
-        conn = self.get_connection()
+        conn = self.get_connection(timeout=60)
+        cursor = conn.cursor()
         try:
-            with conn.cursor() as cursor:
-                query = f'DESCRIBE {table_name}'
-                cursor.execute(query)
-                results = cursor.fetchall()
-                return [row[0] for row in results]
+            query = f'DESCRIBE {table_name}'
+            cursor.execute(query)
+            results = cursor.fetchall()
+            return [row[0] for row in results]
         finally:
+            cursor.close()
             conn.close()
 
     def get_table_total_count_hive(self, table_name):
         """
         Get the total number of rows in the specified table.
         Args:
-        table_name (str): Name of the table
+            table_name (str): Name of the table
         Returns:
-        int: Total number of rows in the table
+            int: Total number of rows in the table
         """
-        conn = self.get_connection()
+        conn = self.get_connection(timeout=60)
+        cursor = conn.cursor()
         try:
-            with conn.cursor() as cursor:
-                query = f"""
-                SELECT COUNT(*) AS total_count
-                FROM {table_name}
-                """
-                cursor.execute(query)
-                result = cursor.fetchone()
-                loguru.logger.info(f'count:{result[0]}')
-                if result:
-                    return result[0]
-                else:
-                    return 0
+            query = f"""
+            SELECT COUNT(*) AS total_count
+            FROM {table_name}
+            """
+            cursor.execute(query)
+            result = cursor.fetchone()
+            if result:
+                return result[0]
+            else:
+                return 0
         finally:
+            cursor.close()
             conn.close()
 
     def query_table_hive(self, table_name: str, columns: list, offset: int, limit: int) -> list:
         """
         Query data in the table with column filtering and pagination support.
         Args:
-        table_name (str): Name of the table
-        columns (list): List of column names to query
-        offset (int): Starting offset for the query
-        limit (int): Maximum number of rows to return
+            table_name (str): Name of the table
+            columns (list): List of column names to query
+            offset (int): Starting offset for the query
+            limit (int): Maximum number of rows to return
         Returns:
-        list: List of query results, where each element is a tuple containing the specified column names and their values
+            list: List of query results, where each element is a tuple containing the specified column names and their values
         """
-        conn = self.get_connection()
+        conn = self.get_connection(timeout=60)
+        cursor = conn.cursor()
         try:
-            with conn.cursor() as cursor:
-                column_names = ', '.join(columns)
-                query = f"""
-                SELECT {column_names}
-                FROM {table_name}
-                LIMIT {limit} OFFSET {offset}
-                """
-                cursor.execute(query)
-                rows = cursor.fetchall()
-                return rows
-        except Exception as e:
-            raise e
+            column_names = ', '.join(columns)
+            query = f"""
+            SELECT {column_names}
+            FROM {table_name}
+            LIMIT {limit} OFFSET {offset}
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return rows
         finally:
-
+            cursor.close()
             conn.close()
 
     def execute_custom_query_hive(self, query: str) -> list:
         """
         Execute a custom HiveQL query and return the query results.
         Args:
-        query (str): The HiveQL query string to be executed
+            query (str): The HiveQL query string to be executed
         Returns:
-        list: List of query results, where each element is a tuple containing column names and values
+            list: List of query results, where each element is a tuple containing column names and values
         """
-        conn = self.get_connection()
+        conn = self.get_connection(timeout=60)
+        cursor = conn.cursor()
         try:
-            with conn.cursor() as cursor:
-
-                cursor.execute(query)
-
-                rows = cursor.fetchall()
-
-                return rows
-        except Exception as e:
-            raise e
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return rows
         finally:
+            cursor.close()
             conn.close()

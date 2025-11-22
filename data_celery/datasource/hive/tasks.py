@@ -12,6 +12,7 @@ from data_celery.utils import (ensure_directory_exists,
                                ensure_directory_exists_remove, get_datasource_csg_hub_server_dir)
 from data_celery.mongo_tools.tools import insert_datasource_run_task_log_info,insert_datasource_run_task_log_error
 from data_server.datasource.services.datasource import get_datasource_connector
+from data_server.datasource.schemas import DataSourceCreate
 from data_engine.exporter.load import load_exporter
 from pathlib import Path
 import pandas as pd
@@ -103,13 +104,32 @@ def collection_hive_task(task_uid: str,user_name: str,user_token: str):
             max_line = extra_config["max_line_json"]
         if use_type == "sql":
             if use_sql:
-                connector = get_datasource_connector(collection_task.datasource)
-                if not connector.test_connection():
+                try:
+                    # 将数据库对象转换为 DataSourceCreate 对象
+                    datasource_create = DataSourceCreate(
+                        name=collection_task.datasource.name,
+                        des=collection_task.datasource.des,
+                        source_type=collection_task.datasource.source_type,
+                        host=collection_task.datasource.host,
+                        port=collection_task.datasource.port,
+                        username=collection_task.datasource.username,
+                        password=collection_task.datasource.password,
+                        database=collection_task.datasource.database,
+                        auth_type=collection_task.datasource.auth_type
+                    )
+                    connector = get_datasource_connector(datasource_create)
+                    test_result = connector.test_connection()
+                    if not test_result or not test_result.get("success", False):
+                        collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
+                        error_msg = test_result.get("message", "Connection failed") if test_result else "Connection test returned None"
+                        insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} failed to connect to the database: {error_msg}")
+                        return False
+                    get_table_dataset_by_sql(connector, task_uid, use_sql, db_session, collection_task,
+                                             datasource_temp_parquet_dir, max_line=max_line)
+                except Exception as e:
                     collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
-                    insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} failed to connect to the database.")
+                    insert_datasource_run_task_log_error(task_uid, f"Error occurred while executing the task: {str(e)}")
                     return False
-                get_table_dataset_by_sql(connector, task_uid, use_sql, db_session, collection_task,
-                                         datasource_temp_parquet_dir, max_line=max_line)
                 upload_path = datasource_temp_parquet_dir.join('run_sql')
                 upload_to_csg_hub_server(csg_hub_dataset_id,
                                          csg_hub_dataset_name,
@@ -125,14 +145,34 @@ def collection_hive_task(task_uid: str,user_name: str,user_token: str):
                 source = hive_config["source"]
                 total_count = 0
                 records_count = 0
-                connector = get_datasource_connector(collection_task.datasource)
-                if not connector.test_connection():
+                try:
+                    # 将数据库对象转换为 DataSourceCreate 对象
+                    datasource_create = DataSourceCreate(
+                        name=collection_task.datasource.name,
+                        des=collection_task.datasource.des,
+                        source_type=collection_task.datasource.source_type,
+                        host=collection_task.datasource.host,
+                        port=collection_task.datasource.port,
+                        username=collection_task.datasource.username,
+                        password=collection_task.datasource.password,
+                        database=collection_task.datasource.database,
+                        auth_type=collection_task.datasource.auth_type
+                    )
+                    connector = get_datasource_connector(datasource_create)
+                    test_result = connector.test_connection()
+                    if not test_result or not test_result.get("success", False):
+                        collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
+                        error_msg = test_result.get("message", "Connection failed") if test_result else "Connection test returned None"
+                        insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} failed to connect to the database: {error_msg}")
+                        return False
+                    for table_name in source.keys():
+                        table_total = connector.get_table_total_count_hive(table_name)
+                        total_count += table_total
+                except Exception as e:
                     collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
-                    insert_datasource_run_task_log_error(task_uid, f"Task with UID {task_uid} failed to connect to the database.")
+                    insert_datasource_run_task_log_error(task_uid, f"Error occurred while executing the task: {str(e)}")
                     return False
-                for table_name in source.keys():
-                    table_total = connector.get_table_total_count_hive(table_name)
-                    total_count += table_total
+                
                 collection_task.total_count = total_count
                 collection_task.records_count = records_count
                 db_session.commit()
@@ -165,8 +205,14 @@ def collection_hive_task(task_uid: str,user_name: str,user_token: str):
     except Exception as e:
         if collection_task:
             collection_task.task_status = DataSourceTaskStatusEnum.ERROR.value
+        error_type = type(e).__name__
+        error_msg = str(e)
+        error_traceback = traceback.format_exc()
+        logger.error(f"Task {task_uid} error: {error_type}: {error_msg}")
+        logger.error(f"Full traceback:\n{error_traceback}")
         traceback.print_exc()
-        insert_datasource_run_task_log_error(task_uid, f"Error occurred while executing the task: {e}")
+        insert_datasource_run_task_log_error(task_uid, f"Error occurred while executing the task: {error_type}: {error_msg}")
+        insert_datasource_run_task_log_error(task_uid, f"Traceback: {error_traceback}")
         return False
     finally:
         if collection_task:

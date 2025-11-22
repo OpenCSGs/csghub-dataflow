@@ -1,12 +1,12 @@
 import traceback
 from typing import List
+import os
+import re
 
 from pycsghub.cmd.repo_types import RepoType
 from pycsghub.upload_large_folder.main import upload_large_folder_internal
 
 from data_engine.exporter.base_exporter import Exporter
-import os
-import re
 from loguru import logger
 from pycsghub.repository import Repository
 from pycsghub.utils import (build_csg_headers,
@@ -38,6 +38,7 @@ class ExporterCSGHUB(Exporter):
             user_token: str = None,
             work_dir: str = None,
             path_is_dir: bool = False,
+            auto_version: bool = False,
     ):
         """
         Initialization method.
@@ -64,6 +65,7 @@ class ExporterCSGHUB(Exporter):
         self.user_name = user_name
         self.user_token = user_token
         self.work_dir = work_dir
+        self.auto_version = auto_version  # True for pipeline jobs, False for formatify tasks
         super().__init__(
             export_path=export_path,
             export_shard_size=export_shard_size,
@@ -118,7 +120,9 @@ class ExporterCSGHUB(Exporter):
             )
         except Exception as e:
             traceback.print_exc()
-
+            logger.error(f'Failed to upload folder to {self.repo_id}: {str(e)}')
+            # 重新抛出异常，让调用者知道上传失败
+            raise
     def export(self, dataset):
         """
         Export method for a dataset.
@@ -193,26 +197,42 @@ class ExporterCSGHUB(Exporter):
         # valid_branches = ["main", "v3.1", "v1.11", "v1.5", "v2", "v1", "v1.2", "v1.11.2"]            
         valid_branches.sort()
         logger.info(f'repo {self.repo_id} all branches: {valid_branches}')
-        return self.find_next_version(origin_branch=origin_branch, valid_branches=valid_branches)
+        result = self.find_next_version(origin_branch=origin_branch, valid_branches=valid_branches)
+        return result
 
     def find_next_version(self, origin_branch: str, valid_branches: List):
+        """
+        根据任务类型选择版本生成逻辑：
+        - auto_version=False (文件转换任务): 直接返回用户指定的分支名
+        - auto_version=True (算子执行任务): 自动生成版本号 (v1, v2, ...)
+        """
+        if not self.auto_version:
+            # 文件转换任务：直接返回用户指定的分支名
+            if origin_branch in valid_branches:
+                return origin_branch
+            return origin_branch
+        
+        # 算子执行任务：自动生成版本号
         latestNum = 0
+        
         for b in valid_branches:
             if origin_branch == "main" and re.match(r"^v\d+", b):
+                # 处理 main 分支的情况，查找 v1, v2, v3 等
                 numStr = b.split(".")[0][1:]
                 if not numStr.isdigit():
                     continue
                 num = int(numStr)
                 latestNum = max(latestNum, num)
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):
+                # 处理其他分支的情况，查找 origin_branch.1, origin_branch.2 等
                 numStr = b[len(origin_branch) + 1:]
                 if not numStr.isdigit():
                     continue
+                num = int(numStr)
+                latestNum = max(latestNum, num)
             else:
                 continue
-            num = int(numStr)
-            latestNum = max(latestNum, num)
-
+        
         if origin_branch == "main":
             if latestNum > 0:
                 return "v" + str(latestNum + 1)

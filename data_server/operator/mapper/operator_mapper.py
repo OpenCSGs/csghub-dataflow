@@ -2,6 +2,7 @@ from data_server.operator.mapper.operator_permission_mapper import get_permissio
 from data_server.operator.models.operator import OperatorInfo, OperatorConfig, OperatorConfigSelectOptions
 from data_server.operator.models.operator_permission import OperatorPermission
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from data_server.operator.schemas import OperatorResponse, OperatorConfigResponse, OperatorConfigSelectOptionsResponse
@@ -293,8 +294,12 @@ def get_operators_grouped_by_condition(db: Session, uuid: str, paths: List[str])
         # if_there_is_no_permission_display_all_operators
         operators = db.query(OperatorInfo).filter(OperatorInfo.is_public.is_(True)).order_by(OperatorInfo.id).all()
     else:
+        # Return the operators within the permission scope plus all public operators within the authorized time limit
         operators = db.query(OperatorInfo).filter(
-            OperatorInfo.id.in_(list(all_permitted_ids))
+            or_(
+                OperatorInfo.id.in_(list(all_permitted_ids)),
+                OperatorInfo.is_public.is_(True)
+            )
         ).order_by(OperatorInfo.id).all()
 
 

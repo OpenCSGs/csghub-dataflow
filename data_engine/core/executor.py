@@ -74,7 +74,7 @@ class Executor:
         
         # Check if this is the specific output_only tool by tool name
         tool_name = getattr(self.cfg, 'tool_name', '')
-        is_specific_output_only = (tool_name == 'template_executor_06_common_internal')
+        is_specific_output_only = (tool_name == 'smoltalk_chinese_common_internal')
 
         # normal_logic
         if not is_specific_output_only:
@@ -127,7 +127,8 @@ class Executor:
             branch = self.cfg.branch,
             user_name=self.user_name,
             user_token=self.user_token,
-            work_dir=self.work_dir
+            work_dir=self.work_dir,
+            auto_version=True  # Pipeline jobs use auto versioning
         )
 
         # setup tracer

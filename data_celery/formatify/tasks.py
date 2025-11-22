@@ -26,9 +26,10 @@ from pycsghub.utils import (build_csg_headers,
                             get_endpoint,
                             REPO_TYPE_DATASET)
 from data_engine.utils.env import GetHubEndpoint
+
+
 @celery_app.task
 def format_task(task_id: int, user_name: str, user_token: str):
-
     tmp_path: str = None
     db_session: Session = None
     format_task: DataFormatTask = None
@@ -49,9 +50,10 @@ def format_task(task_id: int, user_name: str, user_token: str):
             user_token=user_token,
         )
         ingester_result = ingesterCSGHUB.ingest()
-        insert_formatity_task_log_info(format_task.task_uid, f"Download directory completed... Directory address：{ingester_result}")
+        insert_formatity_task_log_info(format_task.task_uid,
+                                       f"Download directory completed... Directory address：{ingester_result}")
         work_dir = Path(tmp_path).joinpath('work')
-        file_bool = search_files(tmp_path,[format_task.from_data_type])
+        file_bool = search_files(tmp_path, [format_task.from_data_type])
 
         if not file_bool:
             insert_formatity_task_log_info(format_task.task_uid, f"file not found. task ended....")
@@ -78,10 +80,44 @@ def format_task(task_id: int, user_name: str, user_token: str):
             path_is_dir=True,
             work_dir=str(work_dir)
         )
-        exporter.export_large_folder()
-        insert_formatity_task_log_info(format_task.task_uid, 'Upload completed...')
-        format_task.task_status = DataFormatTaskStatusEnum.COMPLETED.value
-        db_session.commit()
+
+        # 上传文件重试逻辑：最多重试3次
+        max_retry_count = 3
+        upload_success = False
+        retry_count = 0
+
+        for attempt in range(max_retry_count):
+            try:
+                if attempt == 0:
+                    insert_formatity_task_log_info(format_task.task_uid, f'开始上传文件（第1次尝试）...')
+                else:
+                    retry_count += 1
+                    insert_formatity_task_log_info(format_task.task_uid,
+                                                   f'重新尝试上传文件（第{retry_count + 1}次尝试，共{max_retry_count}次）...')
+
+                exporter.export_large_folder()
+                upload_success = True
+                insert_formatity_task_log_info(format_task.task_uid, 'Upload completed...')
+                break
+            except Exception as e:
+                error_msg = f'上传文件失败（第{attempt + 1}次尝试）: {str(e)}'
+                insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                logger.error(f"Task {format_task.task_uid} upload attempt {attempt + 1} failed: {error_msg}")
+
+                # 如果已经是最后一次尝试，终止任务
+                if attempt == max_retry_count - 1:
+                    final_error_msg = f'上传文件失败，已重试{max_retry_count}次，任务终止。错误信息: {str(e)}'
+                    insert_formatity_task_log_error(format_task.task_uid, final_error_msg)
+                    logger.error(
+                        f"Task {format_task.task_uid} upload failed after {max_retry_count} attempts: {final_error_msg}")
+                    format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
+                    db_session.commit()
+                    raise RuntimeError(final_error_msg)
+
+        # 如果上传成功，更新任务状态为完成
+        if upload_success:
+            format_task.task_status = DataFormatTaskStatusEnum.COMPLETED.value
+            db_session.commit()
         pass
     except Exception as e:
         traceback.print_exc()
@@ -245,21 +281,19 @@ def convert_ppt_to_markdown(file_path: str, task_uid):
 
 from typing import List, Dict, Tuple
 
-def search_files(folder_path: str, types: List[int]) -> Tuple[bool, List[str]]:
 
+def search_files(folder_path: str, types: List[int]) -> Tuple[bool, List[str]]:
     type_map: Dict[int, List[str]] = {
         0: ['.ppt', '.pptx'],  # PPT
         1: ['.doc', '.docx'],  # Word
         3: ['.xls', '.xlsx']  # Excel
     }
 
-
     target_extensions = set()
     for file_type in types:
         if file_type in type_map:
             for ext in type_map[file_type]:
                 target_extensions.add(ext.lower())
-
 
     found_files: List[str] = []
 
@@ -286,8 +320,6 @@ def search_files(folder_path: str, types: List[int]) -> Tuple[bool, List[str]]:
         except Exception as e:
             print(f"Processing path {current_path} error: {str(e)}")
 
-
     traverse(folder_path)
-
 
     return bool(len(found_files) > 0)

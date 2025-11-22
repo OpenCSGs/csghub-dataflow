@@ -142,13 +142,14 @@ async def read_log(id: int,
 @router.get("/pipline_job_log/{id}", response_model=dict,description="Get the log of the job by id")
 async def read_pipline_job_log(id: int,
                                user_id: Annotated[str | None,Header(alias="User-Id")] = None,
+                               isadmin: Annotated[bool | None,Header(alias="isadmin")] = None,
                                page: int = 1,
                                page_size: int = 20,
                                level: str = "",
                                ops_name: str =  "",
                                session: Session = Depends(get_sync_session)):
     try:
-        job = get_job_data(job_id=id, user_id=user_id, session=session)
+        job = get_job_data(job_id=id, user_id=user_id, session=session, isadmin=isadmin)
         if not job:
             return response_fail(msg="job not exist")
         log_list = get_pipline_job_log_List(task_uid=job.uuid, page=page, page_size=page_size, level=level, ops_name=ops_name)

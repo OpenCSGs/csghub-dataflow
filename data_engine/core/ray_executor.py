@@ -101,7 +101,8 @@ class RayExecutor:
             branch=self.cfg.branch,
             user_name=self.user_name,
             user_token=self.user_token,
-            work_dir=self.work_dir
+            work_dir=self.work_dir,
+            auto_version=True  # Pipeline jobs use auto versioning
         )
 
         # setup tracer
