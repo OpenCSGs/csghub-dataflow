@@ -7,13 +7,13 @@ from . import (alphanumeric_filter, annotate_edu_train_bert_scorer,
                image_nsfw_filter, image_shape_filter, image_size_filter,
                image_text_matching_filter, image_text_similarity_filter,
                image_watermark_filter, language_id_score_filter,
-               maximum_line_length_filter, perplexity_filter,
-               phrase_grounding_recall_filter, special_characters_filter,
-               specified_field_filter, specified_numeric_field_filter,
-               stopwords_filter, suffix_filter, text_action_filter,
-               text_bloom_filter, text_entity_dependency_filter,
-               text_high_score_filter, text_length_filter,
-               token_num_filter, video_aesthetics_filter,
+               maximum_line_length_filter, multi_keyword_filter,
+               perplexity_filter, phrase_grounding_recall_filter,
+               special_characters_filter, specified_field_filter,
+               specified_numeric_field_filter, stopwords_filter,
+               suffix_filter, text_action_filter, text_bloom_filter,
+               text_entity_dependency_filter, text_high_score_filter,
+               text_length_filter, token_num_filter, video_aesthetics_filter,
                video_aspect_ratio_filter, video_duration_filter,
                video_frames_text_similarity_filter, video_motion_score_filter,
                video_nsfw_filter, video_ocr_area_ratio_filter,
@@ -39,6 +39,7 @@ from .image_text_similarity_filter import ImageTextSimilarityFilter
 from .image_watermark_filter import ImageWatermarkFilter
 from .language_id_score_filter import LanguageIDScoreFilter
 from .maximum_line_length_filter import MaximumLineLengthFilter
+from .multi_keyword_filter import MultiKeywordFilter
 from .perplexity_filter import PerplexityFilter
 from .phrase_grounding_recall_filter import PhraseGroundingRecallFilter
 from .special_characters_filter import SpecialCharactersFilter
@@ -111,6 +112,7 @@ __all__ = [
     'FlaggedWordFilter',
     'WordRepetitionFilter',
     'VideoMotionScoreFilter',
+    'MultiKeywordFilter',
 ]
 
 # yapf: enable

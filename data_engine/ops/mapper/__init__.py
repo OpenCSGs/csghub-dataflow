@@ -25,7 +25,9 @@ from . import (audio_ffmpeg_wrapped_mapper, chinese_convert_mapper,
                video_tagging_from_audio_mapper,
                video_tagging_from_frames_mapper,
                whitespace_normalization_mapper,
-               pipeline_magpie_zh_mapper)
+               pipeline_magpie_zh_mapper,
+               md_to_jsonl_chunk_mapper,
+               md_to_jsonl_sentence_chunk_mapper)
 from .audio_ffmpeg_wrapped_mapper import AudioFFmpegWrappedMapper
 from .chinese_convert_mapper import ChineseConvertMapper
 from .clean_copyright_mapper import CleanCopyrightMapper
@@ -78,6 +80,8 @@ from .video_tagging_from_audio_mapper import VideoTaggingFromAudioMapper
 from .video_tagging_from_frames_mapper import VideoTaggingFromFramesMapper
 from .whitespace_normalization_mapper import WhitespaceNormalizationMapper
 from .pipeline_magpie_zh_mapper import PipelineMagpieZh
+from .md_to_jsonl_chunk_mapper import MdToJsonlChunkMapper
+from .md_to_jsonl_sentence_chunk_mapper import MdToJsonlSentenceChunkMapper
 
 __all__ = [
     'VideoCaptioningFromAudioMapper',
@@ -128,6 +132,8 @@ __all__ = [
     'VideoSplitByDurationMapper',
     'VideoFaceBlurMapper',
     'PipelineMagpieZh',
+    'MdToJsonlChunkMapper',
+    'MdToJsonlSentenceChunkMapper',
 ]
 
 # yapf: enable

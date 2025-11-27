@@ -6,7 +6,8 @@ from . import (dataset_split_by_language_preprocess,
                reformat_jsonl_nan_value, 
                serialize_meta, 
                prepare_dataset_from_repo,
-               make_cosmopedia_preprocess)
+               make_cosmopedia_preprocess,
+               md_to_jsonl_preprocess)
 from .dataset_split_by_language_preprocess import DatasetSpliterbyLang
 from .opencsg_scrape_url_data_preprocess import URLDataScrape
 from .raw_alpaca_cot_merge_add_meta_preprocess import RawAlpacacotMerge
@@ -17,6 +18,7 @@ from .reformat_jsonl_nan_value import ReformatJsonlNAN
 from .serialize_meta import SerializeMeta
 from .prepare_dataset_from_repo import PrepareDatasetFromRepo
 from .make_cosmopedia_preprocess import makeCosmopediaPreprocessInternal
+from .md_to_jsonl_preprocess import MdToJsonlPreprocess
 
 
 __all__ = [
@@ -30,4 +32,5 @@ __all__ = [
     'SerializeMeta',
     'PrepareDatasetFromRepo',
     'makeCosmopediaPreprocessInternal',
+    'MdToJsonlPreprocess',
 ]

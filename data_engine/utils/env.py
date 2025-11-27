@@ -11,8 +11,7 @@ def GetDataTopPath():
    return os.environ.get("DATA_DIR", DEFAULT_SRC_PATH)
 
 def GetHubEndpoint():
-   # return os.environ.get("CSGHUB_ENDPOINT", "https://hub.opencsg.com")
-   return os.environ.get("CSGHUB_ENDPOINT", "http://net-power.9free.com.cn:18120/")
+    return os.environ.get("CSGHUB_ENDPOINT", "https://hub.opencsg.com")
 
 def RayEnable():
    enalbe = os.getenv("RAY_ENABLE")

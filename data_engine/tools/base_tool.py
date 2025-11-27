@@ -66,6 +66,7 @@ class TOOL:
             user_name=self.executed_params.user_name,
             user_token=self.executed_params.user_token,
             work_dir=self.executed_params.work_dir,
+            auto_version=True  # Tool jobs use auto versioning (similar to pipeline jobs)
         )
 
         # whether the model can be accelerated using cuda

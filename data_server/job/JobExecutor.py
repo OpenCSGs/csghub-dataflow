@@ -37,6 +37,17 @@ def run_executor(config, job_id, job_name, user_id, user_name, user_token):
         config.branch=config.branch if config.branch and len(config.branch) > 0 else 'main'
         if config.job_source == "tool":
             # handle tool jobs
+            # Validate and provide defaults for required parameters
+            if user_id is None:
+                logger.warning("user_id is None, using empty string as default")
+                user_id = ""
+            if user_name is None:
+                logger.warning("user_name is None, using empty string as default")
+                user_name = ""
+            if user_token is None:
+                logger.warning("user_token is None, using empty string as default")
+                user_token = ""
+            
             params = ExecutedParams(
                 user_id=user_id,
                 user_name=user_name,

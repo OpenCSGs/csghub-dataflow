@@ -28,6 +28,7 @@ def create_formatify_task(db_session: Session, dataFormatTask: DataFormatTaskReq
                                          to_csg_hub_dataset_default_branch=dataFormatTask.to_csg_hub_dataset_default_branch,
                                          to_csg_hub_repo_id=dataFormatTask.to_csg_hub_repo_id,
                                          to_data_type=dataFormatTask.to_data_type,
+                                         mineru_api_url=dataFormatTask.mineru_api_url,
                                          task_uid=task_uid,
                                          task_status=DataFormatTaskStatusEnum.WAITING.value,
                                          owner_id=user_id)
@@ -73,7 +74,8 @@ def update_formatify_task(db_session: Session, formatify_id: int, dataFormatTask
     updatable_fields = {
         'name', 'des', 'from_csg_hub_dataset_name', 'from_csg_hub_dataset_id',
         'from_csg_hub_dataset_branch', 'from_data_type', 'to_csg_hub_dataset_name',
-        'to_csg_hub_dataset_id', 'to_csg_hub_dataset_default_branch', 'to_data_type'
+        'to_csg_hub_dataset_id', 'to_csg_hub_dataset_default_branch', 'to_data_type',
+        'mineru_api_url'
     }
     for field in updatable_fields:
         value = getattr(dataFormatTaskRequest, field, None)

@@ -3,6 +3,8 @@ import os
 from functools import partial
 from pickle import UnpicklingError
 from typing import Optional, Union
+import subprocess
+import re
 
 import multiprocess as mp
 import wget
@@ -391,12 +393,11 @@ def prepare_huggingface_model(pretrained_model_name_or_path,
         otherwise, only the processor is returned.
     """
     import transformers
-    from transformers import AutoConfig, AutoProcessor
-
-    processor = AutoProcessor.from_pretrained(
-        pretrained_model_name_or_path, trust_remote_code=trust_remote_code)
+    from transformers import AutoConfig, AutoProcessor, AutoTokenizer
 
     if return_model:
+        processor = AutoProcessor.from_pretrained(
+            pretrained_model_name_or_path, trust_remote_code=trust_remote_code)
         config = AutoConfig.from_pretrained(
             pretrained_model_name_or_path, trust_remote_code=trust_remote_code)
         if hasattr(config, 'auto_map'):
@@ -411,7 +412,42 @@ def prepare_huggingface_model(pretrained_model_name_or_path,
         model = model_class.from_pretrained(
             pretrained_model_name_or_path, trust_remote_code=trust_remote_code)
 
-    return (model, processor) if return_model else processor
+        return (model, processor)
+    else:
+        # For text processing tasks, use AutoTokenizer
+        # Since we download models from OpenCSG via git clone, we should only use local files
+        # Transformers library can load models from local paths without downloading from HuggingFace Hub
+        if os.path.exists(pretrained_model_name_or_path) and os.path.isdir(pretrained_model_name_or_path):
+            # Local path exists (downloaded from OpenCSG), load with local_files_only=True to ensure no HuggingFace downloads
+            try:
+                tokenizer = AutoTokenizer.from_pretrained(
+                    pretrained_model_name_or_path,
+                    trust_remote_code=trust_remote_code,
+                    local_files_only=True
+                )
+                return tokenizer
+            except Exception as e:
+                # If loading fails, it might be missing some files in the git clone
+                # Check if essential files exist, if not, raise error instead of falling back to HuggingFace
+                logger.error(f'Failed to load tokenizer from local path {pretrained_model_name_or_path}: {str(e)}')
+                logger.error('Model files may be incomplete. Please check the downloaded model directory.')
+                # List files in directory to help debug
+                try:
+                    files = os.listdir(pretrained_model_name_or_path)
+                    logger.error(f'Files in model directory: {files[:10]}')  # Show first 10 files
+                except:
+                    pass
+                raise RuntimeError(
+                    f'Failed to load tokenizer from local path {pretrained_model_name_or_path}. '
+                    f'This should not download from HuggingFace. Error: {str(e)}'
+                )
+        else:
+            # Not a local path - this shouldn't happen if model was downloaded from OpenCSG
+            # But if it does, still try to load (might be a HuggingFace model name as fallback)
+            logger.warning(f'Model path does not exist locally: {pretrained_model_name_or_path}')
+            tokenizer = AutoTokenizer.from_pretrained(
+                pretrained_model_name_or_path, trust_remote_code=trust_remote_code)
+            return tokenizer
 
 
 def prepare_vllm_model(pretrained_model_name_or_path,
@@ -663,6 +699,302 @@ def prepare_opencsg_inference(pretrained_model_name_or_path,
     model = CSGHUBModel(url, pretrained_model_name_or_path)
     
     return (model, None) if return_model else None
+
+
+def get_opencsg_model_path(model_name: str, cache_dir: Optional[str] = None) -> str:
+    """
+    Get model's http_clone_url from OpenCSG Hub API and download the model to local.
+    
+    :param model_name: Model name, e.g., "Qwen3-0.6B" or "bert-base-chinese"
+    :param cache_dir: Cache directory, if None, use default DATA_JUICER_MODELS_CACHE
+    :return: Local model path
+    """
+    if cache_dir is None:
+        cache_dir = DJMC
+    
+    # Ensure cache directory exists
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir, exist_ok=True)
+    
+    # Check if model is already downloaded
+    model_cache_path = os.path.join(cache_dir, model_name.replace('/', '_'))
+    if os.path.exists(model_cache_path) and os.path.isdir(model_cache_path):
+        # Check if it's a valid git repository
+        git_dir = os.path.join(model_cache_path, '.git')
+        if os.path.exists(git_dir):
+            logger.info(f'Model {model_name} already exists in cache: {model_cache_path}')
+            return model_cache_path
+    
+    # Get model information from OpenCSG API
+    api_url = 'https://hub.opencsg.com/api/v1/models'
+    params = {
+        'page': 1,
+        'per': 1,
+        'search': model_name,
+        'sort': 'trending',
+        'source': ''
+    }
+    
+    try:
+        logger.info(f'Searching for model from OpenCSG Hub API: {model_name}')
+        response = requests.get(api_url, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        if not data.get('data') or len(data['data']) == 0:
+            raise ValueError(f'Model not found: {model_name}')
+        
+        model_info = data['data'][0]
+        repository = model_info.get('repository', {})
+        http_clone_url = repository.get('http_clone_url')
+        
+        if not http_clone_url:
+            raise ValueError(f'Model {model_name} has no http_clone_url')
+        
+        logger.info(f'Found git URL for model {model_name}: {http_clone_url}')
+        
+        # Download model using git clone
+        logger.info(f'Downloading model to: {model_cache_path}')
+        if os.path.exists(model_cache_path):
+            # If directory exists but is not a git repo, remove it
+            if not os.path.exists(os.path.join(model_cache_path, '.git')):
+                logger.info(f'Removing existing non-git directory: {model_cache_path}')
+                import shutil
+                shutil.rmtree(model_cache_path)
+            else:
+                # If it's a git repo, try to update
+                logger.info(f'Detected existing git repository, attempting to update...')
+                try:
+                    result = subprocess.run(['git', 'pull'], cwd=model_cache_path, 
+                                         check=True, capture_output=True, text=True, timeout=300)
+                    logger.info(f'Model {model_name} updated')
+                    logger.debug(f'Git pull output: {result.stdout}')
+                    return model_cache_path
+                except subprocess.CalledProcessError as e:
+                    logger.warning(f'Failed to update model: {e.stderr or e.stdout}, will re-clone')
+                    import shutil
+                    shutil.rmtree(model_cache_path)
+                except subprocess.TimeoutExpired:
+                    logger.warning(f'Update timeout, will re-clone')
+                    import shutil
+                    shutil.rmtree(model_cache_path)
+        
+        # Clone repository with real-time output for progress tracking
+        logger.info(f'Starting to clone repository: {http_clone_url}')
+        try:
+            # Set git environment variables to avoid interactive prompts
+            env = os.environ.copy()
+            env['GIT_TERMINAL_PROMPT'] = '0'  # Disable terminal prompts
+            env['GIT_ASKPASS'] = 'echo'  # Use echo as password prompt to avoid hanging
+            env['GIT_LFS_SKIP_SMUDGE'] = '1'  # Skip LFS file download - we only need tokenizer files
+            
+            # Use Popen for real-time output and timeout control
+            import threading
+            import queue
+            import time
+            
+            output_queue = queue.Queue()
+            
+            def read_output(pipe, queue_obj):
+                """Read output from pipe and put into queue"""
+                try:
+                    for line in iter(pipe.readline, ''):
+                        if line:
+                            queue_obj.put(line.strip())
+                    pipe.close()
+                except Exception as e:
+                    queue_obj.put(f'Error reading output: {str(e)}')
+            
+            logger.info('Cloning git repository...')
+            process = subprocess.Popen(
+                ['git', 'clone', '--progress', '--verbose', http_clone_url, model_cache_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+                env=env
+            )
+            
+            # Start output reading thread
+            output_thread = threading.Thread(target=read_output, args=(process.stdout, output_queue))
+            output_thread.daemon = True
+            output_thread.start()
+            
+            # Wait for process to complete, max 10 minutes
+            start_time = time.time()
+            timeout_seconds = 600  # 10 minutes
+            last_log_time = start_time
+            
+            output_lines = []
+            clone_completed = False
+            no_output_count = 0
+            max_no_output_count = 10  # If no output for 5 seconds (10 * 0.5s), consider clone done
+            
+            while process.poll() is None:
+                # Check timeout
+                elapsed = time.time() - start_time
+                if elapsed > timeout_seconds:
+                    logger.error(f'Download timeout, terminating process...')
+                    try:
+                        process.kill()
+                        process.wait(timeout=5)
+                    except:
+                        pass
+                    raise RuntimeError(f'Model download timeout (exceeded {timeout_seconds} seconds): {model_name}')
+                
+                # Read output queue
+                has_output = False
+                try:
+                    while True:
+                        line = output_queue.get_nowait()
+                        if line:
+                            logger.info(f'Git clone: {line}')
+                            output_lines.append(line)
+                            last_log_time = time.time()
+                            has_output = True
+                            no_output_count = 0  # Reset counter
+                            # Check if clone is completed
+                            if 'done' in line.lower() or 'complete' in line.lower() or 'checkout' in line.lower():
+                                clone_completed = True
+                                # Immediately check if files exist - if yes, we can proceed
+                                if os.path.exists(model_cache_path):
+                                    files_in_dir = [f for f in os.listdir(model_cache_path) if f != '.git' and not f.startswith('.')]
+                                    if files_in_dir:
+                                        # Clone is done and files exist, wait a bit then exit
+                                        logger.info('Git clone completed and files detected, proceeding...')
+                                        time.sleep(1)  # Brief wait for process to finish
+                                        if process.poll() is None:
+                                            # Process still running (likely stuck on LFS), terminate it
+                                            logger.info('Terminating git process (files already available, no need to wait for LFS)')
+                                            try:
+                                                process.terminate()
+                                                process.wait(timeout=2)
+                                            except:
+                                                try:
+                                                    process.kill()
+                                                except:
+                                                    pass
+                                        break  # Exit the while loop
+                except queue.Empty:
+                    pass
+                
+                # If no output, increment counter
+                if not has_output:
+                    no_output_count += 1
+                
+                # If clone completed and no output for a while, check if files exist and exit
+                if clone_completed and no_output_count >= max_no_output_count:
+                    # Check if we have files (not just .git directory)
+                    if os.path.exists(model_cache_path):
+                        files_in_dir = [f for f in os.listdir(model_cache_path) if f != '.git' and not f.startswith('.')]
+                        if files_in_dir:
+                            logger.info('Git clone appears completed (no output for 5s), checking files and proceeding...')
+                            # Give process a moment to finish, then break
+                            time.sleep(2)
+                            if process.poll() is None:
+                                # Process still running but no output, likely stuck on LFS
+                                logger.warning('Git clone process still running but no output. Terminating to proceed with available files.')
+                                try:
+                                    process.terminate()
+                                    process.wait(timeout=3)
+                                except:
+                                    try:
+                                        process.kill()
+                                    except:
+                                        pass
+                            break
+                
+                # If no output for more than 30 seconds, log warning
+                if time.time() - last_log_time > 30 and last_log_time > start_time:
+                    elapsed_seconds = int(time.time() - start_time)
+                    if process.poll() is None:
+                        logger.warning(f'Git clone has been running for {elapsed_seconds} seconds, still downloading... (downloaded: {len(output_lines)} lines)')
+                    last_log_time = time.time()
+                
+                time.sleep(0.5)  # Avoid high CPU usage
+            
+            # Read remaining output
+            output_thread.join(timeout=5)
+            try:
+                while True:
+                    line = output_queue.get_nowait()
+                    if line:
+                        logger.info(f'Git clone: {line}')
+                        output_lines.append(line)
+            except queue.Empty:
+                pass
+            
+            # Check if clone succeeded or if only LFS files failed
+            clone_failed = process.returncode != 0
+            lfs_error = any('lfs' in line.lower() or 'smudge' in line.lower() for line in output_lines)
+            
+            # Verify download success
+            if not os.path.exists(model_cache_path) or not os.path.exists(os.path.join(model_cache_path, '.git')):
+                raise RuntimeError(f'Git clone failed: directory is invalid: {model_cache_path}')
+            
+            # Check if we have actual files (not just .git directory)
+            files_in_dir = [f for f in os.listdir(model_cache_path) if f != '.git' and not f.startswith('.')]
+            if not files_in_dir:
+                logger.warning('No files found after clone, attempting checkout...')
+                try:
+                    # Try to checkout files, but skip LFS files if they fail
+                    # Use GIT_LFS_SKIP_SMUDGE to skip LFS file download
+                    env_checkout = env.copy()
+                    env_checkout['GIT_LFS_SKIP_SMUDGE'] = '1'  # Skip LFS smudge filter
+                    checkout_result = subprocess.run(
+                        ['git', 'checkout', 'HEAD', '--', '.'],
+                        cwd=model_cache_path,
+                        env=env_checkout,
+                        capture_output=True,
+                        text=True,
+                        timeout=300
+                    )
+                    if checkout_result.returncode == 0:
+                        logger.info('Files checked out successfully (skipped LFS files)')
+                    else:
+                        logger.warning(f'Checkout failed: {checkout_result.stderr}')
+                except Exception as e:
+                    logger.warning(f'Checkout failed: {str(e)}')
+            
+            # Skip Git LFS download - we only need tokenizer files, not model weights
+            # This saves time and space. Tokenizer files are usually small and not in LFS
+            logger.info('Skipping Git LFS download - only tokenizer files are needed, not model weights')
+            
+            # Verify that we have at least some tokenizer files
+            files_in_dir = [f for f in os.listdir(model_cache_path) if f != '.git' and not f.startswith('.')]
+            tokenizer_files = [f for f in files_in_dir if any(keyword in f.lower() for keyword in 
+                            ['tokenizer', 'vocab', 'config.json', 'merges', 'special_tokens'])]
+            
+            if not tokenizer_files:
+                if clone_failed and lfs_error:
+                    # If clone failed due to LFS and we have no tokenizer files, it's a real error
+                    error_msg = '\n'.join(output_lines[-10:]) if output_lines else 'No output'
+                    raise RuntimeError(
+                        f'Git clone failed and no tokenizer files found (return code: {process.returncode}). '
+                        f'This may be due to Git LFS download failure. Error: {error_msg}'
+                    )
+                else:
+                    logger.warning('No tokenizer files found in downloaded model directory')
+                    logger.info(f'Available files: {files_in_dir[:10]}')  # Show first 10 files
+            else:
+                logger.info(f'Found tokenizer files: {tokenizer_files[:5]}')  # Show first 5 files
+                # Even if Git LFS failed, we can still use the model if tokenizer files exist
+                if clone_failed and lfs_error:
+                    logger.warning('Git LFS download failed, but tokenizer files are available. Continuing...')
+            
+            logger.info(f'Model {model_name} download completed: {model_cache_path}')
+            return model_cache_path
+            
+        except FileNotFoundError:
+            raise RuntimeError(f'Git command not found, please ensure git is installed')
+        
+    except requests.RequestException as e:
+        raise RuntimeError(f'Failed to request OpenCSG API: {str(e)}')
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f'Model download timeout: {model_name}')
+    except Exception as e:
+        raise RuntimeError(f'Failed to download model: {str(e)}')
 
 MODEL_FUNCTION_MAPPING = {
     'fasttext': prepare_fasttext_model,
