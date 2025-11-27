@@ -1,7 +1,7 @@
 /*
  Navicat Premium Dump SQL
 
- Source Server         : pg-local-docker
+ Source Server         : postgresql-docker
  Source Server Type    : PostgreSQL
  Source Server Version : 150010 (150010)
  Source Host           : localhost:5433
@@ -12,7 +12,7 @@
  Target Server Version : 150010 (150010)
  File Encoding         : 65001
 
- Date: 21/08/2025 11:01:42
+ Date: 27/11/2025 09:23:55
 */
 
 
@@ -62,10 +62,136 @@ COMMENT ON COLUMN "public"."algo_templates"."updated_at" IS '修改时间';
 -- ----------------------------
 -- Records of algo_templates
 -- ----------------------------
-INSERT INTO "public"."algo_templates" VALUES (1, '54', '数据处理-基础', '该配置文件用于定义数据流处理的各个步骤，包括字符过滤、重复数据去除和中文转换等操作。', 'data_refine', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '1', 'f', '3', 'name: 数据处理-基础
+INSERT INTO "public"."algo_templates" VALUES (3, '0', '数据增强', '该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。', 'data_enhancement', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '3', 't', '3', 'name: 数据增强_复制
+description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
+type: data_enhancement
+buildin: true
+project_name: dataflow-demo-process
+dataset_path: /path/to/your/dataset
+exprot_path: /path/to/your/dataset.jsonl
+np: 3
+open_tracer: true
+trace_num: 3
+process:
+  - optimize_instruction_mapper:
+      model_name: deepseek-chat
+      model_url: https://api.deepseek.com/chat/completions
+      auth_token: ''''
+', 'name: 数据增强_复制
+description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
+type: data_enhancement
+process:
+  node_1764206142290_323:
+    id: node_1764206142290_323
+    operator_id: ''21''
+    operator_type: Mapper
+    operator_name: optimize_instruction_mapper
+    display_name: 优化Instruction
+    operator_description: null
+    icon: >-
+      data:image/png;base64,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
+    position:
+      x: 418.6666259765625
+      ''y'': 357.8333282470703
+    configs:
+      - id: 34
+        operator_id: 21
+        config_name: model_name
+        config_type: input
+        default_value: deepseek-chat
+        is_required: false
+        is_spinner: false
+        final_value: deepseek-chat
+        display_name: 模型名称
+      - id: 156
+        operator_id: 21
+        config_name: model_url
+        config_type: input
+        default_value: https://api.deepseek.com/chat/completions
+        is_required: false
+        is_spinner: false
+        final_value: https://api.deepseek.com/chat/completions
+        display_name: 模型地址
+      - id: 157
+        operator_id: 21
+        config_name: auth_token
+        config_type: input
+        is_required: false
+        is_spinner: false
+        final_value: ''''
+        display_name: 授权令牌
+edges: []
+', '2025-11-27 09:15:47.743138', '2025-11-27 09:15:47.743138');
+INSERT INTO "public"."algo_templates" VALUES (4, '0', '数据生成', '该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。', 'data_generation', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '3', 't', '3', 'name: 数据生成_复制
+description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
+type: data_generation
+buildin: true
+project_name: dataflow-demo-process
+dataset_path: /path/to/your/dataset
+exprot_path: /path/to/your/dataset.jsonl
+np: 3
+open_tracer: true
+trace_num: 3
+process:
+  - extract_qa_mapper:
+      model_name: deepseek-chat
+      model_url: https://api.deepseek.com/chat/completions
+      auth_token: ''''
+', 'name: 数据生成_复制
+description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
+type: data_generation
+process:
+  node_1764206122836_513:
+    id: node_1764206122836_513
+    operator_id: ''11''
+    operator_type: Mapper
+    operator_name: extract_qa_mapper
+    display_name: 问答对提取
+    operator_description: "将一段文字转换成json格式的问答对，如：[\r\n    {\r\n      \"messages\": [\r\n        {\"role\": \"user\", \"content\": \"问题1\"},\r\n        {\"role\": \"assistant\", \"content\": \"答案1\"}\r\n      ]\r\n    }\r\n  ]"
+    icon: >-
+      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAF4AAABeCAYAAACq0qNuAAAACXBIWXMAAAsTAAALEwEAmpwYAAADeWlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgOS4xLWMwMDEgNzkuMTQ2Mjg5OTc3NywgMjAyMy8wNi8yNS0yMzo1NzoxNCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo2ZDYyZmIwNC03ODY4LTQxZjktYmVkMy1iYzE0YWM5MDgxYTciIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6OUQwNjhCRURBNTc1MkY0NTlBNjNEQzNEQTBBNkVBQTUiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6NDI2M0Q2N0NEQ0Y2QzQ0MUE2MjlGMTdDMURBMjkyNTAiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDI1LjEgKE1hY2ludG9zaCkiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpjODlkNzU2MC00NjcxLTQ1OTYtYTY5ZS0zMDNiMmEzYTMxZmUiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NmQ2MmZiMDQtNzg2OC00MWY5LWJlZDMtYmMxNGFjOTA4MWE3Ii8+IDwvcmRmOkRlc2Ny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
+    position:
+      x: 239.6666259765625
+      ''y'': 266.8333282470703
+    configs:
+      - id: 16
+        operator_id: 11
+        config_name: model_name
+        config_type: input
+        config_description: The Name of the Model
+        default_value: deepseek-chat
+        is_required: false
+        is_spinner: false
+        final_value: deepseek-chat
+        display_name: 模型名称
+        display_description: The Name of the Model
+      - id: 158
+        operator_id: 11
+        config_name: model_url
+        config_type: input
+        config_description: The Remote Invocation Address of the Model
+        default_value: https://api.deepseek.com/chat/completions
+        is_required: false
+        is_spinner: false
+        final_value: https://api.deepseek.com/chat/completions
+        display_name: 模型地址
+        display_description: The Remote Invocation Address of the Model
+      - id: 159
+        operator_id: 11
+        config_name: auth_token
+        config_type: input
+        config_description: The Usage Token of the Model
+        is_required: false
+        is_spinner: false
+        final_value: ''''
+        display_name: 授权令牌
+        display_description: The Usage Token of the Model
+edges: []
+', '2025-11-27 09:15:25.442519', '2025-11-27 09:15:25.442519');
+INSERT INTO "public"."algo_templates" VALUES (1, '0', '数据处理-基础', '该配置文件用于定义数据流处理的各个步骤，包括字符过滤、重复数据去除和中文转换等操作。', 'data_refine', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '1', 't', '3', 'name: 数据处理-基础
 description: 该配置文件用于定义数据流处理的各个步骤，包括字符过滤、重复数据去除和中文转换等操作。
 type: data_refine
-buildin: false
+buildin: true
 project_name: dataflow-demo-process
 dataset_path: /path/to/your/dataset
 exprot_path: /path/to/your/dataset.jsonl
@@ -383,96 +509,10 @@ edges:
   - source: node_1755742744761_861
     target: node_1755742766906_855
 ', '2025-08-21 10:24:02.369476', '2025-08-21 10:25:37.779773');
-INSERT INTO "public"."algo_templates" VALUES (3, '54', '数据增强', '该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。', 'data_enhancement', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '1', 'f', '3', 'name: 数据增强
-description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
-type: data_enhancement
-buildin: false
-project_name: dataflow-demo-process
-dataset_path: /path/to/your/dataset
-exprot_path: /path/to/your/dataset.jsonl
-np: 3
-open_tracer: true
-trace_num: 3
-process:
-  - optimize_instruction_mapper:
-      hf_model: alibaba-pai/Qwen2-7B-Instruct-Refine
-', 'name: 数据增强
-description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
-type: data_enhancement
-process:
-  optimize_instruction_mapper:
-    id: node_1755743178730_333
-    operator_id: ''21''
-    operator_type: Mapper
-    operator_name: optimize_instruction_mapper
-    display_name: 优化Instruction
-    icon: >-
-      data:image/png;base64,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
-    position:
-      x: 438.6666259765625
-      ''y'': 323.3333282470703
-    configs:
-      - id: 34
-        operator_id: 21
-        config_name: hf_model
-        config_type: select
-        select_options:
-          - value: ''24''
-            label: alibaba-pai/Qwen2-7B-Instruct-Refine
-        default_value: ''24''
-        is_required: false
-        is_spinner: false
-        final_value: ''24''
-        display_name: 模型名称
-edges: []
-', '2025-08-21 10:26:21.114035', '2025-08-21 10:26:21.114035');
-INSERT INTO "public"."algo_templates" VALUES (4, '54', '数据生成', '该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。', 'data_generation', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '1', 'f', '3', 'name: 数据生成
-description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
-type: data_generation
-buildin: false
-project_name: dataflow-demo-process
-dataset_path: /path/to/your/dataset
-exprot_path: /path/to/your/dataset.jsonl
-np: 3
-open_tracer: true
-trace_num: 3
-process:
-  - extract_qa_mapper:
-      hf_model: alibaba-pai/pai-qwen1_5-7b-doc2qa
-', 'name: 数据生成
-description: 该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。
-type: data_generation
-process:
-  extract_qa_mapper:
-    id: node_1755743324810_423
-    operator_id: ''11''
-    operator_type: Mapper
-    operator_name: extract_qa_mapper
-    display_name: 问答对提取
-    icon: >-
-      data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAF4AAABeCAYAAACq0qNuAAAACXBIWXMAAAsTAAALEwEAmpwYAAADeWlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPD94cGFja2V0IGJlZ2luPSLvu78iIGlkPSJXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQiPz4gPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iQWRvYmUgWE1QIENvcmUgOS4xLWMwMDEgNzkuMTQ2Mjg5OTc3NywgMjAyMy8wNi8yNS0yMzo1NzoxNCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDo2ZDYyZmIwNC03ODY4LTQxZjktYmVkMy1iYzE0YWM5MDgxYTciIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6OUQwNjhCRURBNTc1MkY0NTlBNjNEQzNEQTBBNkVBQTUiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6NDI2M0Q2N0NEQ0Y2QzQ0MUE2MjlGMTdDMURBMjkyNTAiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDI1LjEgKE1hY2ludG9zaCkiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpjODlkNzU2MC00NjcxLTQ1OTYtYTY5ZS0zMDNiMmEzYTMxZmUiIHN0UmVmOmRvY3VtZW50SUQ9InhtcC5kaWQ6NmQ2MmZiMDQtNzg2OC00MWY5LWJlZDMtYmMxNGFjOTA4MWE3Ii8+IDwvcmRmOkRlc2Ny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
-    position:
-      x: 403.6666259765625
-      ''y'': 277.3333282470703
-    configs:
-      - id: 16
-        operator_id: 11
-        config_name: hf_model
-        config_type: select
-        select_options:
-          - value: ''18''
-            label: alibaba-pai/pai-qwen1_5-7b-doc2qa
-        default_value: ''18''
-        is_required: false
-        is_spinner: false
-        final_value: ''18''
-        display_name: 模型名称
-edges: []
-', '2025-08-21 10:28:47.141256', '2025-08-21 10:29:14.172232');
-INSERT INTO "public"."algo_templates" VALUES (2, '54', '数据处理-高阶', '该配置文件用于定义数据处理流程，包含多个处理机制，如清理电子邮件、链接、字符规范化、文本过滤和去重等操作。用户可根据需求调整参数，以提高数据质量和处理效率，确保最终数据集的准确性和一致性。', 'data_refine', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '1', 'f', '3', 'name: 数据处理-高阶
+INSERT INTO "public"."algo_templates" VALUES (2, '0', '数据处理-高阶', '该配置文件用于定义数据处理流程，包含多个处理机制，如清理电子邮件、链接、字符规范化、文本过滤和去重等操作。用户可根据需求调整参数，以提高数据质量和处理效率，确保最终数据集的准确性和一致性。', 'data_refine', 't', 'dataflow-demo-process', '/path/to/your/dataset', '/path/to/your/dataset.jsonl', '1', 't', '3', 'name: 数据处理-高阶
 description: 该配置文件用于定义数据处理流程，包含多个处理机制，如清理电子邮件、链接、字符规范化、文本过滤和去重等操作。用户可根据需求调整参数，以提高数据质量和处理效率，确保最终数据集的准确性和一致性。
 type: data_refine
-buildin: false
+buildin: true
 project_name: dataflow-demo-process
 dataset_path: /path/to/your/dataset
 exprot_path: /path/to/your/dataset.jsonl

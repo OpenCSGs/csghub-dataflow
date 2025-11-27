@@ -215,6 +215,7 @@ def get_operators_grouped_by_type(db: Session) -> List[Dict[str, Any]]:
                 "operator_id": config.operator_id,
                 "config_name": config.config_name,
                 "config_type": config.config_type,
+                "config_description": config.config_description,
                 "select_options": config.select_options,
                 "default_value": config.default_value,
                 "min_value": config.min_value,
@@ -252,6 +253,7 @@ def get_operators_grouped_by_type(db: Session) -> List[Dict[str, Any]]:
             "id": operator.id,
             "operator_name": operator.operator_name,
             "operator_type": operator.operator_type,
+            "operator_description": operator.operator_description,
             "icon": operator.icon,
             "configs": config_responses
         }
@@ -324,6 +326,7 @@ def get_operators_grouped_by_condition(db: Session, uuid: str, paths: List[str])
                 "operator_id": config.operator_id,
                 "config_name": config.config_name,
                 "config_type": config.config_type,
+                "config_description": config.config_description,
                 "select_options": config.select_options,
                 "default_value": config.default_value,
                 "min_value": config.min_value,
@@ -361,6 +364,7 @@ def get_operators_grouped_by_condition(db: Session, uuid: str, paths: List[str])
             "id": operator.id,
             "operator_name": operator.operator_name,
             "operator_type": operator.operator_type,
+            "operator_description": operator.operator_description,
             "icon": operator.icon,
             "configs": config_responses
         }

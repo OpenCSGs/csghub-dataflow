@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, status, Header, Depends
 from oauthlib.uri_validate import query
 from sqlalchemy.orm import Session
-from typing import Annotated, Union
+from typing import Annotated, Union, Optional
 from loguru import logger
 from data_server.database.session import get_sync_session
 from data_server.schemas.responses import response_success, response_fail,response_fail400
@@ -11,9 +11,34 @@ from data_server.formatify.FormatifyManager import (create_formatify_task, searc
                                                     update_formatify_task, delete_formatify_task,
                                                     get_formatify_task, stop_formatify_task)
 from pycsghub.snapshot_download import snapshot_download
+from data_celery.mongo_tools.tools import get_formatity_collection, get_client
 import os
+import re
 from sqlalchemy import func
 router = APIRouter()
+
+
+@router.get("/get_mineru_api_url", response_model=dict)
+async def get_mineru_api_url():
+    """
+    获取当前配置的 MinerU API 地址
+    Returns:
+        Dict: 包含当前 MinerU API 地址的响应
+            - mineru_api_url: MinerU API 服务器地址
+            - source: 配置来源 ("environment" | "default")
+    """
+    try:
+        # 从环境变量获取，如果没有则使用默认值
+        mineru_api_url = os.getenv("MINERU_API_URL", "http://111.4.242.20:30000")
+        source = "environment" if os.getenv("MINERU_API_URL") else "default"
+        
+        return response_success(data={
+            "mineru_api_url": mineru_api_url,
+            "source": source
+        })
+    except Exception as e:
+        logger.error(f"Failed to get mineru_api_url: {str(e)}")
+        return response_fail(msg="获取 MinerU API 地址失败")
 
 
 @router.get("/formatify/get_format_type_list", response_model=dict)
@@ -40,6 +65,7 @@ async def get_format_type_list():
             "from_format_types": [
                 {"value": DataFormatTypeEnum.Word.value, "label": DataFormatTypeEnum.Word.name},
                 {"value": DataFormatTypeEnum.PPT.value, "label": DataFormatTypeEnum.PPT.name},
+                {"value": DataFormatTypeEnum.PDF.value, "label": DataFormatTypeEnum.PDF.name},
             ],
             "to_format_types": [
                 {"value": DataFormatTypeEnum.Markdown.value, "label": DataFormatTypeEnum.Markdown.name},
@@ -168,6 +194,105 @@ async def delete_formatify(formatify_id: int, db: Session = Depends(get_sync_ses
         return response_fail(msg=f"Deletion failed: {str(e)}")
 
 
+def get_progress_from_mongodb_logs(task_uid: str) -> Optional[dict]:
+    """
+    从 MongoDB 日志中解析进度信息
+    Args:
+        task_uid: 任务唯一标识
+    Returns:
+        dict: 包含进度信息的字典，如果解析失败返回 None
+    """
+    try:
+        if not task_uid:
+            return None
+        
+        client = get_client()
+        try:
+            collection = get_formatity_collection(client, task_uid)
+            
+            # 查找包含进度信息的日志（按时间倒序）
+            # 匹配格式：Updated and uploaded meta.json (total: X, success: Y, failure: Z)
+            # 或：All files processed. Total: X, Success: Y, Failure: Z
+            progress_patterns = [
+                r'\(total:\s*(\d+),\s*success:\s*(\d+),\s*failure:\s*(\d+)\)',  # (total: X, success: Y, failure: Z)
+                r'Total:\s*(\d+),\s*Success:\s*(\d+),\s*Failure:\s*(\d+)',  # Total: X, Success: Y, Failure: Z
+            ]
+            
+            # 从最新的日志开始查找
+            logs = collection.find({"level": "info"}).sort("create_at", -1).limit(100)
+            
+            for log in logs:
+                content = log.get("content", "")
+                if not content:
+                    continue
+                
+                # 尝试匹配各种进度格式
+                for pattern in progress_patterns:
+                    match = re.search(pattern, content, re.IGNORECASE)
+                    if match:
+                        total = int(match.group(1))
+                        success = int(match.group(2))
+                        failure = int(match.group(3))
+                        processed = success + failure
+                        progress = round(processed / max(total, 1) * 100, 2) if total > 0 else 0
+                        
+                        return {
+                            "total": total,
+                            "success": success,
+                            "failure": failure,
+                            "progress": progress
+                        }
+            
+            # 如果没有找到进度信息，尝试查找 "Found X files to convert" 来获取总数
+            logs_for_total = collection.find({"level": "info"}).sort("create_at", 1).limit(50)
+            total_count = None
+            for log in logs_for_total:
+                content = log.get("content", "")
+                # 匹配：Found X files to convert
+                match = re.search(r'Found\s+(\d+)\s+files\s+to\s+convert', content, re.IGNORECASE)
+                if match:
+                    total_count = int(match.group(1))
+                    break
+            
+            # 如果找到了总数，尝试统计成功和失败的数量
+            if total_count is not None:
+                success_count = 0
+                failure_count = 0
+                
+                # 统计成功转换的日志
+                success_logs = collection.find({
+                    "level": "info",
+                    "content": {"$regex": r"convert file.*succeed", "$options": "i"}
+                })
+                success_count = success_logs.count()
+                
+                # 统计失败的日志
+                failure_logs = collection.find({
+                    "level": "error",
+                    "content": {"$regex": r"convert file.*error", "$options": "i"}
+                })
+                failure_count = failure_logs.count()
+                
+                processed = success_count + failure_count
+                progress = round(processed / max(total_count, 1) * 100, 2) if total_count > 0 else 0
+                
+                return {
+                    "total": total_count,
+                    "success": success_count,
+                    "failure": failure_count,
+                    "progress": progress
+                }
+                
+        finally:
+            client.close()
+            
+    except Exception as e:
+        logger.warning(f"Failed to get progress from MongoDB logs: {str(e)}")
+        return None
+    
+    return None
+
+
 @router.get("/formatify/get/{formatify_id}", response_model=dict)
 async def get_formatify(formatify_id: int, db: Session = Depends(get_sync_session)):
     """
@@ -176,13 +301,24 @@ async def get_formatify(formatify_id: int, db: Session = Depends(get_sync_sessio
         formatify_id (int): ID of the format conversion task to retrieve
         db (Session): Database session from dependency injection
     Returns:
-        dict: Response with task details or failure message
+        dict: Response with task details and progress information
     """
     try:
         result = get_formatify_task(db, formatify_id)
         if not result:
             return response_fail(msg="Query failed")
-        return response_success(data=result.to_dict())
+        
+        task_dict = result.to_dict()
+        
+        # 如果任务正在执行、已完成或失败，尝试从 MongoDB 日志中解析进度信息
+        # 即使任务失败，日志中也可能有进度信息，应该显示给用户
+        if result.task_status in [DataFormatTaskStatusEnum.EXECUTING.value, DataFormatTaskStatusEnum.COMPLETED.value, DataFormatTaskStatusEnum.ERROR.value]:
+            if result.task_uid:
+                progress_info = get_progress_from_mongodb_logs(task_uid=result.task_uid)
+                if progress_info:
+                    task_dict["progress"] = progress_info
+        
+        return response_success(data=task_dict)
     except Exception as e:
         logger.error(f"get_formatify: {str(e)}")
         return response_fail(msg=f"Query failed: {str(e)}")

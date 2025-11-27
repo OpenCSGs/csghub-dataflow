@@ -81,7 +81,7 @@ class Sample(BaseModelExtended):
 class Param(BaseModelExtended):
     name: str
     type: Optional[Union[Literal["STRING"], Literal["INTEGER"], Literal["FLOAT"],
-                Literal["BOOLEAN"], Literal["DICTIONARY"], Literal["TUPLE"], Literal["LIST"], Literal["PositiveFloat"], Literal["ClosedUnitInterval"], Literal["from_2_to_20"]]] = None
+                Literal["BOOLEAN"], Literal["DICTIONARY"], Literal["TUPLE"], Literal["LIST"], Literal["PositiveFloat"], Literal["ClosedUnitInterval"], Literal["from_2_to_20"], Literal["search-select"]]] = None
     option_values: Optional[list[Option]] = None
     value: Optional[Any] = None
     tempVal: Optional[Any] = None

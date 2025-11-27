@@ -15,3 +15,4 @@ class DataFormatTaskRequest(BaseModel):
     to_csg_hub_dataset_default_branch: Optional[str] = None
     to_csg_hub_repo_id: Optional[str] = None
     to_data_type: Optional[int] = None
+    mineru_api_url: Optional[str] = None

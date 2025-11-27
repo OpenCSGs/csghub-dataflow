@@ -500,6 +500,7 @@ class DataType(Enum):
     PositiveFloat = 1
     ClosedUnitInterval = 2
     from_2_to_20 = 3
+    SEARCH_SELECT = "search-select"
 
 @dataclass
 class Sample:

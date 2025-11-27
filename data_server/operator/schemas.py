@@ -10,6 +10,7 @@ class OperatorInfoResponse(BaseModel):
     execution_order: Optional[int] = None
     is_enabled: Optional[bool] = None
     description: Optional[str] = None
+    operator_description: Optional[str] = None
     before_cleaning: Optional[str] = None
     after_cleaning: Optional[str] = None
     icon: Optional[str] = None
@@ -31,6 +32,7 @@ class OperatorConfigResponse(BaseModel):
     operator_id: Optional[int] = None
     config_name: Optional[str] = None
     config_type: Optional[str] = None
+    config_description: Optional[str] = None
     select_options: Optional[Union[List[int], List[Dict[str, Any]]]] = None
     default_value: Optional[Union[str, Dict[str, Any]]] = None
     min_value: Optional[str] = None
@@ -82,6 +84,7 @@ class OperatorConfigRequest(BaseModel):
     id: Optional[int] = None
     config_name: str
     config_type: str
+    config_description: Optional[str] = None
     select_options: Optional[List[int]] = None
     default_value: Optional[str] = None
     min_value: Optional[str] = None
@@ -98,6 +101,7 @@ class OperatorCreateRequest(BaseModel):
     execution_order: Optional[int] = 0
     is_enabled: Optional[bool] = True
     description: Optional[str] = None
+    operator_description: Optional[str] = None
     before_cleaning: Optional[str] = None
     after_cleaning: Optional[str] = None
     icon: Optional[str] = None
@@ -109,6 +113,7 @@ class OperatorUpdateRequest(BaseModel):
     execution_order: Optional[int] = None
     is_enabled: Optional[bool] = None
     description: Optional[str] = None
+    operator_description: Optional[str] = None
     before_cleaning: Optional[str] = None
     after_cleaning: Optional[str] = None
     icon: Optional[str] = None
@@ -149,3 +154,19 @@ class OperatorPermissionCreateRequest(BaseModel):
     operator_id: int
     users: Optional[List[UserPermission]] = []
     orgs: Optional[List[OrgPermission]] = []
+
+class OperatorDocumentResponse(BaseModel):
+    id: Optional[int] = None
+    operator_id: Optional[int] = None
+    content: Optional[str] = None  # Markdown文档内容
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @field_serializer('created_at', 'updated_at')
+    def serialize_dt(self, dt: Optional[datetime], _info):
+        if dt is None:
+            return None
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+
+    class Config:
+        from_attributes = True

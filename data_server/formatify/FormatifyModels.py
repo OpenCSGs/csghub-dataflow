@@ -15,6 +15,7 @@ class DataFormatTypeEnum(Enum):
     Json = 4  # json
     Csv = 5  # csv
     Parquet = 6  # parquet
+    PDF = 7  # pdf
 
 
 def getFormatTypeName(type):
@@ -52,6 +53,7 @@ class DataFormatTask(Base):
     task_celery_uid = Column(String(100), comment="celery任务调度唯一标识")
     task_status = Column(Integer, nullable=False, comment="任务状态 DataFormatTaskStatusEnum 枚举")
     owner_id = Column(Integer, comment="所属用户")
+    mineru_api_url = Column(String(500), comment="MinerU API 地址")
     start_run_at = Column(DateTime, comment='运行开始时间')
     end_run_at = Column(DateTime, comment='运行结束时间')
     created_at = Column(DateTime, default=datetime.datetime.now, comment='任务创建时间')
@@ -76,6 +78,7 @@ class DataFormatTask(Base):
             "task_celery_uid": self.task_celery_uid,
             "task_status": self.task_status,
             "owner_id": self.owner_id,
+            "mineru_api_url": self.mineru_api_url,
             "start_run_at": self.start_run_at,
             "end_run_at": self.end_run_at,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,

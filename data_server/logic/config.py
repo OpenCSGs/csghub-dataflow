@@ -24,9 +24,10 @@ def build_ops():
             for param in op_class.init_params:
                 options = [Option(key=key, label=param.options[key])
                            for key in param.options.keys()] if param.options else None
+                type_name = param.type.value if isinstance(param.type.value, str) and param.type.value != param.type.name else param.type.name
                 params.append(Param(
                     name=param.name,
-                    type=param.type.name,
+                    type=type_name,
                     option_values=options,
                     value=param.default
                 ))
@@ -105,9 +106,10 @@ def build_tools(userid: str = None, isadmin: bool = False):
                 for param in tool_class.init_params(userid, isadmin):
                     options = [Option(key=key, label=param.options[key])
                             for key in param.options.keys()] if param.options else None
+                    type_name = param.type.value if isinstance(param.type.value, str) and param.type.value != param.type.name else param.type.name
                     params.append(Param(
                         name=param.name,
-                        type=param.type.name,
+                        type=type_name,
                         option_values=options,
                         value=param.default
                     ))

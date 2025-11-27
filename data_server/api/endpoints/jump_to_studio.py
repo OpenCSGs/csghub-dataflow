@@ -8,7 +8,7 @@ from data_server.schemas.responses import response_success, response_fail
 
 router = APIRouter()
 
-BASE_STUDIO_URL = os.getenv("STUDIO_JUMP_URL", "http://192.168.2.6:8080")
+BASE_STUDIO_URL = os.getenv("STUDIO_JUMP_URL", "http://192.168.2.4:8080")
 
 
 @router.post("/jump-to-studio", tags=["studio"])

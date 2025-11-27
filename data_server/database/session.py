@@ -19,6 +19,7 @@ import os
 from loguru import logger
 import redis
 
+
 def sqlalchemy_database_uri() -> URL:
     db_user_name = ""
     db_user_pwd = ""
@@ -34,8 +35,8 @@ def sqlalchemy_database_uri() -> URL:
     db_user_pwd = os.getenv('DATABASE_PASSWORD', "postgres")
     db_host_name = os.getenv('DATABASE_HOSTNAME', "127.0.0.1")
     db_host_port = os.getenv('DATABASE_PORT', 5433)
+
     db_name = os.getenv('DATABASE_DB', "data_flow")
-    
     print(f"connect to {db_user_name}:{db_user_pwd}@{db_host_name}:{db_host_port}/{db_name}")
     return URL.create(
         # drivername="postgresql+asyncpg",
@@ -49,8 +50,7 @@ def sqlalchemy_database_uri() -> URL:
 
 
 def get_radis_database_uri() -> str:
-    # return os.getenv("REDIS_HOST_URL", "redis://:redis123456@net-power.9free.com.cn:18122")
-    return os.getenv("REDIS_HOST_URL", "redis://127.0.0.1:16379")
+    return os.getenv("REDIS_HOST_URL", "redis://192.168.2.10:6379")
 
 
 def get_redis_client_by_db_number(number: int) -> str:
@@ -133,7 +133,7 @@ def get_sync_session() -> Session:  # pragma: no cover
 
 
 
-MONGO_URI = os.getenv('MONG_HOST_URL', 'mongodb://root:example@net-power.9free.com.cn:18123')
+MONGO_URI = os.getenv('MONG_HOST_URL', 'mongodb://root:example@net-power.9free.com.cn:10002')
 
 
 def add_first_op_column():
@@ -149,6 +149,21 @@ def add_first_op_column():
                 session.execute(text("ALTER TABLE job ADD COLUMN first_op VARCHAR;"))
                 session.execute(text("UPDATE job SET first_op = '' WHERE first_op IS NULL;"))
                 logger.info("Column 'first_op' added successfully")
+
+
+def add_mineru_api_url_column():
+    """添加 mineru_api_url 字段到 data_format_tasks 表"""
+    with get_sync_session() as session:
+        with session.begin():
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'data_format_tasks' AND column_name = 'mineru_api_url';
+            """))
+
+            if not result.fetchone():
+                session.execute(text("ALTER TABLE data_format_tasks ADD COLUMN mineru_api_url VARCHAR(500);"))
+                logger.info("Column 'mineru_api_url' added successfully to data_format_tasks table")
 
 
 _initialized = False
@@ -182,6 +197,7 @@ def create_tables():
     _initialized = True
 
     add_first_op_column()
+    add_mineru_api_url_column()
 def is_table_initialized(table_name: str) -> bool:
     """
     Check if a specific table contains any data.
@@ -197,6 +213,7 @@ def is_table_initialized(table_name: str) -> bool:
 def initialize_database():
     """
     Selectively initializes tables if they are empty.
+    Automatically executes one-time deletion on first startup (tracked in deletion_status table).
     This should be called once when the application starts.
     """
     tables_to_initialize = [
@@ -205,17 +222,60 @@ def initialize_database():
         'operator_config_select_options',
         'algo_templates'
     ]
-    
-    logger.info("Starting selective database data initialization check...")
-    from .initializer import initialize_table
 
-    for table in tables_to_initialize:
-        if is_table_initialized(table):
-            logger.info(f"Table '{table}' already contains data, skipping initialization.")
-        else:
-            logger.info(f"Table '{table}' is empty, proceeding with initialization.")
-            initialize_table(table)
-            
+    logger.info("Starting selective database data initialization check...")
+    from .initializer import (
+        initialize_table,
+        delete_table_data_by_ids,
+        has_deletion_been_executed,
+        mark_deletion_as_executed,
+        has_table_alteration_been_executed,
+        mark_table_alteration_as_executed,
+        alter_tables_add_description_columns
+    )
+
+    should_alter_tables = not has_table_alteration_been_executed()
+    should_delete = not has_deletion_been_executed()
+
+    if should_alter_tables:
+        logger.info("First time startup detected, executing one-time table alteration...")
+        try:
+            alter_tables_add_description_columns()
+            mark_table_alteration_as_executed()
+            logger.info("Table alteration completed and marked as executed.")
+        except Exception as e:
+            logger.error(f"Error during table alteration process: {e}")
+            logger.warning("Table alteration interrupted, but will continue...")
+
+    if should_delete:
+        logger.info("First time startup detected, executing one-time deletion...")
+        try:
+            for table in tables_to_initialize:
+                delete_table_data_by_ids(table)
+            mark_deletion_as_executed()
+            logger.info("Data deletion completed and marked as executed.")
+        except Exception as e:
+            logger.error(f"Error during deletion process: {e}")
+            logger.warning("Deletion process interrupted, but will continue with initialization...")
+
+        logger.info("Force re-initializing all tables after deletion...")
+        for table in tables_to_initialize:
+            logger.info(f"Force initializing table '{table}'...")
+            try:
+                initialize_table(table)
+            except Exception as e:
+                logger.error(f"Error initializing table '{table}': {e}")
+                logger.warning(f"Continuing with next table...")
+    else:
+        logger.info("Deletion already executed on previous startup, skipping...")
+
+        for table in tables_to_initialize:
+            if is_table_initialized(table):
+                logger.info(f"Table '{table}' already contains data, skipping initialization.")
+            else:
+                logger.info(f"Table '{table}' is empty, proceeding with initialization.")
+                initialize_table(table)
+
     logger.info("Database selective initialization process completed.")
 
 

@@ -1,59 +1,66 @@
 import json
 import re
-from typing import Dict
+import requests
 
 from loguru import logger
 
-from data_engine.ops.base_op import OPERATORS, UNFORKABLE, Mapper, Sample, Param, DataType
-from data_engine.utils.availability_utils import AvailabilityChecking
-from data_engine.utils.model_utils import get_model, prepare_model
+from data_engine.ops.base_op import OPERATORS, Mapper, Sample, Param, DataType
 
 OP_NAME = 'extract_qa_mapper'
 
-with AvailabilityChecking(['torch', 'transformers'], OP_NAME):
-    import torch
-    import transformers  # noqa: F401
+DEFAULT_SYSTEM_PROMPT = '''你是一个专业的问答提取助手，你的任务是根据用户提供的文本内容，生成高质量的问答对。
 
-    # avoid hanging when calling model in multiprocessing
-    torch.set_num_threads(1)
+重要规则：
+1. 仔细阅读提供的文本内容，理解其中的关键信息
+2. 基于文本内容生成多个相关的问题和答案
+3. 问题要清晰明确，答案要准确且基于原文
+4. 生成的问答对要涵盖文本的主要信息点
+5. 严格按照以下格式输出：
+   Human: [问题1]
+   Assistant: [答案1]
+   Human: [问题2]
+   Assistant: [答案2]
+
+示例：
+输入文本："蒙古国的首都是乌兰巴托（Ulaanbaatar）。它是蒙古国最大的城市，也是该国的政治、经济和文化中心。"
+
+输出格式：
+Human: 蒙古国的首都是哪里？
+Assistant: 蒙古国的首都是乌兰巴托（Ulaanbaatar）。
+Human: 乌兰巴托在蒙古国是什么样的城市？
+Assistant: 乌兰巴托是蒙古国最大的城市，也是该国的政治、经济和文化中心。
+
+现在，请根据用户提供的文本内容生成问答对。'''
 
 
-# TODO: Extend LLM-based OPs into API-based implementation.
-@UNFORKABLE.register_module(OP_NAME)
 @OPERATORS.register_module(OP_NAME)
 class ExtractQAMapper(Mapper):
     """
-    Mapper to extract question and answer pair from text samples.
-    Recommended model list: [
-        'alibaba-pai/pai-llama3-8b-doc2qa',
-        'alibaba-pai/pai-baichuan2-7b-doc2qa',
-        'alibaba-pai/pai-qwen1_5-4b-doc2qa',
-        'alibaba-pai/pai-qwen1_5-7b-doc2qa',
-        'alibaba-pai/pai-qwen1_5-1b8-doc2qa',
-        'alibaba-pai/pai-qwen1_5-0b5-doc2qa'
-    ]
-    These recommended models are all trained with Chinese data
-    and are suitable for Chinese.
+    Mapper to extract question and answer pair from text samples using remote API.
+    Supports OpenAI-compatible API formats including Qwen, DeepSeek, GPT, etc.
     """
 
-    _accelerator = 'cuda'
+    _accelerator = 'cpu'
 
     def __init__(self,
-                 hf_model: str = 'alibaba-pai/pai-qwen1_5-7b-doc2qa',
-                 trust_remote_code=True,
+                 model_url: str = 'https://api.deepseek.com/v1',
+                 model_name: str = 'deepseek-chat',
+                 auth_token: str = '',
                  pattern: str = None,
                  qa_format: str = 'chatml',
-                 enable_vllm: bool = False,
-                 tensor_parallel_size: int = None,
-                 max_model_len: int = None,
-                 max_num_seqs: int = 256,
-                 sampling_params: Dict = {'temperature': 0.3},
                  *args,
                  **kwargs):
-
-
         super().__init__(*args, **kwargs)
         self.num_proc = 1
+
+        self.model_url = model_url
+        self.model_name = model_name
+        self.auth_token = auth_token
+
+        if not self.model_url:
+            raise ValueError("model_url is required")
+        if not self.auth_token:
+            raise ValueError("auth_token is required")
 
         if pattern is None:
             self.pattern = r'Human: (.*?)\nAssistant: (.*?)(?=\nHuman|$)'
@@ -61,31 +68,6 @@ class ExtractQAMapper(Mapper):
             self.pattern = pattern
 
         self.qa_format = qa_format
-        self.enable_vllm = enable_vllm
-
-        if enable_vllm:
-            import torch
-            from vllm import SamplingParams
-
-            assert torch.cuda.device_count() >= 1, 'must be executed in CUDA'
-            if not tensor_parallel_size:
-                tensor_parallel_size = torch.cuda.device_count()
-                logger.info(f'Set tensor_parallel_size to \
-                    {tensor_parallel_size} for vllm.')
-            self.model_key = prepare_model(
-                model_type='vllm',
-                pretrained_model_name_or_path=hf_model,
-                trust_remote_code=trust_remote_code,
-                tensor_parallel_size=tensor_parallel_size,
-                max_model_len=max_model_len,
-                max_num_seqs=max_num_seqs)
-            self.sampling_params = SamplingParams(**sampling_params)
-        else:
-            self.model_key = prepare_model(
-                model_type='opcsg_inference',
-                pretrained_model_name_or_path=hf_model,
-                trust_remote_code=trust_remote_code)
-            self.sampling_params = sampling_params
 
     def _extract_qa(self, output):
         """Extract qestion and answer pair from model output response."""
@@ -101,65 +83,107 @@ class ExtractQAMapper(Mapper):
         return qa_list
 
     def process(self, sample, rank=None):
-        model, _ = get_model(self.model_key, rank, self.use_cuda())
-        logger.info(f'Process with sampling_params: {self.sampling_params}')
-        if self.enable_vllm:
-            response = model.generate([sample[self.text_key]],
-                                      self.sampling_params)
-            output = response[0].outputs[0].text
-        else:
-            response = model.generate(sample[self.text_key], self.sampling_params)
-            output = response
+        try:
+            messages = [
+                {
+                    "role": "system",
+                    "content": DEFAULT_SYSTEM_PROMPT
+                },
+                {
+                    "role": "user",
+                    "content": sample[self.text_key]
+                }
+            ]
 
-        qa_list = self._extract_qa(output)
+            headers = {
+                'Authorization': f'Bearer {self.auth_token}',
+                'Content-Type': 'application/json'
+            }
 
-        if not len(qa_list):
-            logger.info(
-                'No question and answer data was extracted from this sample!')
+            data = {
+                "model": self.model_name,
+                "messages": messages,
+                "stream": False
+            }
 
-        dialogue_data = []
-        if self.qa_format == 'chatml':
-            for qa in qa_list:
-                dialogue_data.append({
-                    'messages': [{
-                        'role': 'user',
-                        'content': qa[0]
-                    }, {
-                        'role': 'assistant',
-                        'content': qa[1]
-                    }]
-                })
-        else:
-            raise ValueError(f'Not support {self.qa_format}!')
+            logger.info(f'Calling API: {self.model_url}, Model: {self.model_name}')
 
-        sample[self.text_key] = json.dumps(dialogue_data, ensure_ascii=False)
+            response = requests.post(
+                url=self.model_url,
+                headers=headers,
+                json=data,
+                timeout=60
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            output = result['choices'][0]['message']['content']
+
+            qa_list = self._extract_qa(output)
+
+            if not len(qa_list):
+                logger.warning(
+                    'No question and answer data was extracted from this sample!')
+                return sample
+
+            dialogue_data = []
+            if self.qa_format == 'chatml':
+                for qa in qa_list:
+                    dialogue_data.append({
+                        'messages': [{
+                            'role': 'user',
+                            'content': qa[0]
+                        }, {
+                            'role': 'assistant',
+                            'content': qa[1]
+                        }]
+                    })
+            else:
+                raise ValueError(f'Not support {self.qa_format}!')
+
+            sample[self.text_key] = json.dumps(dialogue_data, ensure_ascii=False)
+
+            logger.debug(f'QA extraction successful, extracted {len(qa_list)} pairs')
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f'HTTP request error: {e}')
+            logger.warning(f'API call failed, keeping original text')
+        except (KeyError, IndexError, json.JSONDecodeError) as e:
+            logger.error(f'API response parsing error: {e}')
+            logger.warning(f'Response parsing failed, keeping original text')
+        except Exception as e:
+            logger.error(f'Unexpected error: {e}')
+            logger.warning(f'Exception occurred, keeping original text')
 
         return sample
 
     @classmethod
     @property
     def description(cls):
-        return """
-    Mapper to extract question and answer pair from text samples.
-    Recommended model list: [
-        'alibaba-pai/pai-qwen1_5-7b-doc2qa',
-    ]
-    These recommended models are all trained with Chinese data
-    and are suitable for Chinese.
-    """
+        return """问答提取算子：从文本中提取问答对，将文档转换为对话训练格式。支持千问、DeepSeek、GPT 等 OpenAI 兼容格式的 API。"""
 
     @classmethod
     @property
     def sample(cls):
-        return Sample('蒙古国的首都是乌兰巴托（Ulaanbaatar）', 
-                      'Human: 请问蒙古国的首都是哪里？'
-                    'Assistant: 你好，根据提供的信息，蒙古国的首都是乌兰巴托（Ulaanbaatar）')
+        return Sample('蒙古国的首都是乌兰巴托（Ulaanbaatar）。它是蒙古国最大的城市，也是该国的政治、经济和文化中心。',
+                      '[{"messages": [{"role": "user", "content": "蒙古国的首都是哪里？"}, {"role": "assistant", "content": "蒙古国的首都是乌兰巴托（Ulaanbaatar）。"}]}, {"messages": [{"role": "user", "content": "乌兰巴托在蒙古国是什么样的城市？"}, {"role": "assistant", "content": "乌兰巴托是蒙古国最大的城市，也是该国的政治、经济和文化中心。"}]}]')
 
     @classmethod
     @property
     def init_params(cls):
         return [
-            Param("hf_model", DataType.STRING, {
-                "alibaba-pai/pai-qwen1_5-7b-doc2qa": "alibaba-pai/pai-qwen1_5-7b-doc2qa",
-            }, "alibaba-pai/pai-qwen1_5-7b-doc2qa"),
+            Param("model_url", DataType.STRING, {
+                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions": "Qwen API",
+                "https://api.deepseek.com/chat/completions": "DeepSeek API",
+                "https://api.openai.com/v1/chat/completions": "OpenAI API",
+            }, "https://api.deepseek.com/chat/completions"),
+            Param("model_name", DataType.STRING, {
+                "qwen-plus": "qwen-plus",
+                "qwen-max": "qwen-max",
+                "deepseek-chat": "deepseek-chat",
+                "deepseek-reasoner": "deepseek-reasoner",
+                "gpt-4": "gpt-4",
+                "gpt-3.5-turbo": "gpt-3.5-turbo",
+            }, "deepseek-chat"),
+            Param("auth_token", DataType.STRING, {}, ""),
         ]

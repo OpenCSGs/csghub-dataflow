@@ -151,16 +151,23 @@ def retreive_log(job_id: int, user_id, session: Session, isadmin=False):
         return {"session_log": "No session log found"}
 
     log_dir = os.path.join(current_job.work_dir, 'log')
+    if not os.path.exists(log_dir) or not os.path.isdir(log_dir):
+        return {"session_log": "No session log found: log directory does not exist"}
+    
     latest_time = None
     latest_file = None
     time_pattern = re.compile(r'time_(\d{14})\.txt$')
-    for filename in os.listdir(log_dir):
-        match = time_pattern.search(filename)
-        if match:
-            file_time = datetime.strptime(match.group(1), '%Y%m%d%H%M%S')
-            if not latest_time or file_time > latest_time:
-                latest_time = file_time
-                latest_file = filename
+    try:
+        for filename in os.listdir(log_dir):
+            match = time_pattern.search(filename)
+            if match:
+                file_time = datetime.strptime(match.group(1), '%Y%m%d%H%M%S')
+                if not latest_time or file_time > latest_time:
+                    latest_time = file_time
+                    latest_file = filename
+    except Exception as e:
+        logger.error(f"An exception occurred while listing log directory {log_dir}: {e}")
+        return {"session_log": f"No session log found: {str(e)}"}
 
     if not latest_file:
         return {"session_log": "No session log found"}
@@ -169,11 +176,22 @@ def retreive_log(job_id: int, user_id, session: Session, isadmin=False):
     latest_file_path = os.path.join(log_dir, latest_file)
     file_content = ''
     try:
-        with open(latest_file_path, 'r') as f:
-            file_content = f.read()
+        # Try UTF-8 first, then fallback to other encodings
+        encodings = ['utf-8', 'gbk', 'latin-1']
+        read_success = False
+        for encoding in encodings:
+            try:
+                with open(latest_file_path, 'r', encoding=encoding) as f:
+                    file_content = f.read()
+                read_success = True
+                break
+            except UnicodeDecodeError:
+                continue
+        if not read_success:
+            raise Exception(f"Failed to decode log file with encodings: {encodings}")
     except Exception as e:
-        print(f"An exception occurred {e}")
-        file_content = "No session log got"
+        logger.error(f"An exception occurred while reading log file {latest_file_path}: {e}")
+        file_content = f"No session log got: {str(e)}"
     return {"session_log": file_content}
 
 
