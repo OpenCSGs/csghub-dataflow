@@ -206,12 +206,10 @@ class MdToJsonlPreprocess(TOOL):
             logger.info(f'Dataset saved to {output_file} ({num_chunks} chunks)')
             
             # Generate meta.json for fallback case
-            # Sanitize dataset_path if it contains non-ASCII chars
+            # Keep original dataset_path (including Chinese chars if any)
             dataset_path_for_meta = self.tool_def.dataset_path or "unknown"
             if dataset_path_for_meta != "unknown":
-                dataset_basename = os.path.basename(dataset_path_for_meta)
-                safe_dataset_name = sanitize_filename(dataset_basename)
-                dataset_path_for_meta = safe_dataset_name
+                dataset_path_for_meta = os.path.basename(dataset_path_for_meta)
             
             meta_data = {
                 "job_name": job_name,
@@ -334,6 +332,11 @@ class MdToJsonlPreprocess(TOOL):
         failed_files = []
         total_chunks = 0
         
+        # Track all generated output filenames to avoid conflicts
+        # This handles cases like: test.md, test1.md, folder/test.md
+        # Should output: test.jsonl, test1.jsonl, test2.jsonl (not test1.jsonl again!)
+        generated_outputs = set()  # Set of all generated output base names (without .jsonl)
+        
         for md_file_path in md_files:
             # Ensure md_file_path is str (not bytes) for cross-platform compatibility
             if isinstance(md_file_path, bytes):
@@ -349,36 +352,32 @@ class MdToJsonlPreprocess(TOOL):
             # Ensure path uses forward slashes (cross-platform compatibility)
             original_rel_path = original_rel_path.replace('\\', '/')
             
-            # Create safe version for meta.json 'from' field
-            # Keep directory structure, only sanitize the filename part
-            path_parts = original_rel_path.rsplit('/', 1)
-            if len(path_parts) == 2:
-                dir_part, file_part = path_parts
-                file_ext = Path(file_part).suffix
-                safe_file_name = sanitize_filename(file_part)
-                safe_file_part = safe_file_name + file_ext
-                from_rel_path = f"{dir_part}/{safe_file_part}"
-            else:
-                # No directory, just filename
-                file_ext = Path(original_rel_path).suffix
-                safe_file_name = sanitize_filename(original_rel_path)
-                from_rel_path = safe_file_name + file_ext
-            
             try:
                 logger.info(f'Processing file: {md_file_path}')
                 
                 # Load dataset for this single file
-                # Ensure the file path is properly encoded for the filesystem
+                # Handle encoding for both Windows and Linux
                 try:
+                    # Ensure path is properly encoded for the OS
+                    if os.name == 'nt':  # Windows
+                        # Windows handles Unicode paths natively in Python 3
+                        file_path_to_load = md_file_path
+                    else:  # Linux/Unix
+                        # Ensure UTF-8 encoding
+                        if isinstance(md_file_path, str):
+                            file_path_to_load = md_file_path
+                        else:
+                            file_path_to_load = md_file_path.decode('utf-8', errors='replace')
+                    
                     formatter = load_formatter(
-                        dataset_path=md_file_path,  # Pass single file path instead of directory
+                        dataset_path=file_path_to_load,
                         text_keys=['text'],
                         suffixes=['.md']
                     )
                     dataset = formatter.load_dataset(num_proc=self.tool_def.np)
                 except (UnicodeDecodeError, UnicodeEncodeError) as e:
-                    raise RuntimeError(f'Failed to load file with non-ASCII path: {md_file_path}. '
-                                     f'Error: {str(e)}. Consider using ASCII-only filenames.') from e
+                    raise RuntimeError(f'Failed to load file due to encoding issue: {md_file_path}. '
+                                     f'Error: {str(e)}') from e
                 
                 logger.info(f'Loaded {len(dataset)} sample(s) from {os.path.basename(md_file_path)}')
                 
@@ -388,45 +387,57 @@ class MdToJsonlPreprocess(TOOL):
                 num_chunks = len(dataset)
                 logger.info(f'After chunking, {os.path.basename(md_file_path)} has {num_chunks} chunk(s)')
                 
-                # Generate output filename based on source filename
+                # Generate output filename - preserve original filename (including Chinese chars)
+                # All files output to same directory, use numeric suffix for duplicates
                 md_filename = os.path.basename(md_file_path)
-                original_name = os.path.splitext(md_filename)[0]
+                base_name = os.path.splitext(md_filename)[0]
                 
-                # Sanitize filename for cross-platform compatibility
-                safe_name = sanitize_filename(md_filename)
-                output_filename = safe_name + '.jsonl'
+                # Handle duplicate filenames by adding numeric suffix
+                # Check against all generated outputs to avoid conflicts (e.g., test.md + test1.md + folder/test.md)
+                output_base_name = base_name
+                suffix = 0
+                
+                # Keep incrementing suffix until we find an unused filename
+                while output_base_name in generated_outputs:
+                    suffix += 1
+                    output_base_name = f"{base_name}{suffix}"
+                
+                # Mark this output name as used
+                generated_outputs.add(output_base_name)
+                
+                output_filename = output_base_name + '.jsonl'
                 output_file = os.path.join(self.tool_def.export_path, output_filename)
                 
-                # Log filename conversion if changed
-                if safe_name != original_name:
-                    logger.info(f'Filename sanitized: "{original_name}" -> "{safe_name}"')
+                # Log if filename has numeric suffix due to duplication
+                if suffix > 0:
+                    logger.info(f'Duplicate filename detected: "{base_name}" -> "{output_base_name}" (added suffix {suffix})')
                 
-                # Save dataset to JSONL file
-                dataset.to_json(output_file, force_ascii=False, num_proc=self.tool_def.np)
+                # Save dataset to JSONL file with UTF-8 encoding (cross-platform compatible)
+                try:
+                    dataset.to_json(output_file, force_ascii=False, num_proc=self.tool_def.np)
+                except Exception as e:
+                    raise RuntimeError(f'Failed to save JSONL file: {output_file}. Error: {str(e)}') from e
+                
                 processed_files.append(output_file)
                 total_chunks += num_chunks
                 
-                # Record success in meta.json with both original and safe filenames
+                # Record success in meta.json
                 to_rel_path = output_filename.replace('\\', '/')
                 file_record = {
-                    "from": from_rel_path,
-                    "to": to_rel_path,
+                    "from": original_rel_path,  # Keep original relative path with Chinese chars
+                    "to": to_rel_path,           # Output filename with Chinese chars preserved
                     "status": "success",
                     "chunks": num_chunks
                 }
                 
-                # Add original source path if it contains non-ASCII chars (for traceability)
-                if from_rel_path != original_rel_path:
-                    file_record["original_source"] = original_rel_path
-                
-                # Add original output filename if it was sanitized
-                if safe_name != original_name:
-                    file_record["original_filename"] = original_name
+                # Add note if numeric suffix was added due to duplicate filename
+                if suffix > 0:
+                    file_record["note"] = f"Duplicate filename, added suffix {suffix}"
                 
                 meta_data["files"].append(file_record)
                 meta_data["result"]["success"] += 1
                 
-                # Update meta.json immediately
+                # Update meta.json immediately with UTF-8 encoding
                 with open(meta_file_path, 'w', encoding='utf-8') as f:
                     json.dump(meta_data, f, indent=2, ensure_ascii=False)
                 
@@ -439,20 +450,16 @@ class MdToJsonlPreprocess(TOOL):
                 
                 # Record failure in meta.json
                 failure_record = {
-                    "from": from_rel_path,
+                    "from": original_rel_path,  # Keep original path with Chinese chars
                     "to": None,
                     "status": "failure",
                     "error": str(e)
                 }
                 
-                # Add original source path if it contains non-ASCII chars
-                if from_rel_path != original_rel_path:
-                    failure_record["original_source"] = original_rel_path
-                
                 meta_data["files"].append(failure_record)
                 meta_data["result"]["failure"] += 1
                 
-                # Update meta.json immediately
+                # Update meta.json immediately with UTF-8 encoding
                 with open(meta_file_path, 'w', encoding='utf-8') as f:
                     json.dump(meta_data, f, indent=2, ensure_ascii=False)
                 

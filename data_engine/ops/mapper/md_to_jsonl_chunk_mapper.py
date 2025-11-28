@@ -1,4 +1,5 @@
 from jsonargparse.typing import PositiveInt, NonNegativeInt
+from loguru import logger
 
 from data_engine.utils.availability_utils import AvailabilityChecking
 from data_engine.utils.model_utils import get_model, prepare_model
@@ -38,10 +39,25 @@ class MdToJsonlChunkMapper(Mapper):
         super().__init__(*args, **kwargs)
         self.chunk_size = chunk_size
         self.overlap = overlap
-        # Ensure overlap is less than chunk_size
-        if self.overlap >= self.chunk_size:
-            self.overlap = 0
         self.hf_tokenizer = hf_tokenizer
+        
+        # Validate parameters and warn if unreasonable
+        if self.overlap >= self.chunk_size:
+            logger.warning(
+                f"Unreasonable parameter: overlap ({self.overlap}) >= chunk_size ({self.chunk_size}). "
+                f"This will cause overlap to be larger than chunk itself. "
+                f"Auto-adjusting overlap to 0. "
+                f"Recommendation: Set overlap < chunk_size (ideally < chunk_size/2)."
+            )
+            self.overlap = 0
+        elif self.overlap > self.chunk_size / 2:
+            logger.warning(
+                f"Unreasonable parameter: overlap ({self.overlap}) > chunk_size/2 ({self.chunk_size/2:.0f}). "
+                f"Large overlap ratio may reduce processing efficiency. "
+                f"Task will continue with current settings. "
+                f"Recommendation: Consider reducing overlap to < {self.chunk_size/2:.0f} for better efficiency."
+            )
+        
         self.model_key = prepare_model(
             model_type='huggingface',
             pretrained_model_name_or_path=hf_tokenizer,
@@ -58,8 +74,16 @@ class MdToJsonlChunkMapper(Mapper):
         if not text or not text.strip():
             return []
 
+        # Ensure text is properly encoded as UTF-8 string (cross-platform compatible)
+        if isinstance(text, bytes):
+            text = text.decode('utf-8', errors='replace')
+        
         # Tokenize the entire text
-        tokens = tokenizer.encode(text, add_special_tokens=False)
+        try:
+            tokens = tokenizer.encode(text, add_special_tokens=False)
+        except Exception as e:
+            # If tokenization fails, return original text
+            return [text]
         
         chunks = []
         # Calculate step size: if overlap > 0, each chunk moves forward by (chunk_size - overlap)
@@ -68,7 +92,7 @@ class MdToJsonlChunkMapper(Mapper):
         
         for i in range(0, len(tokens), step_size):
             chunk_tokens = tokens[i:i + self.chunk_size]
-            # Decode tokens back to text with error handling
+            # Decode tokens back to text with robust error handling for cross-platform compatibility
             try:
                 chunk_text = tokenizer.decode(
                     chunk_tokens, 
@@ -76,13 +100,20 @@ class MdToJsonlChunkMapper(Mapper):
                     clean_up_tokenization_spaces=False
                 )
                 # Ensure valid UTF-8 encoding (replace broken characters instead of ignoring)
-                # This preserves more content while fixing encoding issues
-                chunk_text = chunk_text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+                # This is critical for cross-platform compatibility (Windows/Linux)
+                if isinstance(chunk_text, bytes):
+                    chunk_text = chunk_text.decode('utf-8', errors='replace')
+                else:
+                    # Re-encode and decode to fix any encoding issues
+                    chunk_text = chunk_text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
             except Exception:
                 # Fallback: if decode fails, try standard decode
                 try:
                     chunk_text = tokenizer.decode(chunk_tokens, skip_special_tokens=True)
-                    chunk_text = chunk_text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+                    if isinstance(chunk_text, bytes):
+                        chunk_text = chunk_text.decode('utf-8', errors='replace')
+                    else:
+                        chunk_text = chunk_text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
                 except Exception:
                     # If still fails, skip this chunk
                     continue

@@ -1,5 +1,6 @@
 from jsonargparse.typing import PositiveInt, NonNegativeInt
 import regex as re
+from loguru import logger
 
 from data_engine.utils.availability_utils import AvailabilityChecking
 from data_engine.utils.model_utils import get_model, prepare_model
@@ -53,11 +54,33 @@ class MdToJsonlSentenceChunkMapper(Mapper):
         super().__init__(*args, **kwargs)
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        # Ensure overlap is less than chunk_size
-        if self.chunk_overlap >= self.chunk_size:
-            self.chunk_overlap = 0
         self.min_sentences_per_chunk = min_sentences_per_chunk
         self.hf_tokenizer = hf_tokenizer
+        
+        # Validate parameters and warn if unreasonable
+        if self.chunk_overlap >= self.chunk_size:
+            logger.warning(
+                f"Unreasonable parameter: chunk_overlap ({self.chunk_overlap}) >= chunk_size ({self.chunk_size}). "
+                f"This will cause overlap to be larger than chunk itself. "
+                f"Auto-adjusting chunk_overlap to 0. "
+                f"Recommendation: Set chunk_overlap < chunk_size (ideally < chunk_size/2)."
+            )
+            self.chunk_overlap = 0
+        elif self.chunk_overlap > self.chunk_size / 2:
+            logger.warning(
+                f"Unreasonable parameter: chunk_overlap ({self.chunk_overlap}) > chunk_size/2 ({self.chunk_size/2:.0f}). "
+                f"Large overlap may cause frequent chunk overflow in sentence-based chunking. "
+                f"Task will continue, but expect more ERROR logs about chunk overflow. "
+                f"Recommendation: Reduce chunk_overlap to < {self.chunk_size/2:.0f} or increase chunk_size."
+            )
+        
+        if self.min_sentences_per_chunk < 1:
+            logger.warning(
+                f"Unreasonable parameter: min_sentences_per_chunk ({self.min_sentences_per_chunk}) < 1. "
+                f"Auto-adjusting to 1. "
+                f"Each chunk must contain at least 1 sentence."
+            )
+            self.min_sentences_per_chunk = 1
         
         # Prepare tokenizer model
         self.tokenizer_model_key = prepare_model(
@@ -77,16 +100,28 @@ class MdToJsonlSentenceChunkMapper(Mapper):
         if not text or not text.strip():
             return []
 
+        # Ensure text is properly encoded as UTF-8 string (cross-platform compatible)
+        if isinstance(text, bytes):
+            text = text.decode('utf-8', errors='replace')
+        
         # First, split text into sentences using mixed Chinese-English segmentation
         sentences = split_sentence_mixed(text)
         
         if not sentences:
             return [text] if text.strip() else []
 
-        # Calculate token count for each sentence
+        # Calculate token count for each sentence with error handling
         sentence_tokens = []
         for sentence in sentences:
-            tokens = tokenizer.encode(sentence, add_special_tokens=False)
+            try:
+                # Ensure sentence is UTF-8 string before tokenization
+                if isinstance(sentence, bytes):
+                    sentence = sentence.decode('utf-8', errors='replace')
+                tokens = tokenizer.encode(sentence, add_special_tokens=False)
+            except Exception:
+                # If tokenization fails, use length as approximation
+                tokens = list(range(len(sentence)))
+            
             sentence_tokens.append({
                 'text': sentence,
                 'tokens': tokens,
@@ -104,6 +139,15 @@ class MdToJsonlSentenceChunkMapper(Mapper):
                 # Use empty string join for better Chinese support
                 chunk_text = ''.join(current_chunk_sentences)
                 if chunk_text.strip():
+                    # Log if chunk exceeds chunk_size
+                    if current_chunk_token_count > self.chunk_size:
+                        overflow_amount = current_chunk_token_count - self.chunk_size
+                        logger.warning(
+                            f"Chunk overflow detected: Created chunk has {current_chunk_token_count} tokens, "
+                            f"exceeds chunk_size ({self.chunk_size}) by {overflow_amount} tokens. "
+                            f"Contains {len(current_chunk_sentences)} sentence(s). "
+                            f"Operation: Preserving full chunk without truncation."
+                        )
                     chunks.append(chunk_text.strip())
                 return True
             return False
@@ -134,8 +178,15 @@ class MdToJsonlSentenceChunkMapper(Mapper):
                 current_chunk_sentences[:] = overlap_sentences
                 if overlap_sentences:
                     overlap_text = ''.join(overlap_sentences)
-                    current_chunk_tokens = tokenizer.encode(overlap_text, add_special_tokens=False)
-                    current_chunk_token_count = len(current_chunk_tokens)
+                    # Ensure UTF-8 encoding before tokenization
+                    if isinstance(overlap_text, bytes):
+                        overlap_text = overlap_text.decode('utf-8', errors='replace')
+                    try:
+                        current_chunk_tokens = tokenizer.encode(overlap_text, add_special_tokens=False)
+                        current_chunk_token_count = len(current_chunk_tokens)
+                    except Exception:
+                        current_chunk_tokens = []
+                        current_chunk_token_count = 0
                 else:
                     current_chunk_tokens = []
                     current_chunk_token_count = 0
@@ -154,11 +205,37 @@ class MdToJsonlSentenceChunkMapper(Mapper):
                 if len(current_chunk_sentences) >= self.min_sentences_per_chunk:
                     if create_chunk():
                         reset_chunk_with_overlap()
-                        # Don't increment i, retry with current sentence
-                        continue
+                        # After reset, check if overlap is too large to fit current sentence
+                        # If overlap + current sentence still exceeds chunk_size, clear overlap to avoid infinite loop
+                        if current_chunk_token_count + sent_info['token_count'] > self.chunk_size:
+                            # Log the situation and clear overlap
+                            actual_total = current_chunk_token_count + sent_info['token_count']
+                            logger.warning(
+                                f"Chunk overflow detected: Current sentence ({sent_info['token_count']} tokens) + "
+                                f"overlap ({current_chunk_token_count} tokens) = {actual_total} tokens exceeds "
+                                f"chunk_size ({self.chunk_size}). "
+                                f"Operation: Clearing overlap and preserving full sentence as new chunk. "
+                                f"Suggestion: Reduce chunk_overlap or increase chunk_size."
+                            )
+                            # Clear overlap and force add current sentence to break the loop
+                            current_chunk_sentences.clear()
+                            current_chunk_tokens = []
+                            current_chunk_token_count = 0
+                        else:
+                            # Overlap is small enough, retry with current sentence
+                            continue
                 else:
                     # If we don't have enough sentences yet, force add this sentence
                     # (even if it exceeds chunk_size) to meet min_sentences_per_chunk requirement
+                    if sent_info['token_count'] > self.chunk_size:
+                        overflow_amount = sent_info['token_count'] - self.chunk_size
+                        logger.warning(
+                            f"Chunk overflow detected: Single sentence has {sent_info['token_count']} tokens, "
+                            f"exceeds chunk_size ({self.chunk_size}) by {overflow_amount} tokens. "
+                            f"Operation: Preserving full sentence as oversized chunk (will not truncate). "
+                            f"Sentence preview: '{sent_info['text'][:100]}...' "
+                            f"Suggestion: Increase chunk_size parameter to accommodate long sentences."
+                        )
                     current_chunk_sentences.append(sent_info['text'])
                     current_chunk_tokens.extend(sent_info['tokens'])
                     current_chunk_token_count += sent_info['token_count']
@@ -190,6 +267,16 @@ class MdToJsonlSentenceChunkMapper(Mapper):
             if len(current_chunk_sentences) >= self.min_sentences_per_chunk:
                 chunk_text = ''.join(current_chunk_sentences)
                 if chunk_text.strip():
+                    # Check if final chunk exceeds chunk_size and log it
+                    if current_chunk_token_count > self.chunk_size:
+                        overflow_amount = current_chunk_token_count - self.chunk_size
+                        logger.warning(
+                            f"Final chunk overflow detected: Final chunk has {current_chunk_token_count} tokens, "
+                            f"exceeds chunk_size ({self.chunk_size}) by {overflow_amount} tokens. "
+                            f"Contains {len(current_chunk_sentences)} sentence(s). "
+                            f"Operation: Preserving full chunk without truncation. "
+                            f"Suggestion: Increase chunk_size or reduce chunk_overlap."
+                        )
                     chunks.append(chunk_text.strip())
             # If remaining sentences don't meet min requirement, they are discarded
             # (or could be merged with previous chunk if needed, but current logic discards them)
