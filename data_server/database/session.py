@@ -24,7 +24,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-
 def sqlalchemy_database_uri() -> URL:
     db_user_name = ""
     db_user_pwd = ""
