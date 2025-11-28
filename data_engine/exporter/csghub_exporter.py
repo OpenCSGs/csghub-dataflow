@@ -121,7 +121,7 @@ class ExporterCSGHUB(Exporter):
         except Exception as e:
             traceback.print_exc()
             logger.error(f'Failed to upload folder to {self.repo_id}: {str(e)}')
-            # 重新抛出异常，让调用者知道上传失败
+            # Re-raise exception to let caller know upload failed
             raise
 
     def export(self, dataset):
@@ -208,24 +208,24 @@ class ExporterCSGHUB(Exporter):
         - auto_version=True (算子执行任务): 自动生成版本号 (v1, v2, ...)
         """
         if not self.auto_version:
-            # 文件转换任务：直接返回用户指定的分支名
+            # File conversion task: directly return user-specified branch name
             if origin_branch in valid_branches:
                 return origin_branch
             return origin_branch
         
-        # 算子执行任务：自动生成版本号
+        # Operator execution task: automatically generate version number
         latestNum = 0
         
         for b in valid_branches:
             if origin_branch == "main" and re.match(r"^v\d+", b):
-                # 处理 main 分支的情况，查找 v1, v2, v3 等
+                # Handle main branch case, find v1, v2, v3, etc.
                 numStr = b.split(".")[0][1:]
                 if not numStr.isdigit():
                     continue
                 num = int(numStr)
                 latestNum = max(latestNum, num)
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):
-                # 处理其他分支的情况，查找 origin_branch.1, origin_branch.2 等
+                # Handle other branch cases, find origin_branch.1, origin_branch.2, etc.
                 numStr = b[len(origin_branch) + 1:]
                 if not numStr.isdigit():
                     continue

@@ -95,8 +95,8 @@ async def create_datasource(datasource: DataSourceCreate, db: Session = Depends(
             return response_fail(msg="不支持的数据源类型")
         # user_id = 54
         
-        # 处理分支信息：修正前端传递的分支信息
-        # 前端可能将用户填写的分支名错误地放在了 csg_hub_dataset_name 中
+        # Handle branch information: correct branch information passed from frontend
+        # Frontend may incorrectly place user-entered branch name in csg_hub_dataset_name
         if datasource.extra_config is None:
             datasource.extra_config = {}
         
@@ -104,7 +104,7 @@ async def create_datasource(datasource: DataSourceCreate, db: Session = Depends(
         dataset_name = datasource.extra_config.get("csg_hub_dataset_name", "")
         dataset_id = datasource.extra_config.get("csg_hub_dataset_id", "")
         
-        # 如果用户选择了数据流向，且分支是 main，但 dataset_name 有值，使用 dataset_name 作为分支
+        # If user selected data flow direction, branch is main, but dataset_name has value, use dataset_name as branch
         if dataset_id and current_branch == "main" and dataset_name and dataset_name != "main" and dataset_name.strip():
             datasource.extra_config["csg_hub_dataset_default_branch"] = dataset_name
 
@@ -174,13 +174,13 @@ async def test_datasource_connection(datasource: DataSourceCreate):
 @router.put("/datasource/edit/{datasource_id}", response_model=dict)
 async def update_datasource(datasource_id: int, datasource: DataSourceUpdate, db: Session = Depends(get_sync_session)):
     try:
-        # 处理分支信息：修正前端传递的分支信息（与创建接口相同的逻辑）
+        # Handle branch information: correct branch information passed from frontend (same logic as create interface)
         if datasource.extra_config is not None:
             current_branch = datasource.extra_config.get("csg_hub_dataset_default_branch", "")
             dataset_name = datasource.extra_config.get("csg_hub_dataset_name", "")
             dataset_id = datasource.extra_config.get("csg_hub_dataset_id", "")
             
-            # 如果用户选择了数据流向，且分支是 main，但 dataset_name 有值，使用 dataset_name 作为分支
+            # If user selected data flow direction, branch is main, but dataset_name has value, use dataset_name as branch
             if dataset_id and current_branch == "main" and dataset_name and dataset_name != "main" and dataset_name.strip():
                 datasource.extra_config["csg_hub_dataset_default_branch"] = dataset_name
         

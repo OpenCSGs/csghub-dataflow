@@ -18,6 +18,11 @@ from collections.abc import AsyncGenerator
 import os
 from loguru import logger
 import redis
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 
 
 def sqlalchemy_database_uri() -> URL:
@@ -152,7 +157,7 @@ def add_first_op_column():
 
 
 def add_mineru_api_url_column():
-    """添加 mineru_api_url 字段到 data_format_tasks 表"""
+    """Add mineru_api_url column to data_format_tasks table"""
     with get_sync_session() as session:
         with session.begin():
             result = session.execute(text("""
@@ -272,6 +277,9 @@ def initialize_database():
         for table in tables_to_initialize:
             if is_table_initialized(table):
                 logger.info(f"Table '{table}' already contains data, skipping initialization.")
+                # Update sequence even when skipping initialization to avoid conflicts
+                from .initializer import update_sequence_for_table
+                update_sequence_for_table(table)
             else:
                 logger.info(f"Table '{table}' is empty, proceeding with initialization.")
                 initialize_table(table)

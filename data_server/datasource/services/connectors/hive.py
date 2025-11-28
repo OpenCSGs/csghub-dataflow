@@ -16,7 +16,7 @@ class HiveConnector:
         Returns:
             hive.Connection: Hive connection object
         """
-        # 处理 auth_type：pyhive 使用 'NOSASL' 表示无认证，'LDAP' 表示 LDAP 认证
+        # Handle auth_type: pyhive uses 'NOSASL' for no authentication, 'LDAP' for LDAP authentication
         auth_type = self.datasource.auth_type
         if auth_type:
             auth_type_upper = auth_type.upper()
@@ -29,7 +29,7 @@ class HiveConnector:
         else:
             auth_type = 'NOSASL'
         
-        # 只有在 LDAP 认证时才需要密码
+        # Password only needed for LDAP authentication
         password = None
         if auth_type == 'LDAP':
             password = self.datasource.password
@@ -50,10 +50,10 @@ class HiveConnector:
         try:
             conn = self.get_connection(timeout=30)
             cursor = conn.cursor()
-            # 使用简单的 SELECT 1 查询，避免 SHOW TABLES 可能的问题
+            # Use simple SELECT 1 query to avoid potential issues with SHOW TABLES
             cursor.execute("SELECT 1")
             result = cursor.fetchone()
-            # 验证结果
+            # Verify result
             if result and len(result) > 0:
                 return {"success": True, "message": "Connection successful"}
             else:

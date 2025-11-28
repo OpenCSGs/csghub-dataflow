@@ -502,6 +502,7 @@ class MdToJsonlPreprocess(TOOL):
             }, "token"),
             Param("hf_tokenizer", DataType.SEARCH_SELECT, {
                 "EleutherAI/pythia-6.9b-deduped": "EleutherAI/pythia-6.9b-deduped",
+                "hfl/chinese-bert-wwm-ext": "hfl/chinese-bert-wwm-ext"
             }, "EleutherAI/pythia-6.9b-deduped"),
             Param("chunk_size", DataType.PositiveFloat, None, 512),
             Param("overlap", DataType.PositiveFloat, None, 0),

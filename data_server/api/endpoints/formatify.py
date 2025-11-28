@@ -28,7 +28,7 @@ async def get_mineru_api_url():
             - source: 配置来源 ("environment" | "default")
     """
     try:
-        # 从环境变量获取，如果没有则使用默认值
+        # Get from environment variable, use default value if not set
         mineru_api_url = os.getenv("MINERU_API_URL", "http://111.4.242.20:30000")
         source = "environment" if os.getenv("MINERU_API_URL") else "default"
         
@@ -210,15 +210,15 @@ def get_progress_from_mongodb_logs(task_uid: str) -> Optional[dict]:
         try:
             collection = get_formatity_collection(client, task_uid)
             
-            # 查找包含进度信息的日志（按时间倒序）
-            # 匹配格式：Updated and uploaded meta.json (total: X, success: Y, failure: Z)
-            # 或：All files processed. Total: X, Success: Y, Failure: Z
+            # Find logs containing progress information (sorted by time descending)
+            # Match format: Updated and uploaded meta.json (total: X, success: Y, failure: Z)
+            # Or: All files processed. Total: X, Success: Y, Failure: Z
             progress_patterns = [
                 r'\(total:\s*(\d+),\s*success:\s*(\d+),\s*failure:\s*(\d+)\)',  # (total: X, success: Y, failure: Z)
                 r'Total:\s*(\d+),\s*Success:\s*(\d+),\s*Failure:\s*(\d+)',  # Total: X, Success: Y, Failure: Z
             ]
             
-            # 从最新的日志开始查找
+            # Start searching from latest logs
             logs = collection.find({"level": "info"}).sort("create_at", -1).limit(100)
             
             for log in logs:
@@ -226,7 +226,7 @@ def get_progress_from_mongodb_logs(task_uid: str) -> Optional[dict]:
                 if not content:
                     continue
                 
-                # 尝试匹配各种进度格式
+                # Try to match various progress formats
                 for pattern in progress_patterns:
                     match = re.search(pattern, content, re.IGNORECASE)
                     if match:
@@ -243,30 +243,30 @@ def get_progress_from_mongodb_logs(task_uid: str) -> Optional[dict]:
                             "progress": progress
                         }
             
-            # 如果没有找到进度信息，尝试查找 "Found X files to convert" 来获取总数
+            # If progress information not found, try to find "Found X files to convert" to get total
             logs_for_total = collection.find({"level": "info"}).sort("create_at", 1).limit(50)
             total_count = None
             for log in logs_for_total:
                 content = log.get("content", "")
-                # 匹配：Found X files to convert
+                # Match: Found X files to convert
                 match = re.search(r'Found\s+(\d+)\s+files\s+to\s+convert', content, re.IGNORECASE)
                 if match:
                     total_count = int(match.group(1))
                     break
             
-            # 如果找到了总数，尝试统计成功和失败的数量
+            # If total found, try to count success and failure numbers
             if total_count is not None:
                 success_count = 0
                 failure_count = 0
                 
-                # 统计成功转换的日志
+                # Count successful conversion logs
                 success_logs = collection.find({
                     "level": "info",
                     "content": {"$regex": r"convert file.*succeed", "$options": "i"}
                 })
                 success_count = success_logs.count()
                 
-                # 统计失败的日志
+                # Count failure logs
                 failure_logs = collection.find({
                     "level": "error",
                     "content": {"$regex": r"convert file.*error", "$options": "i"}
@@ -310,8 +310,8 @@ async def get_formatify(formatify_id: int, db: Session = Depends(get_sync_sessio
         
         task_dict = result.to_dict()
         
-        # 如果任务正在执行、已完成或失败，尝试从 MongoDB 日志中解析进度信息
-        # 即使任务失败，日志中也可能有进度信息，应该显示给用户
+        # If task is running, completed or failed, try to parse progress information from MongoDB logs
+        # Even if task failed, logs may contain progress information, should display to user
         if result.task_status in [DataFormatTaskStatusEnum.EXECUTING.value, DataFormatTaskStatusEnum.COMPLETED.value, DataFormatTaskStatusEnum.ERROR.value]:
             if result.task_uid:
                 progress_info = get_progress_from_mongodb_logs(task_uid=result.task_uid)

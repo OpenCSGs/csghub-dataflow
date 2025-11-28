@@ -173,11 +173,11 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
         return f"{param_name}: {list_content}"
     
     # regular_expressions_match_lists_in_string_format
-    # 匹配单引号包裹的字符串数组：'[...]'
+    # Match string array wrapped in single quotes: '[...]'
     pattern1 = r"(\s+\w+):\s*'(\[.*?\])'"
     yaml_str = re.sub(pattern1, convert_string_list_to_yaml, yaml_str)
     
-    # 匹配双引号包裹的字符串数组："[...]"
+    # Match string array wrapped in double quotes: "[...]"
     pattern2 = r'(\s+\w+):\s*"(\[.*?\])"'
     yaml_str = re.sub(pattern2, convert_string_list_to_yaml, yaml_str)
 

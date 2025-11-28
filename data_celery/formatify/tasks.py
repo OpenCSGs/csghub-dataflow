@@ -57,7 +57,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
             insert_formatity_task_log_info(format_task.task_uid, f"Download directory completed... Directory address：{ingester_result}")
         except Exception as e:
             error_msg = str(e)
-            # 检查是否是认证错误
+            # Check if it's an authentication error
             if "401" in error_msg or "Unauthorized" in error_msg:
                 detailed_error = f"认证失败：无法访问数据集 {format_task.from_csg_hub_repo_id}。可能原因：1) Token 已过期，请重新登录；2) Token 无效；3) 没有访问该数据集的权限。错误详情：{error_msg}"
                 insert_formatity_task_log_error(format_task.task_uid, detailed_error)
@@ -78,15 +78,15 @@ def format_task(task_id: int, user_name: str, user_token: str):
             return
         insert_formatity_task_log_info(format_task.task_uid, f"Start converting file...")
         
-        # 创建新目录，只包含转换成功的文件
+        # Create new directory containing only successfully converted files
         converted_dir = Path(tmp_path).joinpath('converted')
         ensure_directory_exists(str(converted_dir))
         
-        # 创建 meta 文件夹
+        # Create meta folder
         meta_dir = converted_dir / "meta"
         ensure_directory_exists(str(meta_dir))
         
-        # 获取目标文件扩展名列表
+        # Get target file extension list
         type_map: Dict[int, List[str]] = {
             0: ['.ppt', '.pptx'],  # PPT
             1: ['.doc', '.docx'],  # Word
@@ -98,14 +98,14 @@ def format_task(task_id: int, user_name: str, user_token: str):
             for ext in type_map[format_task.from_data_type]:
                 target_extensions.add(ext.lower())
         
-        # 先统计总文件数（使用与转换时完全相同的逻辑）
+        # First count total files (using exactly the same logic as conversion)
         total_count = 0
         base_path = Path(ingester_result)
         file_list_for_count = []
         for root, dirs, files in os.walk(ingester_result):
             for file in files:
                 file_path_full = os.path.join(root, file)
-                # 只处理指定类型的文件（与转换时的逻辑完全一致）
+                # Only process files of specified types (exactly the same logic as conversion)
                 file_ext = Path(file_path_full).suffix.lower()
                 if file_ext in target_extensions:
                     total_count += 1
@@ -115,12 +115,12 @@ def format_task(task_id: int, user_name: str, user_token: str):
         if total_count > 0:
             insert_formatity_task_log_info(format_task.task_uid, f'Files to convert: {[Path(f).name for f in file_list_for_count[:5]]}{"..." if total_count > 5 else ""}')
         
-        # 初始化统计信息
+        # Initialize statistics
         success_count = 0
         failure_count = 0
         
-        # 初始化 meta.json 数据结构（包含正确的总数）
-        # 注意：total 在初始化时设置后，后续不再修改，只更新 success 和 failure
+        # Initialize meta.json data structure (with correct total)
+        # Note: total is set during initialization and not modified afterwards, only success and failure are updated
         meta_data = {
             "job_id": format_task.id,
             "job_name": format_task.name,
@@ -128,19 +128,19 @@ def format_task(task_id: int, user_name: str, user_token: str):
             "source_branch": format_task.from_csg_hub_dataset_branch,
             "files": [],
             "result": {
-                "total": total_count,  # 固定总数，后续不再修改
+                "total": total_count,  # Fixed total, not modified afterwards
                 "success": 0,
                 "failure": 0
             }
         }
         meta_file_path = meta_dir / "meta.json"
         
-        # 先上传包含总数的 meta.json 文件
+        # First upload meta.json file containing total count
         with open(meta_file_path, 'w', encoding='utf-8') as f:
             json.dump(meta_data, f, indent=2, ensure_ascii=False)
         insert_formatity_task_log_info(format_task.task_uid, f'Generated initial meta.json file with total: {total_count} (total will remain fixed)')
         
-        # 创建 exporter（复用同一个实例）
+        # Create exporter (reuse the same instance)
         exporter = load_exporter(
             export_path=str(converted_dir),
             repo_id=format_task.to_csg_hub_repo_id,
@@ -151,28 +151,28 @@ def format_task(task_id: int, user_name: str, user_token: str):
             work_dir=str(work_dir)
         )
         
-        # 先上传包含总数的 meta.json（重要：必须上传成功，包含总文件数信息）
-        # 如果失败3次，任务立即终止
-        # 注意：第一次尝试不算在重试次数里，只有失败后才开始重试计数
+        # First upload meta.json containing total count (important: must upload successfully, containing total file count)
+        # If it fails 3 times, the task terminates immediately
+        # Note: First attempt doesn't count in retry count, retry counting only starts after failure
         initial_upload_success = False
         initial_upload_retry_count = 0
-        max_initial_retries = 3  # 初始上传最多重试3次
+        max_initial_retries = 3  # Maximum 3 retries for initial upload
         
-        # 第一次尝试（不算在重试次数里）
+        # First attempt (doesn't count in retry count)
         try:
             insert_formatity_task_log_info(format_task.task_uid, f'开始上传初始 meta.json (总文件数: {total_count})')
             exporter.export_large_folder()
             insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.json 上传成功 (总文件数: {total_count})')
             initial_upload_success = True
-            upload_failure_count = 0  # 重置失败计数
+            upload_failure_count = 0  # Reset failure count
         except Exception as e:
-            # 第一次失败，开始重试
+            # First failure, start retrying
             initial_upload_retry_count += 1
             error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.json 上传失败: {str(e)}'
             insert_formatity_task_log_error(format_task.task_uid, error_msg)
             logger.error(error_msg)
             
-            # 重试最多3次
+            # Retry up to 3 times
             while not initial_upload_success and initial_upload_retry_count < max_initial_retries:
                 try:
                     initial_upload_retry_count += 1
@@ -180,14 +180,14 @@ def format_task(task_id: int, user_name: str, user_token: str):
                     exporter.export_large_folder()
                     insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.json 上传成功 (总文件数: {total_count})')
                     initial_upload_success = True
-                    upload_failure_count = 0  # 重置失败计数
+                    upload_failure_count = 0  # Reset failure count
                 except Exception as e:
                     error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.json 上传失败: {str(e)}'
                     insert_formatity_task_log_error(format_task.task_uid, error_msg)
                     logger.error(error_msg)
                     
                     if initial_upload_retry_count >= max_initial_retries:
-                        # 初始上传失败3次，任务立即终止
+                        # Initial upload failed 3 times, task terminates immediately
                         final_error_msg = f'[任务终止] 初始 meta.json 上传失败 {max_initial_retries} 次，任务已停止。总文件数: {total_count}'
                         insert_formatity_task_log_error(format_task.task_uid, final_error_msg)
                         logger.error(final_error_msg)
@@ -195,7 +195,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         db_session.commit()
                         raise RuntimeError(f'初始 meta.json 上传失败 {max_initial_retries} 次，任务已终止。总文件数: {total_count}')
         
-        # 如果初始上传失败，不应该继续执行
+        # If initial upload fails, should not continue execution
         if not initial_upload_success:
             error_msg = f'[任务终止] 初始 meta.json 上传失败，任务已停止。总文件数: {total_count}'
             insert_formatity_task_log_error(format_task.task_uid, error_msg)
@@ -204,7 +204,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
             db_session.commit()
             raise RuntimeError(f'初始 meta.json 上传失败，任务已终止。总文件数: {total_count}')
         
-        # 选择转换函数
+        # Select conversion function
         convert_func = None
         match format_task.from_data_type:
             case DataFormatTypeEnum.Excel.value:
@@ -237,22 +237,22 @@ def format_task(task_id: int, user_name: str, user_token: str):
         insert_formatity_task_log_info(format_task.task_uid,
                                        f"Change the table of contents：{ingester_result}，Source file type：{getFormatTypeName(format_task.from_data_type)}，Target file type：{getFormatTypeName(format_task.to_data_type)}")
         
-        # 用于跟踪已使用的文件名，处理重名情况
+        # Track used filenames to handle duplicate names
         used_names = {}
         
-        # 遍历文件并实时转换、上传
-        upload_failure_count = 0  # 连续上传失败计数（初始上传失败已计入）
-        max_upload_failures = 3  # 最大连续上传失败次数
+        # Iterate files and convert/upload in real-time
+        upload_failure_count = 0  # Consecutive upload failure count (initial upload failure already counted)
+        max_upload_failures = 3  # Maximum consecutive upload failures
         
         for root, dirs, files in os.walk(ingester_result):
-            # 检查任务是否被停止
+            # Check if task is stopped
             db_session.refresh(format_task)
             if format_task.task_status == DataFormatTaskStatusEnum.STOP.value:
                 insert_formatity_task_log_info(format_task.task_uid, "Task stopped by user")
                 return
             
             for file in files:
-                # 检查任务是否被停止
+                # Check if task is stopped
                 db_session.refresh(format_task)
                 if format_task.task_status == DataFormatTaskStatusEnum.STOP.value:
                     insert_formatity_task_log_info(format_task.task_uid, "Task stopped by user")
@@ -260,13 +260,13 @@ def format_task(task_id: int, user_name: str, user_token: str):
                 
                 file_path_full = os.path.join(root, file)
                 
-                # 只处理指定类型的文件
+                # Only process files of specified types
                 file_ext = Path(file_path_full).suffix.lower()
                 if file_ext not in target_extensions:
                     continue
                 
-                # 执行转换
-                # 对于 PDF 转 MD，需要传递 mineru_api_url 参数
+                # Execute conversion
+                # For PDF to MD conversion, need to pass mineru_api_url parameter
                 if format_task.from_data_type == DataFormatTypeEnum.PDF.value and format_task.to_data_type == DataFormatTypeEnum.Markdown.value:
                     result = convert_func(file_path_full, format_task.task_uid, format_task.mineru_api_url)
                 else:
@@ -279,21 +279,21 @@ def format_task(task_id: int, user_name: str, user_token: str):
                 to_file = result['to']
                 status = result['status']
                 
-                # 计算原文件的相对路径（相对于 base_path），用于 meta.json
+                # Calculate relative path of original file (relative to base_path) for meta.json
                 try:
                     from_rel_path = str(Path(from_file).relative_to(base_path))
                 except ValueError:
                     from_rel_path = Path(from_file).name
                 
-                # 确保 from 路径使用正斜杠（跨平台兼容）
+                # Ensure from path uses forward slashes (cross-platform compatibility)
                 from_rel_path = from_rel_path.replace('\\', '/')
                 
                 if status == 'success' and to_file and Path(to_file).exists():
                     src_path = Path(to_file)
-                    # 直接使用文件名，如果重名则添加序号
+                    # Use filename directly, add sequence number if duplicate
                     file_name = src_path.name
                     if file_name in used_names:
-                        # 文件名冲突，添加序号
+                        # Filename conflict, add sequence number
                         name_part = src_path.stem
                         ext_part = src_path.suffix
                         counter = used_names[file_name]
@@ -309,18 +309,18 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         final_to_file = file_name
                         insert_formatity_task_log_info(format_task.task_uid, f'Copied converted file: {file_name}')
                     
-                    # 复制文件到 converted 目录
+                    # Copy file to converted directory
                     shutil.copy2(src_path, dst_path)
                     
-                    # to 路径：相对于 converted_dir 的路径
+                    # to path: relative to converted_dir
                     to_rel_path = final_to_file.replace('\\', '/')
                     
-                    # 立即上传转换成功的文件（上传成功后才更新统计信息）
+                    # Immediately upload successfully converted file (update statistics only after successful upload)
                     try:
                         exporter.export_large_folder()
                         insert_formatity_task_log_info(format_task.task_uid, f'Uploaded converted file: {final_to_file}')
                         
-                        # 文件上传成功后才更新统计信息
+                        # Update statistics only after file upload succeeds
                         success_count += 1
                         meta_data["files"].append({
                             "from": from_rel_path,
@@ -328,14 +328,14 @@ def format_task(task_id: int, user_name: str, user_token: str):
                             "status": "success"
                         })
                         meta_data["result"]["success"] = success_count
-                        upload_failure_count = 0  # 重置失败计数
+                        upload_failure_count = 0  # Reset failure count
                     except Exception as e:
                         upload_failure_count += 1
                         error_msg = f'[上传失败 {upload_failure_count}/{max_upload_failures}] 文件上传失败: {final_to_file}, 错误: {str(e)}'
                         insert_formatity_task_log_error(format_task.task_uid, error_msg)
                         logger.error(error_msg)
                         
-                        # 文件上传失败，立即更新统计信息为失败并更新 meta.json
+                        # File upload failed, immediately update statistics to failure and update meta.json
                         failure_count += 1
                         meta_data["files"].append({
                             "from": from_rel_path,
@@ -345,24 +345,24 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         })
                         meta_data["result"]["failure"] = failure_count
                         
-                        # 确保 total 保持不变（不应该被修改）
+                        # Ensure total remains unchanged (should not be modified)
                         assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
                         
-                        # 立即更新并上传 meta.json（记录上传失败的文件）
+                        # Immediately update and upload meta.json (record failed uploads)
                         with open(meta_file_path, 'w', encoding='utf-8') as f:
                             json.dump(meta_data, f, indent=2, ensure_ascii=False)
                         try:
                             exporter.export_large_folder()
                             insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.json with upload failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                            # 注意：meta.json 上传成功不重置 upload_failure_count，只有文件上传成功才重置
+                            # Note: meta.json upload success doesn't reset upload_failure_count, only file upload success resets it
                         except Exception as e:
-                            # meta.json 更新上传失败只记录日志，不抛出异常，不影响文件上传失败计数
+                            # meta.json update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
                             error_msg = f'meta.json 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
                             insert_formatity_task_log_error(format_task.task_uid, error_msg)
                             logger.error(error_msg)
-                            # 不增加 upload_failure_count，不影响文件上传失败计数
+                            # Don't increment upload_failure_count, doesn't affect file upload failure count
                         
-                        # 如果连续上传失败次数过多，停止任务
+                        # If too many consecutive upload failures, stop task
                         if upload_failure_count >= max_upload_failures:
                             error_msg = f'[任务终止] 连续上传失败 {upload_failure_count} 次，任务已停止。'
                             insert_formatity_task_log_error(format_task.task_uid, error_msg)
@@ -371,52 +371,52 @@ def format_task(task_id: int, user_name: str, user_token: str):
                             db_session.commit()
                             raise RuntimeError(f'连续上传失败 {upload_failure_count} 次，任务已停止')
                     
-                    # 确保 total 保持不变（不应该被修改）
+                    # Ensure total remains unchanged (should not be modified)
                     assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
                     
-                    # 文件上传成功时，更新并上传 meta.json
-                    if upload_failure_count == 0:  # 只有上传成功时才更新（失败时已经在上面更新了）
+                    # When file upload succeeds, update and upload meta.json
+                    if upload_failure_count == 0:  # Only update when upload succeeds (already updated above on failure)
                         with open(meta_file_path, 'w', encoding='utf-8') as f:
                             json.dump(meta_data, f, indent=2, ensure_ascii=False)
                         try:
                             exporter.export_large_folder()
                             insert_formatity_task_log_info(format_task.task_uid, f'Updated and uploaded meta.json (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                            # 注意：meta.json 上传成功不重置 upload_failure_count，只有文件上传成功才重置
+                            # Note: meta.json upload success doesn't reset upload_failure_count, only file upload success resets it
                         except Exception as e:
-                            # meta.json 更新上传失败只记录日志，不抛出异常，不影响文件上传失败计数
+                            # meta.json update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
                             error_msg = f'meta.json 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
                             insert_formatity_task_log_error(format_task.task_uid, error_msg)
                             logger.error(error_msg)
-                            # 不增加 upload_failure_count，不影响文件上传失败计数
+                            # Don't increment upload_failure_count, doesn't affect file upload failure count
                 else:
-                    # 转换失败的文件也记录到 meta.json
+                    # Also record failed conversions to meta.json
                     failure_count += 1
                     meta_entry = {
                         "from": from_rel_path,
                         "to": None,
                         "status": "failure"
                     }
-                    # 如果有错误信息，也记录到 meta.json
+                    # If there's error message, also record to meta.json
                     if "error" in result:
                         meta_entry["error"] = result["error"]
                     meta_data["files"].append(meta_entry)
                     meta_data["result"]["failure"] = failure_count
-                    # 确保 total 保持不变（不应该被修改）
+                    # Ensure total remains unchanged (should not be modified)
                     assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
                     
-                    # 更新并上传 meta.json（包含失败记录，不抛出异常，只记录日志）
+                    # Update and upload meta.json (include failure records, don't raise exception, only log)
                     with open(meta_file_path, 'w', encoding='utf-8') as f:
                         json.dump(meta_data, f, indent=2, ensure_ascii=False)
                     try:
                         exporter.export_large_folder()
                         insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.json with failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                        # 注意：meta.json 上传成功不重置 upload_failure_count，只有文件上传成功才重置
+                        # Note: meta.json upload success doesn't reset upload_failure_count, only file upload success resets it
                     except Exception as e:
-                        # meta.json 更新上传失败只记录日志，不抛出异常，不影响文件上传失败计数
+                        # meta.json update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
                         error_msg = f'meta.json 更新上传失败 (转换失败的文件), 错误: {str(e)}'
                         insert_formatity_task_log_error(format_task.task_uid, error_msg)
                         logger.error(error_msg)
-                        # 不增加 upload_failure_count，不影响文件上传失败计数
+                        # Don't increment upload_failure_count, doesn't affect file upload failure count
         
         insert_formatity_task_log_info(format_task.task_uid, f'All files processed. Total: {total_count}, Success: {success_count}, Failure: {failure_count}')
         format_task.task_status = DataFormatTaskStatusEnum.COMPLETED.value
@@ -469,7 +469,7 @@ def format_task_func(
         case DataFormatTypeEnum.PDF.value:
             match to_type:
                 case DataFormatTypeEnum.Markdown.value:
-                    # 对于 PDF 转 MD，需要传递 mineru_api_url
+                    # For PDF to MD conversion, need to pass mineru_api_url
                     conversion_results = traverse_files(tmp_path, convert_pdf_to_markdown, task_uid, mineru_api_url)
     return conversion_results
 
@@ -483,12 +483,12 @@ def traverse_files(file_path: str, func, task_uid, mineru_api_url: Optional[str]
     for root, dirs, files in os.walk(file_path):
         for file in files:
             file_path_full = os.path.join(root, file)
-            # 对于 PDF 转 MD，传递 mineru_api_url 参数
+            # For PDF to MD conversion, pass mineru_api_url parameter
             if func == convert_pdf_to_markdown and mineru_api_url is not None:
                 result = func(file_path_full, task_uid, mineru_api_url)
             else:
                 result = func(file_path_full, task_uid)
-            # result 应该是字典，包含 from, to, status
+            # result should be a dictionary containing from, to, status
             if isinstance(result, dict):
                 conversion_results.append(result)
         for dir in dirs:
@@ -521,7 +521,7 @@ def convert_excel_to_csv(file_path: str, task_uid) -> Optional[Dict[str, str]]:
                 "status": "failure"
             }
     else:
-        return None  # 非目标文件，返回 None
+        return None  # Not a target file, return None
 
 
 def convert_excel_to_json(file_path: str, task_uid) -> Optional[Dict[str, str]]:
@@ -547,36 +547,36 @@ def convert_excel_to_json(file_path: str, task_uid) -> Optional[Dict[str, str]]:
                 "status": "failure"
             }
     else:
-        return None  # 非目标文件，返回 None
+        return None  # Not a target file, return None
 
 
 def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str]]:
     if file_path.lower().endswith(('.xlsx', '.xls')):
         insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
         try:
-            # 读取 Excel 文件
+            # Read Excel file
             df = pd.read_excel(file_path)
             
-            # 处理混合类型列，避免 Parquet 类型转换错误
+            # Handle mixed type columns to avoid Parquet type conversion errors
             for col in df.columns:
                 if df[col].dtype == 'object':
-                    # 对于 object 类型（通常是混合类型），统一转换为字符串
-                    # 这样可以避免 Parquet 的类型转换错误
+                    # For object type (usually mixed type), convert uniformly to string
+                    # This avoids Parquet type conversion errors
                     df[col] = df[col].astype(str)
-                    # 将 'nan' 字符串转换为 None
+                    # Convert 'nan' string to None
                     df[col] = df[col].replace('nan', None)
                 elif pd.api.types.is_integer_dtype(df[col]):
-                    # 整数类型，检查是否有 NaN，如果有则转换为字符串
+                    # Integer type, check for NaN, convert to string if found
                     if df[col].isna().any():
                         df[col] = df[col].astype(str)
                 elif pd.api.types.is_float_dtype(df[col]):
-                    # 浮点数类型，检查是否有 NaN
+                    # Float type, check for NaN
                     if df[col].isna().any():
-                        # NaN 值在 Parquet 中是可以处理的，但为了安全，可以保持原样
+                        # NaN values can be handled in Parquet, but for safety, keep as is
                         pass
             
             new_file = os.path.splitext(file_path)[0] + '.parquet'
-            # 使用 pyarrow 引擎
+            # Use pyarrow engine
             df.to_parquet(new_file, index=False, engine='pyarrow')
             insert_formatity_task_log_info(task_uid, f'convert file {new_file} succeed')
             os.remove(file_path)
@@ -594,7 +594,7 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
                 "status": "failure"
             }
     else:
-        return None  # 非目标文件，返回 None
+        return None  # Not a target file, return None
 
 
 def convert_word_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]]:
@@ -624,7 +624,7 @@ def convert_word_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str
                 "status": "failure"
             }
     else:
-        return None  # 非目标文件，返回 None
+        return None  # Not a target file, return None
 
 
 def convert_ppt_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]]:
@@ -662,7 +662,7 @@ def convert_ppt_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]
                 "status": "failure"
             }
     else:
-        return None  # 非目标文件，返回 None
+        return None  # Not a target file, return None
 
 
 def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[str] = None) -> Optional[Dict[str, str]]:
@@ -674,21 +674,21 @@ def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[s
             from mineru.backend.vlm.vlm_middle_json_mkcontent import union_make as vlm_union_make
             from mineru.utils.enum_class import MakeMode
             
-            # 优先级：传入的参数 > 环境变量 > 默认值
+            # Priority: passed parameter > environment variable > default value
             if mineru_api_url:
                 server_url = mineru_api_url
             else:
                 server_url = os.getenv("MINERU_API_URL", "http://111.4.242.20:30000")
             backend = "http-client"
             
-            # 记录使用的 MinerU API 地址，便于调试
+            # Record used MinerU API address for debugging
             insert_formatity_task_log_info(task_uid, f'Using MinerU API server: {server_url}')
             
             pdf_file_name = Path(file_path).stem
             temp_output_dir = Path(file_path).parent / f"_temp_pdf_convert_{pdf_file_name}"
             temp_output_dir.mkdir(exist_ok=True)
             
-            # 在独立进程中运行 MinerU（使用 subprocess）
+            # Run MinerU in separate process (using subprocess)
             result_json_path = temp_output_dir / "mineru_result.json"
             script_dir = Path(__file__).parent
             mineru_worker_script = script_dir / "mineru_worker.py"
@@ -737,7 +737,7 @@ def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[s
             
             middle_json = result_data["middle_json"]
             
-            # 生成 Markdown 内容
+            # Generate Markdown content
             local_image_dir, local_md_dir = prepare_env(str(temp_output_dir), pdf_file_name, "vlm")
             md_writer = FileBasedDataWriter(local_md_dir)
             
@@ -780,7 +780,7 @@ def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[s
                 "status": "failure"
             }
     else:
-        return None  # 非目标文件，返回 None
+        return None  # Not a target file, return None
 
 
 def search_files(folder_path: str, types: List[int]) -> Tuple[bool, List[str]]:

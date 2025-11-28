@@ -216,6 +216,52 @@ def extract_sequence_statements(sql_file_path: str) -> list[str]:
         logger.error(f"An error occurred while reading {sql_file_path}: {e}")
         return []
 
+def update_sequence_for_table(table_name: str):
+    """
+    Update sequence based on table data to avoid primary key conflicts.
+    
+    Logic:
+    - If max(id) >= 1000 (has user data): set sequence to max(id) + 1
+    - If max(id) < 1000 (only SQL data): set sequence to 1000
+    - If table is empty: set sequence to 1000
+    """
+    sequence_name = f"{table_name}_id_seq"
+    
+    with get_sync_session() as session:
+        try:
+            # Query current max id in table
+            result = session.execute(
+                text(f"SELECT MAX(id) FROM {table_name}")
+            )
+            max_id = result.scalar()
+            
+            # Determine next sequence value
+            if max_id is None:
+                # Empty table: start from 1000
+                next_id = 1000
+                logger.info(f"Table '{table_name}' is empty, setting sequence to 1000")
+            elif max_id >= 1000:
+                # Has user data (id >= 1000): start from max + 1
+                next_id = max_id + 1
+                logger.info(f"Table '{table_name}' has user data (max_id={max_id}), setting sequence to {next_id}")
+            else:
+                # Only SQL data (max_id < 1000): start from 1000
+                next_id = 1000
+                logger.info(f"Table '{table_name}' only has SQL data (max_id={max_id}), setting sequence to 1000")
+            
+            # Update sequence
+            session.execute(
+                text(f"ALTER SEQUENCE {sequence_name} RESTART WITH :next_id"),
+                {"next_id": next_id}
+            )
+            session.commit()
+            
+            logger.info(f"Successfully updated sequence '{sequence_name}' to start from {next_id}")
+        
+        except Exception as e:
+            logger.warning(f"Error updating sequence for '{table_name}': {e}")
+            session.rollback()
+
 def delete_by_ids(table_name: str, ids: list[int]):
     """
     Delete data from table by id list. Ignore if id doesn't exist.
@@ -305,21 +351,6 @@ def initialize_table(table_name: str):
             else:
                 logger.warning(f"Executed {success_count}/{len(insert_statements)} INSERTs for '{table_name}'.")
 
-    # After inserting data, handle sequence updates
-    sequence_statements = extract_sequence_statements(sql_file_path)
-    if not sequence_statements:
-        logger.info(f"No sequence statements found for table '{table_name}'.")
-        return
-
-    logger.info(f"Found {len(sequence_statements)} sequence statements for '{table_name}'. Executing now.")
-    with get_sync_session() as session:
-        for statement in sequence_statements:
-            try:
-                session.execute(text(statement))
-                session.commit()
-                logger.info(f"Successfully executed sequence statement for '{table_name}'.")
-            except Exception as e:
-                logger.error(f"Failed to execute sequence statement for '{table_name}'. Rolling back.")
-                logger.error(f"Statement: {statement}")
-                logger.error(f"Error: {e}")
-                session.rollback()
+    # After inserting data, update sequence to avoid primary key conflicts
+    # Dynamically sets sequence based on actual data in table
+    update_sequence_for_table(table_name)

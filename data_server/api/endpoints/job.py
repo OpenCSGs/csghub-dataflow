@@ -232,7 +232,7 @@ def create_job(
     # print(config)
     if isinstance(config, Recipe):
         print("匹配到 Recipe 类")
-        # 处理 Recipe 逻辑（如解析 process 字段）
+        # Handle Recipe logic (e.g., parse process field)
     elif isinstance(config, Tool):
         print("匹配到 Tool 类")
     try:

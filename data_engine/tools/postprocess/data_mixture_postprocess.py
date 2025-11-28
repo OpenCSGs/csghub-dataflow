@@ -34,14 +34,14 @@ class DataMixture(TOOL):
                             self.weights = [x.strip() for x in tempVal_str.split()]
                             print(f"解析为多个值: {self.weights}")
                         except ValueError:
-                            self.weights = [1.0]  # 默认值
+                            self.weights = [1.0]  # Default value
                     else:
-                        # 单个值
+                        # Single value
                         try:
                             self.weights = [tempVal_str]
                             print(f"解析为单个值: {self.weights}")
                         except ValueError:
-                            self.weights = [1.0]  # 默认值
+                            self.weights = [1.0]  # Default value
                 else:
                     self.weights = weights_param.tempVal
             elif weights_param.value:
