@@ -17,7 +17,7 @@ from data_server.operator.mapper.operator_mapper import (
 from data_server.operator.models.operator import OperatorInfo
 from data_server.operator.schemas import (
     OperatorCreateRequest, OperatorUpdateRequest, OperatorConfigSelectOptionsCreate,
-    OperatorResponse, OperatorConfigSelectOptionsResponse
+    OperatorResponse, OperatorConfigSelectOptionsResponse, OperatorDocumentResponse
 )
 from ...schemas.responses import response_success, response_fail
 from ...api.dependencies import get_validated_token_payload
