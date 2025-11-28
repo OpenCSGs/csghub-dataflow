@@ -48,11 +48,11 @@ class DataSource(Base):
     updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now, comment='更新时间')
 
     def to_json(self):
-        # 处理 extra_config，确保正确解析并返回
+        # Handle extra_config, ensure correct parsing and return
         extra_config_raw = self.extra_config
         extra_config_dict = None
         
-        # 解析 extra_config
+        # Parse extra_config
         if isinstance(extra_config_raw, str):
             try:
                 extra_config_dict = json.loads(extra_config_raw)
@@ -61,23 +61,23 @@ class DataSource(Base):
         elif isinstance(extra_config_raw, dict):
             extra_config_dict = extra_config_raw.copy()
         
-        # 处理分支字段：保持 csg_hub_dataset_default_branch 原样（从数据库读取，不做修改），同时添加 csg_hub_dataset_branch
+        # Handle branch field: keep csg_hub_dataset_default_branch as is (read from database, no modification), also add csg_hub_dataset_branch
         if extra_config_dict is not None:
-            # 获取 csg_hub_dataset_default_branch 的值（如果存在），用于设置 csg_hub_dataset_branch
-            # 保持 csg_hub_dataset_default_branch 原样，不做任何修改
+            # Get value of csg_hub_dataset_default_branch (if exists) to set csg_hub_dataset_branch
+            # Keep csg_hub_dataset_default_branch as is, no modification
             branch_value = extra_config_dict.get("csg_hub_dataset_default_branch")
             if not branch_value or (isinstance(branch_value, str) and branch_value.strip() == ""):
                 branch_value = "main"
             
-            # 添加 csg_hub_dataset_branch 字段（从 csg_hub_dataset_default_branch 获取值，如果不存在则使用 main）
+            # Add csg_hub_dataset_branch field (get value from csg_hub_dataset_default_branch, use main if not exists)
             extra_config_dict["csg_hub_dataset_branch"] = branch_value
             
-            # csg_hub_dataset_default_branch 保持原样，不做修改（如果数据库中有就返回，如果没有就不添加）
+            # csg_hub_dataset_default_branch remains unchanged (return if exists in database, don't add if not)
             
-            # 将更新后的字典转换回 JSON 字符串格式返回
+            # Convert updated dictionary back to JSON string format
             extra_config = json.dumps(extra_config_dict, ensure_ascii=False, indent=4)
         else:
-            # 如果 extra_config 为空，保持原样返回空配置
+            # If extra_config is empty, return empty config as is
             extra_config = extra_config_raw if extra_config_raw else "{}"
         
         return {

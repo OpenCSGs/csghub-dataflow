@@ -44,14 +44,14 @@ class BranchTool:
         
         for b in valid_branches:
             if origin_branch == "main" and re.match(r"^v\d+", b):
-                # 处理 main 分支的情况，查找 v1, v2, v3 等
+                # Handle main branch case, find v1, v2, v3, etc.
                 numStr = b.split(".")[0][1:]
                 if not numStr.isdigit():
                     continue
                 num = int(numStr)
                 latestNum = max(latestNum, num)
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):
-                # 处理其他分支的情况，查找 origin_branch.1, origin_branch.2 等
+                # Handle other branch cases, find origin_branch.1, origin_branch.2, etc.
                 numStr = b[len(origin_branch) + 1:]
                 if not numStr.isdigit():
                     continue

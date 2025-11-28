@@ -2,7 +2,9 @@ from fastapi import FastAPI, APIRouter, Depends, HTTPException, Query, Path as F
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional, Annotated
 import base64
+import os
 from pathlib import Path
+from loguru import logger
 from data_celery.utils import get_project_root
 
 from data_server.database.session import get_sync_session
@@ -12,12 +14,10 @@ from data_server.operator.mapper.operator_mapper import (
     get_operator_config_select_options_list, get_operator_config_select_option_by_id,
     create_operator_config_select_option, get_operators_grouped_by_type, get_operators_grouped_by_condition
 )
-from data_server.operator.mapper.operator_document_mapper import (
-    get_document, upload_document, delete_document
-)
+from data_server.operator.models.operator import OperatorInfo
 from data_server.operator.schemas import (
     OperatorCreateRequest, OperatorUpdateRequest, OperatorConfigSelectOptionsCreate,
-    OperatorResponse, OperatorConfigSelectOptionsResponse, OperatorDocumentResponse
+    OperatorResponse, OperatorConfigSelectOptionsResponse
 )
 from ...schemas.responses import response_success, response_fail
 from ...api.dependencies import get_validated_token_payload
@@ -248,7 +248,7 @@ def get_isAdmin_true_or_false(isadmin: str = Header(..., alias="isadmin", descri
     return response_success(data={"isadmin":isadmin})
 
 
-# ==================== 算子文档相关接口 ====================
+# ==================== Operator Document Related APIs ====================
 
 @router.post("/{operator_id}/document", summary="上传算子文档")
 async def upload_operator_document_api(
@@ -256,13 +256,57 @@ async def upload_operator_document_api(
     file: UploadFile = File(..., description="Markdown文档文件"),
     db: Session = Depends(get_sync_session)
 ):
-    """上传算子文档：读取md文件内容并存储到数据库"""
+    """Upload operator document: save md file to file system"""
     try:
-        result = await upload_document(db, operator_id, file)
-        return response_success(data=result, msg="文档上传成功")
-    except ValueError as e:
-        return response_fail(msg=str(e))
+        # Validate file type
+        if not file.filename or not file.filename.endswith('.md'):
+            return response_fail(msg="仅支持 .md 格式文件")
+        
+        # Check if operator exists and get operator name
+        operator = db.query(OperatorInfo).filter(OperatorInfo.id == operator_id).first()
+        if not operator:
+            return response_fail(msg="算子不存在")
+        
+        if not operator.operator_name:
+            return response_fail(msg="算子名称不存在")
+        
+        # Read file content
+        content_bytes = await file.read()
+        content_str = content_bytes.decode('utf-8')
+        
+        # Validate content is not empty
+        if not content_str.strip():
+            return response_fail(msg="文档内容不能为空")
+        
+        # Validate file size (10MB limit)
+        max_size = 10 * 1024 * 1024  # 10MB
+        if len(content_bytes) > max_size:
+            return response_fail(msg=f"文档大小不能超过 {max_size // (1024 * 1024)}MB")
+        
+        # Get document save path
+        project_root = get_project_root()
+        operator_docs_dir = Path(project_root) / 'attach' / 'operator_docs'
+        operator_docs_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save file with operator name as filename
+        file_path = operator_docs_dir / f"{operator.operator_name}.md"
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content_str)
+        
+        logger.info(f"算子 {operator_id} ({operator.operator_name}) 的文档已保存到: {file_path}")
+        
+        return response_success(
+            data={
+                "operator_id": operator_id,
+                "operator_name": operator.operator_name,
+                "content": content_str
+            },
+            msg="文档上传成功"
+        )
+    except UnicodeDecodeError:
+        return response_fail(msg="文件编码错误，请使用 UTF-8 编码")
     except Exception as e:
+        logger.error(f"上传文档失败: {str(e)}")
         return response_fail(msg=f"文档上传失败: {str(e)}")
     finally:
         db.close()
@@ -273,49 +317,38 @@ def get_operator_document_api(
     operator_id: int = FPath(..., description="算子ID"),
     db: Session = Depends(get_sync_session)
 ):
-    """查询算子的文档内容"""
+    """Get operator document content (read from file system)"""
     try:
-        document = get_document(db, operator_id)
-        if document is None:
+        # Check if operator exists and get operator name
+        operator = db.query(OperatorInfo).filter(OperatorInfo.id == operator_id).first()
+        if not operator:
+            return response_fail(msg="算子不存在")
+        
+        if not operator.operator_name:
+            return response_fail(msg="算子名称不存在")
+        
+        # Get document path
+        project_root = get_project_root()
+        file_path = Path(project_root) / 'attach' / 'operator_docs' / f"{operator.operator_name}.md"
+        
+        # Check if file exists
+        if not file_path.exists():
             return response_fail(msg="文档不存在")
-        return response_success(data=document, msg="获取文档成功")
-    except Exception as e:
-        return response_fail(msg=f"获取文档失败: {str(e)}")
-    finally:
-        db.close()
-
-
-@router.get("/{operator_id}/documents", summary="查询算子文档列表")
-def get_operator_documents_api(
-    operator_id: int = FPath(..., description="算子ID"),
-    db: Session = Depends(get_sync_session)
-):
-    """查询算子的文档列表（由于一个算子只有一个文档，实际返回单条记录）"""
-    try:
-        document = get_document(db, operator_id)
-        documents = [document] if document else []
+        
+        # Read file content
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
         return response_success(
-            data={"total": len(documents), "documents": documents},
-            msg="获取文档列表成功"
+            data={
+                "operator_id": operator_id,
+                "operator_name": operator.operator_name,
+                "content": content
+            },
+            msg="获取文档成功"
         )
     except Exception as e:
-        return response_fail(msg=f"获取文档列表失败: {str(e)}")
-    finally:
-        db.close()
-
-
-@router.delete("/{operator_id}/document", summary="删除算子文档")
-def delete_operator_document_api(
-    operator_id: int = FPath(..., description="算子ID"),
-    db: Session = Depends(get_sync_session)
-):
-    """删除算子的文档"""
-    try:
-        success = delete_document(db, operator_id)
-        if not success:
-            return response_fail(msg="文档不存在")
-        return response_success(msg="文档删除成功")
-    except Exception as e:
-        return response_fail(msg=f"删除文档失败: {str(e)}")
+        logger.error(f"获取文档失败: {str(e)}")
+        return response_fail(msg=f"获取文档失败: {str(e)}")
     finally:
         db.close()

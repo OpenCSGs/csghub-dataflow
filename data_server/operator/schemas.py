@@ -154,19 +154,3 @@ class OperatorPermissionCreateRequest(BaseModel):
     operator_id: int
     users: Optional[List[UserPermission]] = []
     orgs: Optional[List[OrgPermission]] = []
-
-class OperatorDocumentResponse(BaseModel):
-    id: Optional[int] = None
-    operator_id: Optional[int] = None
-    content: Optional[str] = None  # Markdown文档内容
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    @field_serializer('created_at', 'updated_at')
-    def serialize_dt(self, dt: Optional[datetime], _info):
-        if dt is None:
-            return None
-        return dt.strftime('%Y-%m-%d %H:%M:%S')
-
-    class Config:
-        from_attributes = True

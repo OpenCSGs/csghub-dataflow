@@ -105,7 +105,7 @@ def collection_hive_task(task_uid: str,user_name: str,user_token: str):
         if use_type == "sql":
             if use_sql:
                 try:
-                    # 将数据库对象转换为 DataSourceCreate 对象
+                    # Convert database object to DataSourceCreate object
                     datasource_create = DataSourceCreate(
                         name=collection_task.datasource.name,
                         des=collection_task.datasource.des,
@@ -146,7 +146,7 @@ def collection_hive_task(task_uid: str,user_name: str,user_token: str):
                 total_count = 0
                 records_count = 0
                 try:
-                    # 将数据库对象转换为 DataSourceCreate 对象
+                    # Convert database object to DataSourceCreate object
                     datasource_create = DataSourceCreate(
                         name=collection_task.datasource.name,
                         des=collection_task.datasource.des,
