@@ -39,7 +39,7 @@ def check_model_for_md_to_jsonl(
             'sort': 'trending',
             'source': ''
         }
-        
+        logger.info(f'Checking model with api_url: {api_url}')
         logger.info(f'Checking model availability: {model_name}')
         response = requests.get(api_url, params=params, timeout=30)
         response.raise_for_status()
@@ -88,7 +88,24 @@ def check_model_for_md_to_jsonl(
                         msg='模型已下载但缺少tokenizer文件，无法用'
                     )
                 else:
-                    logger.info(f'Model {model_name} exists locally with tokenizer files: {tokenizer_files[:3]}')
+                    # ✅ Additional check: verify files are not empty
+                    non_empty_files = []
+                    for f in tokenizer_files:
+                        file_path = os.path.join(model_cache_path, f)
+                        if os.path.isfile(file_path):
+                            file_size = os.path.getsize(file_path)
+                            if file_size > 0:
+                                non_empty_files.append(f'{f} ({file_size} bytes)')
+                    
+                    if not non_empty_files:
+                        logger.warning(f'Model {model_name} exists locally but all tokenizer files are empty')
+                        logger.warning(f'Empty files: {tokenizer_files[:5]}')
+                        return response_success(
+                            data=None,
+                            msg='模型已下载但tokenizer文件内容为空，无法使用'
+                        )
+                    
+                    logger.info(f'Model {model_name} exists locally with valid tokenizer files: {non_empty_files[:3]}')
                     return response_success(
                         data=model_name_from_api,
                         msg='模型已下载且包含tokenizer文件，可用'
@@ -107,10 +124,12 @@ def check_model_for_md_to_jsonl(
             env['GIT_ASKPASS'] = 'echo'
             env['GIT_LFS_SKIP_SMUDGE'] = '1'  # Skip LFS file download
             
-            # Use shallow clone (depth=1) to quickly download, only check file list
+            # Use shallow clone (depth=1) to quickly download
+            # ⚠️ Remove --filter=blob:none to ensure we get actual file contents, not just tree structure
+            # This matches the actual download behavior in model_utils.py
             logger.info(f'Performing shallow clone to {temp_dir}...')
             clone_result = subprocess.run(
-                ['git', 'clone', '--depth', '1', '--filter=blob:none', http_clone_url, temp_dir],
+                ['git', 'clone', '--depth', '1', http_clone_url, temp_dir],
                 capture_output=True,
                 text=True,
                 timeout=60,  # 60 second timeout
@@ -140,7 +159,24 @@ def check_model_for_md_to_jsonl(
                         msg='模型仓库中缺少tokenizer文件，无法用'
                     )
                 else:
-                    logger.info(f'Model {model_name} contains tokenizer files: {tokenizer_files[:3]}')
+                    # ✅ Additional check: verify files are not empty (not just placeholders)
+                    non_empty_files = []
+                    for f in tokenizer_files:
+                        file_path = os.path.join(temp_dir, f)
+                        if os.path.isfile(file_path):
+                            file_size = os.path.getsize(file_path)
+                            if file_size > 0:
+                                non_empty_files.append(f'{f} ({file_size} bytes)')
+                    
+                    if not non_empty_files:
+                        logger.warning(f'Model {model_name} has tokenizer files but they are all empty')
+                        logger.warning(f'Empty files: {tokenizer_files[:5]}')
+                        return response_success(
+                            data=None,
+                            msg='模型tokenizer文件存在但内容为空，仓库可能未正确初始化'
+                        )
+                    
+                    logger.info(f'Model {model_name} contains valid tokenizer files: {non_empty_files[:3]}')
                     return response_success(
                         data=model_name_from_api,
                         msg='模型包含tokenizer文件，可用'
