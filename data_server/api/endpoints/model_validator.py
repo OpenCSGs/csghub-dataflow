@@ -30,7 +30,8 @@ def check_model_for_md_to_jsonl(
     """
     try:
         # Query model from OpenCSG Hub API
-        api_url = 'https://hub.opencsg.com/api/v1/models'
+        csghub_endpoint = os.getenv('CSGHUB_ENDPOINT', 'https://hub.opencsg.com')
+        api_url = f'{csghub_endpoint}/api/v1/models'
         params = {
             'page': 1,
             'per': 1,
