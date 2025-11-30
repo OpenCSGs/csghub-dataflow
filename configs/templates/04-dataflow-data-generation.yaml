@@ -1,0 +1,14 @@
+name: "数据生成"
+description: "该模版用于数据增强，旨在扩展用户的提示数据，以帮助模型更好地理解任务。"
+buildin: True
+type: 'data_generation'
+project_name: ''
+dataset_path: '/path/to/your/dataset'                       # path to your dataset directory or file
+export_path: '/path/to/your/dataset.jsonl'                  # number of subprocess to process your dataset
+text_keys: 'text'                                           # the key name of field where the sample texts to be processed, e.g., `text`, `instruction`, `output`, ...
+np: 2                                                      # number of subprocess to process your dataset
+trace_num: 10
+# process schedule: a list of several process operators with their arguments
+process:
+  - extract_qa_mapper:                                      # mapper to extract question and answer pair from text.
+      hf_model: 'alibaba-pai/pai-qwen1_5-7b-doc2qa'           # model name on huggingface to extract question and answer pair.

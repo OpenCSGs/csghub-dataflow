@@ -1,0 +1,10 @@
+services:
+  server:
+    build: 
+      context: .
+      dockerfile: Dockerfile-server
+
+  cli:
+    build:
+      context: .
+      dockerfile: Dockerfile

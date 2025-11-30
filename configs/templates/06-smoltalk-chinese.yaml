@@ -1,0 +1,25 @@
+name: '生成高质量中文多轮对话数据集'
+description: 'High-quality Chinese multi-round dialogue datasets are produced by automatically generating large models and through quality scoring and semantic deduplication screening.'
+type: 'data_refine'
+buildin: true
+project_name: 'dataflow-demo-process'
+dataset_path: ''
+exprot_path: '/path/to/your/dataset.jsonl'
+np: 1
+open_tracer: false
+trace_num: 3
+process:
+  - pipeline_magpie_zh_mapper:
+      auth_token: ''
+      model_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      model_name: 'qwen-plus'
+  - gather_generated_data_filter:
+  - encode_and_get_nearest_mapper:
+      auth_token: ''
+      model_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+      model_name: 'text-embedding-v4'
+      dimensions: 1024
+  - dedup_and_save_deduplicator:
+      similarity_threshold: 0.5
+      nn_indices_key: 'nn_indices'
+      nn_scores_key: 'nn_scores'

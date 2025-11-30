@@ -1,0 +1,4 @@
+fire
+jsonlines
+click
+scrapegraphai==1.12.0

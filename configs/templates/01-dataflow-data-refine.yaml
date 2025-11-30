@@ -1,0 +1,36 @@
+# global parameters
+name: "数据处理-基础"
+description: "该配置文件用于定义数据流处理的各个步骤，包括字符过滤、重复数据去除和中文转换等操作。"
+buildin: True
+type: 'data_refine'
+project_name: 'dataflow-demo-process'
+dataset_path: '/path/to/your/dataset'  # path to your dataset directory or file
+export_path: '/path/to/your/dataset.jsonl'
+
+np: 2  # number of subprocess to process your dataset
+open_tracer: true
+trace_num: 3
+
+# process schedule
+# a list of several process operators with their arguments
+process:
+  - chinese_convert_mapper:    # convert Chinese between Traditional Chinese, Simplified Chinese and Japanese Kanji.
+      mode: 't2s'      
+  - clean_email_mapper:     # remove emails from text.
+  - alphanumeric_filter: # 16957388
+      tokenization: false
+      min_ratio: 0.10
+  - character_repetition_filter: # 16956845
+      rep_len: 10
+      max_ratio: 0.6
+  - flagged_words_filter: # 16954629
+      lang: zh
+      tokenization: true
+      use_words_aug: true
+      max_ratio: 0.001       # max_ratio: 0.017
+      flagged_words_dir: ./assets
+  - text_length_filter: # 16954317
+      min_len: 10
+  - document_deduplicator: # 16957516
+      lowercase: true # whether to convert text to lower case
+      ignore_non_character: true
