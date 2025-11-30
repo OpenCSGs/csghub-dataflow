@@ -13,6 +13,13 @@ from data_engine.ops.base_op import OPERATORS
 from data_engine.utils.file_utils import find_files_with_suffix
 from data_engine.utils.model_utils import get_opencsg_model_path
 
+# Import for new upload method
+from pycsghub.upload_large_folder.main import upload_large_folder_internal
+from pycsghub.cmd.repo_types import RepoType
+from pycsghub.utils import get_endpoint
+from data_engine.utils.env import GetHubEndpoint
+import traceback
+
 
 TOOL_NAME = 'md_to_jsonl_preprocess_internal'
 
@@ -80,6 +87,10 @@ class MdToJsonlPreprocess(TOOL):
         """
         super().__init__(tool_defination, params)
         
+        # Override exporter to use custom upload method that supports Chinese filenames
+        self._original_exporter = self.exporter
+        self.exporter = self._create_custom_exporter()
+        
         # Get parameters from tool definition
         model_name = next(
             (item.value for item in self.tool_def.params if item.name == "hf_tokenizer"),
@@ -138,6 +149,124 @@ class MdToJsonlPreprocess(TOOL):
         
         # text_key is fixed as 'text' since MD files are converted to this format before passing to tool
         self.text_key = "text"
+    
+    def _create_custom_exporter(self):
+        """
+        Create a custom exporter that uses upload_large_folder_internal
+        instead of Repository.upload() to properly handle Chinese filenames.
+        
+        :return: Custom exporter object with export_from_files method
+        """
+        class CustomExporter:
+            def __init__(self, parent):
+                self.parent = parent
+            
+            def export_from_files(self, upload_path: Path):
+                """
+                Export method using upload_large_folder_internal for Chinese filename support.
+                
+                :param upload_path: path with files to upload
+                :return: branch name
+                """
+                # 🔍 诊断日志: 检查上传路径
+                logger.info(f'='*80)
+                logger.info(f'[EXPORT DEBUG] Starting export_from_files()')
+                logger.info(f'[EXPORT DEBUG] Upload path type: {type(upload_path)}, value: {upload_path}')
+                logger.info(f'[EXPORT DEBUG] Upload path (str): {str(upload_path)}')
+                logger.info(f'[EXPORT DEBUG] Upload path exists: {os.path.exists(upload_path)}')
+                
+                if not os.path.exists(upload_path):
+                    logger.error(f'[EXPORT DEBUG] Upload path does not exist!')
+                    return None
+                    
+                # 🔍 诊断日志: 列出所有要上传的文件
+                try:
+                    files_to_upload = os.listdir(upload_path)
+                    logger.info(f'[EXPORT DEBUG] Files in upload directory: {len(files_to_upload)} files')
+                    for i, filename in enumerate(files_to_upload, 1):
+                        file_path = os.path.join(upload_path, filename)
+                        file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
+                        # 显示文件名的不同编码形式
+                        logger.info(f'[EXPORT DEBUG]   File {i}: {filename}')
+                        logger.info(f'[EXPORT DEBUG]     - repr(): {repr(filename)}')
+                        logger.info(f'[EXPORT DEBUG]     - bytes: {filename.encode("utf-8")}')
+                        logger.info(f'[EXPORT DEBUG]     - size: {file_size} bytes')
+                        logger.info(f'[EXPORT DEBUG]     - is_file: {os.path.isfile(file_path)}')
+                except Exception as e:
+                    logger.error(f'[EXPORT DEBUG] Error listing files: {str(e)}')
+                    traceback.print_exc()
+                
+                if len(os.listdir(upload_path)) == 0:
+                    logger.info(f'[EXPORT DEBUG] The target dir is empty, no need to upload anything, abort.')
+                    return None
+                
+                if self.parent.tool_def.repo_id is None or len(self.parent.tool_def.repo_id) == 0:
+                    logger.info('[EXPORT DEBUG] No repo_id specified, skip upload.')
+                    return 'N/A'
+                
+                # 🔍 诊断日志: repo信息
+                logger.info(f'[EXPORT DEBUG] Target repo_id: {self.parent.tool_def.repo_id}')
+                logger.info(f'[EXPORT DEBUG] User token (first 10 chars): {self.parent.executed_params.user_token[:10] if self.parent.executed_params.user_token else "None"}...')
+                
+                try:
+                    # Get branch name
+                    branch = self.parent.tool_def.branch if self.parent.tool_def.branch and len(self.parent.tool_def.branch) > 0 else 'main'
+                    logger.info(f'[EXPORT DEBUG] Original branch: {branch}')
+                    
+                    output_branch_name = self.parent._get_available_branch(branch)
+                    logger.info(f'[EXPORT DEBUG] Output branch name: {output_branch_name}')
+                    
+                    # 🔍 诊断日志: 上传参数
+                    endpoint = get_endpoint(endpoint=GetHubEndpoint())
+                    logger.info(f'[EXPORT DEBUG] Upload parameters:')
+                    logger.info(f'[EXPORT DEBUG]   - repo_id: {self.parent.tool_def.repo_id}')
+                    logger.info(f'[EXPORT DEBUG]   - local_path: {str(upload_path)}')
+                    logger.info(f'[EXPORT DEBUG]   - repo_type: {RepoType.DATASET}')
+                    logger.info(f'[EXPORT DEBUG]   - revision: {output_branch_name}')
+                    logger.info(f'[EXPORT DEBUG]   - endpoint: {endpoint}')
+                    logger.info(f'[EXPORT DEBUG]   - num_workers: 1')
+                    
+                    logger.info(f'='*80)
+                    logger.info(f'Start to upload {upload_path} to repo: {self.parent.tool_def.repo_id} with branch: {output_branch_name}')
+                    logger.info(f'Using upload_large_folder_internal for Chinese filename support')
+                    logger.info(f'='*80)
+                    
+                    # Use upload_large_folder_internal for better Unicode/Chinese filename handling
+                    upload_large_folder_internal(
+                        repo_id=self.parent.tool_def.repo_id,
+                        local_path=str(upload_path),
+                        repo_type=RepoType.DATASET,
+                        revision=output_branch_name,
+                        endpoint=endpoint,
+                        token=self.parent.executed_params.user_token,
+                        num_workers=1,
+                        print_report=False,
+                        print_report_every=1,
+                        allow_patterns=None,
+                        ignore_patterns=None
+                    )
+                    
+                    logger.info(f'='*80)
+                    logger.info(f'[EXPORT DEBUG] Upload completed successfully!')
+                    logger.info(f'[EXPORT DEBUG] Uploaded to repo: {self.parent.tool_def.repo_id}')
+                    logger.info(f'[EXPORT DEBUG] Branch: {output_branch_name}')
+                    logger.info(f'='*80)
+                    logger.info(f'Successfully uploaded to repo: {self.parent.tool_def.repo_id} with branch: {output_branch_name}')
+                    return output_branch_name
+                    
+                except Exception as e:
+                    logger.error(f'='*80)
+                    logger.error(f'[EXPORT DEBUG] Upload failed with exception!')
+                    logger.error(f'[EXPORT DEBUG] Exception type: {type(e).__name__}')
+                    logger.error(f'[EXPORT DEBUG] Exception message: {str(e)}')
+                    logger.error(f'[EXPORT DEBUG] Exception args: {e.args}')
+                    logger.error(f'[EXPORT DEBUG] Full traceback:')
+                    traceback.print_exc()
+                    logger.error(f'='*80)
+                    logger.error(f'Failed to upload folder to {self.parent.tool_def.repo_id}: {str(e)}')
+                    raise
+        
+        return CustomExporter(self)
 
     def process(self):
         """
@@ -494,6 +623,71 @@ class MdToJsonlPreprocess(TOOL):
         
         # Return the export directory (already contains _data from base_tool.__init__)
         return Path(self.tool_def.export_path)
+
+    def _get_available_branch(self, origin_branch: str) -> str:
+        """
+        Get available branch name (auto-increment version number).
+        Same logic as csghub_exporter.get_avai_branch()
+        
+        :param origin_branch: original branch name
+        :return: available branch name
+        """
+        import requests
+        from pycsghub.utils import build_csg_headers
+        
+        action_endpoint = get_endpoint(endpoint=GetHubEndpoint())
+        url = f"{action_endpoint}/api/v1/datasets/{self.tool_def.repo_id}/branches"
+        headers = build_csg_headers(
+            token=self.executed_params.user_token,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()
+            
+            if response.status_code != 200:
+                logger.warning(f"Cannot request repo {self.tool_def.repo_id} branches, using origin branch: {origin_branch}")
+                return origin_branch
+            
+            jsonRes = response.json()
+            if jsonRes.get("msg") != "OK":
+                logger.warning(f"Cannot read repo {self.tool_def.repo_id} branches, using origin branch: {origin_branch}")
+                return origin_branch
+            
+            branches = jsonRes.get("data", [])
+            valid_branches = [b['name'] for b in branches]
+            valid_branches.sort()
+            
+            logger.info(f'repo {self.tool_def.repo_id} all branches: {valid_branches}')
+            
+            # Auto-increment version number (v1, v2, v3, ...)
+            latest_num = 0
+            for b in valid_branches:
+                if origin_branch == "main" and re.match(r"^v\d+$", b):
+                    num_str = b[1:]  # Remove 'v' prefix
+                    if num_str.isdigit():
+                        latest_num = max(latest_num, int(num_str))
+                elif b.startswith(origin_branch) and len(b) > len(origin_branch):
+                    num_str = b[len(origin_branch) + 1:]
+                    if num_str.isdigit():
+                        latest_num = max(latest_num, int(num_str))
+            
+            if origin_branch == "main":
+                return f"v{latest_num + 1}" if latest_num > 0 else "v1"
+            else:
+                if latest_num > 0:
+                    return f"{origin_branch}.{latest_num + 1}"
+                else:
+                    # Check if origin_branch exists
+                    if origin_branch in valid_branches:
+                        return f"{origin_branch}.1"
+                    else:
+                        return origin_branch
+                        
+        except Exception as e:
+            logger.warning(f"Error getting branches: {str(e)}, using origin branch: {origin_branch}")
+            return origin_branch
 
     @classmethod
     @property

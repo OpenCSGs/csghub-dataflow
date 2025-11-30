@@ -19,6 +19,7 @@ from data_engine.core import Executor
 import tempfile,time
 import traceback
 import io
+from loguru import logger
 
 
 @celery_app.task(name="run_pipline_job")
@@ -91,18 +92,42 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
         #     insert_pipline_job_run_task_log_error(job_uuid, f"not exists yaml config : {job_uuid}")
         #     return False
     except Exception as e:
-        if job_obj is not None:
-            job_obj.status = JOB_STATUS.FAILED.value
-        # print(f"--------{job_uuid} Error occurred while executing the task: {e.__str__()}")
+        if job_obj is not None and db_session:
+            try:
+                # 确保任务状态被正确更新为 FAILED
+                job_obj.status = JOB_STATUS.FAILED.value
+                job_obj.date_finish = get_current_time()
+                db_session.flush()  # 先 flush 确保更改被记录
+                db_session.commit()  # 然后 commit 确保持久化
+            except Exception as db_error:
+                logger.error(f"Failed to update job status to FAILED in outer exception handler: {db_error}")
+                try:
+                    db_session.rollback()
+                    # 重新查询 job 对象
+                    job_obj_refreshed = get_pipline_job_by_uid(db_session, job_uuid)
+                    if job_obj_refreshed:
+                        job_obj_refreshed.status = JOB_STATUS.FAILED.value
+                        job_obj_refreshed.date_finish = get_current_time()
+                        db_session.commit()
+                except Exception as e2:
+                    logger.error(f"Failed to update job status even after rollback: {e2}")
         insert_pipline_job_run_task_log_error(job_uuid, f"{job_uuid} Error occurred while executing the task: {e.__str__()}")
         traceback.print_exc()
         return False
     finally:
-        if job_obj:
-            job_obj.date_finish = get_current_time()
-        if db_session and job_obj:
-            db_session.commit()
-            db_session.close()
+        if job_obj and db_session:
+            try:
+                # 确保完成时间被设置（如果之前没有设置）
+                if not job_obj.date_finish:
+                    job_obj.date_finish = get_current_time()
+                # 如果状态还是 PROCESSING，说明异常处理可能没有正确执行，设置为 FAILED
+                if job_obj.status == JOB_STATUS.PROCESSING.value:
+                    job_obj.status = JOB_STATUS.FAILED.value
+                db_session.commit()
+            except Exception as e:
+                logger.error(f"Failed to update job in finally block: {e}")
+            finally:
+                db_session.close()
         # if yaml_temp_dir and os.path.exists(yaml_temp_dir) and os.path.isdir(yaml_temp_dir):
         #     shutil.rmtree(yaml_temp_dir)
         if current_process_id > 0 and current_ip is not None and work_name is not None:
@@ -183,21 +208,46 @@ def run_pipline_job_task(config,job,session,user_id, user_name, user_token):
     job.work_dir = work_dir
     job.status = JOB_STATUS.PROCESSING.value
     session.commit()
-    _, branch_name = executor.run()
+    try:
+        _, branch_name = executor.run()
 
-    trace_dir = os.path.join(work_dir, 'trace')
-    first_op = list(cfg.process[0])[0]
-    count_filename = f"count-{first_op}.txt"
-    count_filepath = os.path.join(trace_dir, count_filename)
-    data_count = 0
-    if os.path.exists(count_filepath):
-        with open(count_filepath, 'r') as f:
-            data_lines = f.read().strip()
-            data_count = int(data_lines)
+        trace_dir = os.path.join(work_dir, 'trace')
+        first_op = list(cfg.process[0])[0]
+        count_filename = f"count-{first_op}.txt"
+        count_filepath = os.path.join(trace_dir, count_filename)
+        data_count = 0
+        if os.path.exists(count_filepath):
+            with open(count_filepath, 'r') as f:
+                data_lines = f.read().strip()
+                data_count = int(data_lines) if data_lines else 0
 
-    job.data_count = data_count
-    job.status = JOB_STATUS.FINISHED.value
-    job.process_count = data_count
-    job.export_repo_id = repo_id
-    job.export_branch_name = branch_name
-    session.commit()
+        job.data_count = data_count
+        job.status = JOB_STATUS.FINISHED.value
+        job.process_count = data_count
+        job.export_repo_id = repo_id
+        job.export_branch_name = branch_name
+        session.commit()
+    except Exception as e:
+        # 当操作符执行失败时，确保任务状态被正确更新为 FAILED
+        try:
+            # 使用 flush 和 commit 确保状态被正确保存
+            job.status = JOB_STATUS.FAILED.value
+            job.date_finish = get_current_time()
+            session.flush()  # 先 flush 确保更改被记录
+            session.commit()  # 然后 commit 确保持久化
+        except Exception as db_error:
+            # 如果更新失败，记录错误但继续抛出原始异常
+            logger.error(f"Failed to update job status to FAILED: {db_error}")
+            # 尝试回滚并重新提交
+            try:
+                session.rollback()
+                from data_celery.db.JobsManager import get_pipline_job_by_uid
+                job_from_db = get_pipline_job_by_uid(session, job.uuid)
+                if job_from_db:
+                    job_from_db.status = JOB_STATUS.FAILED.value
+                    job_from_db.date_finish = get_current_time()
+                    session.commit()
+            except Exception as e2:
+                logger.error(f"Failed to update job status even after rollback: {e2}")
+        insert_pipline_job_run_task_log_error(job.uuid, f"{job.uuid} Error occurred during pipeline execution: {str(e)}")
+        raise
