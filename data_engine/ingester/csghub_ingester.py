@@ -50,8 +50,8 @@ class IngesterCSGHUB(Ingester):
                 endpoint=endpoint,
                 token=self.user_token
             )
-            logger.info(f'result:{result}')
-            return result
+            logger.info(f"result: {result}, _src_path: {self._src_path}")
+            return self._src_path
         else:
             logger.info(f'Using local path: {self._src_path}')
             return self._src_path
