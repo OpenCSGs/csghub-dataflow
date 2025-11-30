@@ -47,6 +47,7 @@ class IngesterCSGHUB(Ingester):
                 repo_type=REPO_TYPE_DATASET,
                 revision=self.branch,
                 cache_dir=self._src_path,
+                local_dir=self._src_path,
                 endpoint=endpoint,
                 token=self.user_token
             )
