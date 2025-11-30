@@ -72,6 +72,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize database data
         initialize_database()
 
+        # Fix orphaned jobs after service restart
+        from data_server.job.JobHealthCheck import fix_orphaned_jobs
+        try:
+            fix_result = fix_orphaned_jobs()
+            logger.info(
+                f"Orphaned jobs check completed: "
+                f"{fix_result['fixed_count']} jobs fixed, "
+                f"{fix_result['skipped_count']} jobs still running"
+            )
+        except Exception as fix_error:
+            logger.error(f"Failed to fix orphaned jobs during startup: {str(fix_error)}")
+            # Don't interrupt startup process
+
         # Any other initialization code
         logger.info("Application startup complete")
 

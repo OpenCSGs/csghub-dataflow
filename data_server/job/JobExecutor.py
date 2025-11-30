@@ -100,19 +100,42 @@ def run_executor(config, job_id, job_name, user_id, user_name, user_token):
                     setattr(job, 'work_dir', work_dir)
                     setattr(job, 'status', JOB_STATUS.PROCESSING.value)
         _, branch_name = executor.run()
+
+        # write data to db after pipeline finish
+        date_finish = datetime.datetime.now()
     except Exception as e:
-        logger.info(f'executor.run error with: {str(e)}')
+        logger.error(f'Job {job_id} execution failed with error: {str(e)}')
         # write data to db after pipeline failed
         date_finish = datetime.datetime.now()
-        with get_sync_session() as session:
-            with session.begin():
-                job = session.query(Job).filter(Job.job_id == job_id).first()
-                if job:
-                    setattr(job, 'status', JOB_STATUS.FAILED.value)
-                    setattr(job, 'date_finish', date_finish)
+        try:
+            with get_sync_session() as session:
+                with session.begin():
+                    job = session.query(Job).filter(Job.job_id == job_id).first()
+                    if job:
+                        setattr(job, 'status', JOB_STATUS.FAILED.value)
+                        setattr(job, 'date_finish', date_finish)
+                        logger.info(f'Job {job_id} marked as FAILED')
+        except Exception as db_error:
+            logger.error(f'Failed to update job {job_id} status to FAILED: {str(db_error)}')
         return
+    finally:
+        # Final safety check: ensure job status is not stuck in PROCESSING
+        try:
+            with get_sync_session() as session:
+                job = session.query(Job).filter(Job.job_id == job_id).first()
+                if job and job.status == JOB_STATUS.PROCESSING.value:
+                    logger.warning(
+                        f'Job {job_id} still in PROCESSING state in finally block, '
+                        f'marking as FAILED'
+                    )
+                    job.status = JOB_STATUS.FAILED.value
+                    if not job.date_finish:
+                        job.date_finish = datetime.datetime.now()
+                    session.commit()
+        except Exception as final_error:
+            logger.error(f'Failed to update job {job_id} in finally block: {str(final_error)}')
 
-    # write data to db after pipeline finish
+    # Continue with success path
     date_finish = datetime.datetime.now()
     if config.job_source == "tool":
         with get_sync_session() as session:
