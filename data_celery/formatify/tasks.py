@@ -679,7 +679,8 @@ def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[s
                 server_url = mineru_api_url
             else:
                 server_url = os.getenv("MINERU_API_URL", "http://111.4.242.20:30000")
-            backend = "vlm-http-client"
+            # MinerU backend can be configured via MINERU_BACKEND environment variable
+            backend = os.getenv("MINERU_BACKEND", "http-client")
             
             # Record used MinerU API address for debugging
             insert_formatity_task_log_info(task_uid, f'Using MinerU API server: {server_url}')
