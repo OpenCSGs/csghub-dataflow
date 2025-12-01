@@ -1,0 +1,2 @@
+type: dj_text_quality_classifier
+dataset_path: './outputs/demo-process/demo-processed.jsonl'

@@ -7,7 +7,7 @@ pip install .[tools] -i https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install .[scil] -i https://pypi.tuna.tsinghua.edu.cn/simple/
 pip install -r docker/requirements.txt
 ```
-### 启动api-server 
+### 启动api-server
 ```cmd
 uvicorn data_server.main:app --reload
 ```
