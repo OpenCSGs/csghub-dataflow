@@ -501,6 +501,7 @@ class DataType(Enum):
     ClosedUnitInterval = 2
     from_2_to_20 = 3
     SEARCH_SELECT = "search-select"
+    SELECT_MODEL = "select-model"
 
 @dataclass
 class Sample:

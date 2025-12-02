@@ -7,6 +7,7 @@ import shutil
 from loguru import logger
 from ...schemas.responses import response_success, response_fail
 from data_engine.utils.cache_utils import DATA_JUICER_MODELS_CACHE
+from typing import Optional
 
 router = APIRouter()
 
@@ -55,7 +56,7 @@ def check_model_for_md_to_jsonl(
         
         # Get the first matching model information
         model_info = data['data'][0]
-        model_name_from_api = model_info.get('name', model_name)  # Get name field from API response
+        model_name_from_api = model_info.get('path', model_name)  # Get path field from API response
         repository = model_info.get('repository', {})
         http_clone_url = repository.get('http_clone_url')
         
@@ -219,3 +220,87 @@ def check_model_for_md_to_jsonl(
     except Exception as e:
         logger.error(f'Error checking model: {str(e)}')
         return response_fail(msg=f'检查模型时发生错误: {str(e)}')
+
+
+@router.get("/list-models", summary="获取模型列表")
+def list_models(
+    page: int = Query(1, description="页码，从1开始"),
+    per_page: int = Query(16, description="每页数量，默认16条"),
+    search: Optional[str] = Query(None, description="搜索关键词"),
+    sort: str = Query("trending", description="排序方式")
+):
+    """
+    Fetch model list from OpenCSG Hub and return basic information.
+    
+    Returns:
+    - path: Model path
+    - updated_at: Last update time
+    - first_tag: show_name of the first tag with category == "task"
+    - downloads: Download count
+    - description: Model description
+    
+    :param page: Page number
+    :param per_page: Items per page, default 16
+    :param search: Search keyword (optional)
+    :param sort: Sort method, default trending
+    :return: Model list
+    """
+    try:
+        # Get CSGHUB_ENDPOINT from environment
+        csghub_endpoint = os.getenv('CSGHUB_ENDPOINT', 'https://hub.opencsg.com')
+        api_url = f'{csghub_endpoint}/api/v1/models'
+        
+        # Set request parameters
+        params = {
+            'page': page,
+            'per': per_page,
+            'search': search or '',
+            'sort': sort,
+            'source': ''
+        }
+        
+        logger.info(f'Fetching models from {api_url} with params: {params}')
+        
+        # Send request
+        response = requests.get(api_url, params=params, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Extract required fields
+        models_data = []
+        if data.get('data'):
+            for model in data['data']:
+                # Find the first tag with category == "task" and get its show_name
+                first_tag_show_name = ''
+                if model.get('tags'):
+                    for tag in model['tags']:
+                        if tag.get('category') == 'task':
+                            first_tag_show_name = tag.get('show_name', '')
+                            break
+                
+                model_info = {
+                    'path': model.get('path', ''),
+                    'updated_at': model.get('updated_at', ''),
+                    'first_tag': first_tag_show_name,
+                    'downloads': model.get('downloads', 0),
+                    'description': model.get('description', '')
+                }
+                models_data.append(model_info)
+        
+        # Build result
+        result = {
+            'models': models_data,
+            'total': data.get('total', 0),
+            'page': page,
+            'per_page': per_page
+        }
+        
+        logger.info(f'Successfully fetched {len(models_data)} models')
+        return response_success(data=result, msg='获取模型列表成功')
+        
+    except requests.RequestException as e:
+        logger.error(f'Failed to request OpenCSG API: {str(e)}')
+        return response_fail(msg=f'无法连接到OpenCSG Hub API: {str(e)}')
+    except Exception as e:
+        logger.error(f'Error fetching models: {str(e)}')
+        return response_fail(msg=f'获取模型列表时发生错误: {str(e)}')
