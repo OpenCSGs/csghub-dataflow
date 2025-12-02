@@ -21,24 +21,35 @@ router = APIRouter()
 @router.get("/get_mineru_api_url", response_model=dict)
 async def get_mineru_api_url():
     """
-    获取当前配置的 MinerU API 地址
+    获取当前配置的 MinerU 引擎参数
     Returns:
-        Dict: 包含当前 MinerU API 地址的响应
+        Dict: 包含当前 MinerU 引擎参数的响应
             - mineru_api_url: MinerU API 服务器地址
-            - source: 配置来源 ("environment" | "default")
+            - mineru_backend: MinerU 后端类型
+            - sources: 配置来源字典
+                - mineru_api_url_source: mineru_api_url 的配置来源 ("environment" | "default")
+                - mineru_backend_source: mineru_backend 的配置来源 ("environment" | "default")
     """
     try:
-        # Get from environment variable, use default value if not set
+        # Get mineru_api_url from environment variable, use default value if not set
         mineru_api_url = os.getenv("MINERU_API_URL", "http://111.4.242.20:30000")
-        source = "environment" if os.getenv("MINERU_API_URL") else "default"
+        mineru_api_url_source = "environment" if os.getenv("MINERU_API_URL") else "default"
+        
+        # Get mineru_backend from environment variable, use default value if not set
+        mineru_backend = os.getenv("MINERU_BACKEND", "http-client")
+        mineru_backend_source = "environment" if os.getenv("MINERU_BACKEND") else "default"
         
         return response_success(data={
             "mineru_api_url": mineru_api_url,
-            "source": source
+            "mineru_backend": mineru_backend,
+            "sources": {
+                "mineru_api_url_source": mineru_api_url_source,
+                "mineru_backend_source": mineru_backend_source
+            }
         })
     except Exception as e:
         logger.error(f"Failed to get mineru_api_url: {str(e)}")
-        return response_fail(msg="获取 MinerU API 地址失败")
+        return response_fail(msg="获取 MinerU 引擎参数失败")
 
 
 @router.get("/formatify/get_format_type_list", response_model=dict)

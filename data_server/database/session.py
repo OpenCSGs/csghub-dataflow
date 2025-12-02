@@ -170,6 +170,21 @@ def add_mineru_api_url_column():
                 logger.info("Column 'mineru_api_url' added successfully to data_format_tasks table")
 
 
+def add_mineru_backend_column():
+    """Add mineru_backend column to data_format_tasks table"""
+    with get_sync_session() as session:
+        with session.begin():
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'data_format_tasks' AND column_name = 'mineru_backend';
+            """))
+
+            if not result.fetchone():
+                session.execute(text("ALTER TABLE data_format_tasks ADD COLUMN mineru_backend VARCHAR(100);"))
+                logger.info("Column 'mineru_backend' added successfully to data_format_tasks table")
+
+
 _initialized = False
 from data_server.database.bean.work import Worker
 from data_server.job.JobModels import Job
@@ -202,6 +217,7 @@ def create_tables():
 
     add_first_op_column()
     add_mineru_api_url_column()
+    add_mineru_backend_column()
 def is_table_initialized(table_name: str) -> bool:
     """
     Check if a specific table contains any data.

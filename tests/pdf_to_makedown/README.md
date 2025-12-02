@@ -86,9 +86,6 @@ python pdf_to_markdown.py
 - `MINERU_BACKEND`: MinerU 后端类型（默认: http-client）
 
 支持的 backend 值：
-- `transformers`
-- `sglang-engine`
-- `sglang-client`
 - `http-client`
 
 可以通过 `.env` 文件或系统环境变量进行配置。

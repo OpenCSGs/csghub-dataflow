@@ -266,9 +266,9 @@ def format_task(task_id: int, user_name: str, user_token: str):
                     continue
                 
                 # Execute conversion
-                # For PDF to MD conversion, need to pass mineru_api_url parameter
+                # For PDF to MD conversion, need to pass mineru_api_url and mineru_backend parameters
                 if format_task.from_data_type == DataFormatTypeEnum.PDF.value and format_task.to_data_type == DataFormatTypeEnum.Markdown.value:
-                    result = convert_func(file_path_full, format_task.task_uid, format_task.mineru_api_url)
+                    result = convert_func(file_path_full, format_task.task_uid, format_task.mineru_api_url, format_task.mineru_backend)
                 else:
                     result = convert_func(file_path_full, format_task.task_uid)
                 
@@ -665,7 +665,7 @@ def convert_ppt_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]
         return None  # Not a target file, return None
 
 
-def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[str] = None) -> Optional[Dict[str, str]]:
+def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[str] = None, mineru_backend: Optional[str] = None) -> Optional[Dict[str, str]]:
     if file_path.lower().endswith('.pdf'):
         insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
         try:
@@ -679,11 +679,14 @@ def convert_pdf_to_markdown(file_path: str, task_uid, mineru_api_url: Optional[s
                 server_url = mineru_api_url
             else:
                 server_url = os.getenv("MINERU_API_URL", "http://111.4.242.20:30000")
-            # MinerU backend can be configured via MINERU_BACKEND environment variable
-            backend = os.getenv("MINERU_BACKEND", "http-client")
+            # MinerU backend: Priority: passed parameter > environment variable > default value
+            if mineru_backend:
+                backend = mineru_backend
+            else:
+                backend = os.getenv("MINERU_BACKEND", "http-client")
             
-            # Record used MinerU API address for debugging
-            insert_formatity_task_log_info(task_uid, f'Using MinerU API server: {server_url}')
+            # Record used MinerU API address and backend for debugging
+            insert_formatity_task_log_info(task_uid, f'Using MinerU API server: {server_url}, backend: {backend}')
             
             pdf_file_name = Path(file_path).stem
             temp_output_dir = Path(file_path).parent / f"_temp_pdf_convert_{pdf_file_name}"
