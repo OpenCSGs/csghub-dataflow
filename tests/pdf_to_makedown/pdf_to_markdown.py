@@ -57,11 +57,29 @@ def print_section(title: str):
 class PDFToMarkdownTester:
     """PDF 转 Markdown 测试类"""
     
-    def __init__(self):
-        """初始化测试环境"""
+    def __init__(self, project_root: Optional[str] = None):
+        """
+        初始化测试环境
+        
+        Args:
+            project_root: 项目根目录路径（可选，如果不提供则自动查找）
+        """
         # 获取脚本所在目录
         self.script_dir = Path(__file__).parent
-        self.project_root = self.script_dir.parent.parent
+        
+        # 确定项目根目录
+        if project_root:
+            self.project_root = Path(project_root).resolve()
+            print_info(f"使用指定的项目根目录: {self.project_root}")
+        else:
+            # 方法1: 从环境变量获取
+            env_project_root = os.getenv("PROJECT_ROOT")
+            if env_project_root:
+                self.project_root = Path(env_project_root).resolve()
+                print_info(f"从环境变量 PROJECT_ROOT 获取项目根目录: {self.project_root}")
+            else:
+                # 方法2: 自动查找项目根目录
+                self.project_root = self._find_project_root()
         
         # 设置路径
         self.input_dir = self.script_dir / "input"
@@ -74,6 +92,44 @@ class PDFToMarkdownTester:
         
         # 测试结果
         self.test_results: List[Dict] = []
+    
+    def _find_project_root(self) -> Path:
+        """
+        自动查找项目根目录
+        通过查找包含 data_celery/formatify/mineru_worker.py 的目录来确定
+        """
+        current_path = Path(__file__).resolve().parent
+        
+        # 向上查找，直到找到包含 data_celery 目录的路径
+        max_depth = 10  # 防止无限循环
+        depth = 0
+        
+        while depth < max_depth:
+            # 检查是否存在 data_celery/formatify/mineru_worker.py
+            mineru_worker = current_path / "data_celery" / "formatify" / "mineru_worker.py"
+            if mineru_worker.exists():
+                print_info(f"自动找到项目根目录: {current_path}")
+                return current_path
+            
+            # 检查是否存在 setup.py 或 pyproject.toml（项目根目录的常见标识）
+            if (current_path / "setup.py").exists() or (current_path / "pyproject.toml").exists():
+                # 再次确认 data_celery 目录存在
+                if (current_path / "data_celery").exists():
+                    print_info(f"通过 setup.py/pyproject.toml 找到项目根目录: {current_path}")
+                    return current_path
+            
+            # 向上移动一级
+            parent = current_path.parent
+            if parent == current_path:
+                # 已经到达文件系统根目录
+                break
+            current_path = parent
+            depth += 1
+        
+        # 如果找不到，使用原来的方法（假设在 tests/pdf_to_makedown 下）
+        fallback_root = Path(__file__).parent.parent.parent
+        print_warning(f"无法自动找到项目根目录，使用默认路径: {fallback_root}")
+        return fallback_root
     
     def check_environment(self) -> Tuple[bool, Dict[str, str]]:
         """检查环境配置"""
@@ -407,7 +463,34 @@ class PDFToMarkdownTester:
 
 def main():
     """主函数"""
-    tester = PDFToMarkdownTester()
+    import argparse
+    
+    parser = argparse.ArgumentParser(
+        description='PDF 转 Markdown 功能测试',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+使用示例:
+  # 使用默认项目根目录（自动查找）
+  python pdf_to_markdown.py
+  
+  # 指定项目根目录
+  python pdf_to_markdown.py --project-root /path/to/project
+  
+  # 通过环境变量指定项目根目录
+  export PROJECT_ROOT=/path/to/project
+  python pdf_to_markdown.py
+        """
+    )
+    parser.add_argument(
+        '--project-root',
+        type=str,
+        default=None,
+        help='项目根目录路径（可选，如果不提供则自动查找或使用环境变量 PROJECT_ROOT）'
+    )
+    
+    args = parser.parse_args()
+    
+    tester = PDFToMarkdownTester(project_root=args.project_root)
     tester.run_tests()
 
 

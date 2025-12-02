@@ -20,18 +20,36 @@ tests/pdf_to_makedown/
 
 ### 2. 运行测试
 
-在项目根目录下运行：
+#### 方式1: 使用默认项目根目录（自动查找）
+
+脚本会自动查找项目根目录，可以在任意位置运行：
 
 ```bash
+# 在项目根目录下运行
 python tests/pdf_to_makedown/pdf_to_markdown.py
-```
 
-或者在测试目录下运行：
-
-```bash
+# 或者在测试目录下运行
 cd tests/pdf_to_makedown
 python pdf_to_markdown.py
+
+# 或者在任何位置运行（脚本会自动查找项目根目录）
+python /path/to/pdf_to_markdown.py
 ```
+
+#### 方式2: 通过命令行参数指定项目根目录
+
+```bash
+python pdf_to_markdown.py --project-root /path/to/project
+```
+
+#### 方式3: 通过环境变量指定项目根目录
+
+```bash
+export PROJECT_ROOT=/path/to/project
+python pdf_to_markdown.py
+```
+
+**优先级**: 命令行参数 > 环境变量 > 自动查找
 
 ### 3. 查看结果
 
