@@ -6,112 +6,240 @@ from data_celery.utils import get_project_root
 from sqlalchemy import text
 from data_server.database.session import get_sync_session
 
-def ensure_deletion_status_table():
-    """
-    Create deletion_status table if it doesn't exist.
-    """
-    with get_sync_session() as session:
-        try:
-            session.execute(text("""
-                CREATE TABLE IF NOT EXISTS deletion_status (
-                    id SERIAL PRIMARY KEY,
-                    operation_name VARCHAR(255) UNIQUE NOT NULL,
-                    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    description TEXT
-                )
-            """))
-            session.commit()
-        except Exception as e:
-            logger.error(f"Error creating deletion_status table: {e}")
-            session.rollback()
+# Initialization data version - Update this version when modifying SQL files in Initialization_data directory
+INIT_DATA_VERSION = "1.0.0"
 
-def has_deletion_been_executed() -> bool:
+def get_current_db_version() -> str:
     """
-    Check if the one-time deletion has already been executed by checking database.
+    Get the current initialization data version stored in database.
+    Returns the latest version (ordered by id DESC) or 'None' if no version is found.
     """
     ensure_deletion_status_table()
     with get_sync_session() as session:
         try:
             result = session.execute(
-                text("SELECT 1 FROM deletion_status WHERE operation_name = :name"),
-                {"name": "init_data_deletion"}
+                text("SELECT version FROM deletion_status ORDER BY id DESC LIMIT 1")
             )
-            executed = result.scalar_one_or_none() is not None
-            if executed:
-                logger.info("Deletion has already been executed (found record in deletion_status table)")
-            else:
-                logger.info("Deletion has not been executed yet (no record in deletion_status table)")
-            return executed
+            version = result.scalar_one_or_none()
+            return version if version else "None"
         except Exception as e:
+            logger.warning(f"Error getting current database version: {e}")
+            return "Error"
+
+def ensure_deletion_status_table():
+    """
+    Create deletion_status table if it doesn't exist.
+    Simplified table structure with only necessary fields:
+    - id: Primary key
+    - version: Initialization data version
+    - description: Optional description
+    - created_at: Timestamp when this version was initialized (for version history tracking)
+    
+    Also handles migration from old table structure (removes operation_name and executed_at).
+    """
+    with get_sync_session() as session:
+        try:
+            # Create table if not exists (new simplified structure with created_at)
+            logger.info("Ensuring deletion_status table exists...")
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS deletion_status (
+                    id SERIAL PRIMARY KEY,
+                    version VARCHAR(50),
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')
+                )
+            """))
+            session.commit()
+            logger.info("deletion_status table ensured")
+            
+            # Add version column if it doesn't exist (for backward compatibility)
+            try:
+                logger.info("Ensuring version column exists...")
+                session.execute(text("""
+                    ALTER TABLE deletion_status 
+                    ADD COLUMN IF NOT EXISTS version VARCHAR(50)
+                """))
+                session.commit()
+                logger.info("version column ensured")
+            except Exception as e:
+                logger.debug(f"Could not add version column: {e}")
+                session.rollback()
+            
+            # Add created_at column if it doesn't exist (for backward compatibility)
+            try:
+                logger.info("Ensuring created_at column exists...")
+                session.execute(text("""
+                    ALTER TABLE deletion_status 
+                    ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')
+                """))
+                session.commit()
+                logger.info("created_at column ensured")
+            except Exception as e:
+                logger.debug(f"Could not add created_at column: {e}")
+                session.rollback()
+            
+            # Migration: Remove old columns if they exist (for backward compatibility)
+            # This ensures smooth upgrade from old version
+            logger.info("Checking for old columns to remove...")
+            
+            # Check and drop operation_name column
+            try:
+                session.execute(text("""
+                    ALTER TABLE deletion_status 
+                    DROP COLUMN IF EXISTS operation_name
+                """))
+                session.commit()
+                logger.info("Old column 'operation_name' removed (if existed)")
+            except Exception as e:
+                logger.debug(f"Could not drop operation_name: {e}")
+                session.rollback()
+            
+            # Check and drop executed_at column
+            try:
+                session.execute(text("""
+                    ALTER TABLE deletion_status 
+                    DROP COLUMN IF EXISTS executed_at
+                """))
+                session.commit()
+                logger.info("Old column 'executed_at' removed (if existed)")
+            except Exception as e:
+                logger.debug(f"Could not drop executed_at: {e}")
+                session.rollback()
+            
+            # Clean up old records with NULL version (from previous schema)
+            # This removes legacy records that don't have version information
+            try:
+                result = session.execute(text("DELETE FROM deletion_status WHERE version IS NULL"))
+                deleted_count = result.rowcount
+                session.commit()
+                if deleted_count > 0:
+                    logger.info(f"Cleaned up {deleted_count} old record(s) with NULL version")
+            except Exception as e:
+                logger.debug(f"Could not clean up old records: {e}")
+                session.rollback()
+            
+            logger.info("Table structure migration completed")
+            
+        except Exception as e:
+            logger.error(f"Error creating/updating deletion_status table: {e}")
+            session.rollback()
+
+def has_deletion_been_executed() -> bool:
+    """
+    Check if the one-time deletion has already been executed by checking database version.
+    Returns False if:
+    - No record exists in deletion_status table
+    - Version field is NULL (old data without version)
+    - Version doesn't match current INIT_DATA_VERSION
+    This ensures re-initialization when SQL files are updated.
+    
+    Execution order guarantee:
+    1. First call ensure_deletion_status_table() to ensure correct table structure
+    2. Then query the version field value
+    This way even old users (with old fields in table) can migrate correctly
+    """
+    # Step 1: Ensure deletion_status table structure is correct
+    # For old users, automatically removes operation_name and executed_at fields, and adds created_at
+    ensure_deletion_status_table()
+    
+    # Step 2: Query version number (get the latest version from deletion_status table)
+    with get_sync_session() as session:
+        try:
+            result = session.execute(
+                text("SELECT version FROM deletion_status ORDER BY id DESC LIMIT 1")
+            )
+            db_version = result.scalar_one_or_none()
+            
+            # scalar_one_or_none() returns None in these cases:
+            # 1. No records in the table
+            # 2. Has record but version field is NULL (old users after upgrade)
+            if db_version is None:
+                logger.info(f"No version record found or version is NULL in database. Current code version: {INIT_DATA_VERSION}. Will execute re-initialization.")
+                return False
+            elif db_version != INIT_DATA_VERSION:
+                logger.info(f"Version mismatch detected! Database version: {db_version}, Code version: {INIT_DATA_VERSION}. Will execute re-initialization.")
+                return False
+            else:
+                logger.info(f"Version matched: {db_version}. Initialization already executed for this version.")
+                return True
+        except Exception as e:
+            # Any exception returns False, triggering initialization (safety strategy)
             logger.warning(f"Error checking deletion status: {e}")
+            logger.warning("Will trigger re-initialization as a safety measure.")
             return False
 
 def mark_deletion_as_executed():
     """
-    Mark the one-time deletion as executed in database.
+    Mark the one-time deletion as executed in database with current version.
+    Appends a new record to keep version history (does not delete old records).
+    Each initialization creates a new record with timestamp.
     """
     with get_sync_session() as session:
         try:
+            # Insert new record with current version (append, not replace)
+            # created_at will be automatically set to CURRENT_TIMESTAMP
             session.execute(
                 text("""
-                    INSERT INTO deletion_status (operation_name, description) 
-                    VALUES (:name, :desc) 
-                    ON CONFLICT (operation_name) DO NOTHING
+                    INSERT INTO deletion_status (version, description) 
+                    VALUES (:version, :desc)
                 """),
                 {
-                    "name": "init_data_deletion",
-                    "desc": "Initial data deletion from Initialization_data SQL files"
+                    "version": INIT_DATA_VERSION,
+                    "desc": f"Initialization data version {INIT_DATA_VERSION} from Initialization_data SQL files"
                 }
             )
             session.commit()
-            logger.info("Marked deletion as executed in deletion_status table")
+            logger.info(f"Marked deletion as executed with version {INIT_DATA_VERSION} in deletion_status table (appended to history)")
         except Exception as e:
             logger.error(f"Error marking deletion as executed: {e}")
             session.rollback()
 
 def has_table_alteration_been_executed() -> bool:
     """
-    Check if the one-time table alteration has already been executed by checking database.
+    Check if the one-time table alteration has already been executed.
+    Since we use ALTER TABLE ... ADD COLUMN IF NOT EXISTS, we can check column existence directly.
+    Returns True if columns already exist (no need to execute again).
     """
-    ensure_deletion_status_table()
     with get_sync_session() as session:
         try:
-            result = session.execute(
-                text("SELECT 1 FROM deletion_status WHERE operation_name = :name"),
-                {"name": "table_alteration_add_description"}
-            )
-            executed = result.scalar_one_or_none() is not None
-            if executed:
-                logger.info("Table alteration has already been executed (found record in deletion_status table)")
+            # Check if operator_description column exists in operator_info table
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'operator_info' 
+                AND column_name = 'operator_description'
+            """))
+            operator_col_exists = result.scalar_one_or_none() is not None
+            
+            # Check if config_description column exists in operator_config table
+            result = session.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'operator_config' 
+                AND column_name = 'config_description'
+            """))
+            config_col_exists = result.scalar_one_or_none() is not None
+            
+            both_exist = operator_col_exists and config_col_exists
+            
+            if both_exist:
+                logger.info("Table alteration columns already exist, skipping...")
             else:
-                logger.info("Table alteration has not been executed yet (no record in deletion_status table)")
-            return executed
+                logger.info("Table alteration columns do not exist, will execute...")
+            
+            return both_exist
         except Exception as e:
             logger.warning(f"Error checking table alteration status: {e}")
             return False
 
 def mark_table_alteration_as_executed():
     """
-    Mark the one-time table alteration as executed in database.
+    Mark the one-time table alteration as executed.
+    Since we check column existence directly, this function is now a no-op.
+    Kept for compatibility.
     """
-    with get_sync_session() as session:
-        try:
-            session.execute(
-                text("""
-                    INSERT INTO deletion_status (operation_name, description) 
-                    VALUES (:name, :desc) 
-                    ON CONFLICT (operation_name) DO NOTHING
-                """),
-                {
-                    "name": "table_alteration_add_description",
-                    "desc": "Added operator_description and config_description columns"
-                }
-            )
-            session.commit()
-            logger.info("Marked table alteration as executed in deletion_status table")
-        except Exception as e:
-            logger.error(f"Error marking table alteration as executed: {e}")
-            session.rollback()
+    logger.info("Table alteration completed (no status record needed)")
+    pass
 
 def alter_tables_add_description_columns():
     """
