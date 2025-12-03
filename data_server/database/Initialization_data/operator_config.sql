@@ -12,7 +12,7 @@
  Target Server Version : 150010 (150010)
  File Encoding         : 65001
 
- Date: 27/11/2025 10:04:18
+ Date: 03/12/2025 15:44:33
 */
 
 
@@ -83,8 +83,6 @@ INSERT INTO "public"."operator_config" VALUES (44, 35, 'chars_to_remove', 'input
 INSERT INTO "public"."operator_config" VALUES (5, 2, 'rep_len', 'number', NULL, '10', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-25 17:12:04.424873', '2025-07-25 17:12:04.424873', NULL);
 INSERT INTO "public"."operator_config" VALUES (6, 2, 'min_ratio', 'slider', NULL, '0', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-25 17:12:04.424873', '2025-07-25 17:12:04.424873', NULL);
 INSERT INTO "public"."operator_config" VALUES (7, 2, 'max_ratio', 'slider', NULL, '0.5', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-25 17:12:04.424873', '2025-07-25 17:12:04.424873', NULL);
-INSERT INTO "public"."operator_config" VALUES (19, 8, 'prompt_template', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 21:56:42.474364', '2025-07-28 21:56:42.474364', NULL);
-INSERT INTO "public"."operator_config" VALUES (18, 8, 'hf_model', 'select', '[23]', '23', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 21:56:42.474364', '2025-07-28 21:56:42.474364', NULL);
 INSERT INTO "public"."operator_config" VALUES (13, 13, 'max_len', 'number', NULL, '136028', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-25 17:23:47.885255', '2025-07-25 17:23:47.885255', NULL);
 INSERT INTO "public"."operator_config" VALUES (12, 13, 'min_len', 'number', NULL, '10', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-25 17:23:47.885255', '2025-07-25 17:23:47.885255', NULL);
 INSERT INTO "public"."operator_config" VALUES (4, 15, 'max_ratio', 'number', NULL, '999999', NULL, NULL, NULL, 'f', 'f', '1', NULL, '2025-07-25 17:07:16.881312', '2025-07-25 17:07:16.881312', NULL);
@@ -196,6 +194,9 @@ INSERT INTO "public"."operator_config" VALUES (145, 59, 'dimensions', 'number', 
 INSERT INTO "public"."operator_config" VALUES (133, 59, 'model_name', 'input', NULL, 'text-embedding-v4', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-09-02 10:34:57.837909', '2025-09-02 10:34:57.837909', NULL);
 INSERT INTO "public"."operator_config" VALUES (146, 59, 'model_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-25 16:47:28.412958', '2025-08-25 16:47:28.412958', NULL);
 INSERT INTO "public"."operator_config" VALUES (142, 61, 'model_name', 'input', NULL, 'qwen-plus', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881', NULL);
+INSERT INTO "public"."operator_config" VALUES (162, 8, 'auth_token', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:13', NULL);
+INSERT INTO "public"."operator_config" VALUES (18, 8, 'model_name', 'input', NULL, 'deepseek-chat', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 21:56:42.474364', '2025-07-28 21:56:42.474364', NULL);
+INSERT INTO "public"."operator_config" VALUES (19, 8, 'model_url', 'input', NULL, 'https://www.sophnet.com/api/open-apis/v1/chat/completions', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 21:56:42.474364', '2025-07-28 21:56:42.474364', NULL);
 
 -- ----------------------------
 -- Indexes structure for table operator_config
