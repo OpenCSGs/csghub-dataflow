@@ -259,3 +259,4 @@ xxhash==3.5.0
 yarl==1.20.0
 zipp==3.21.0
 zstandard==0.23.0
+mineru==2.6.5

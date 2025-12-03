@@ -54,6 +54,7 @@ class DataFormatTask(Base):
     task_status = Column(Integer, nullable=False, comment="任务状态 DataFormatTaskStatusEnum 枚举")
     owner_id = Column(Integer, comment="所属用户")
     mineru_api_url = Column(String(500), comment="MinerU API 地址")
+    mineru_backend = Column(String(100), comment="MinerU 后端类型")
     start_run_at = Column(DateTime, comment='运行开始时间')
     end_run_at = Column(DateTime, comment='运行结束时间')
     created_at = Column(DateTime, default=datetime.datetime.now, comment='任务创建时间')
@@ -79,6 +80,7 @@ class DataFormatTask(Base):
             "task_status": self.task_status,
             "owner_id": self.owner_id,
             "mineru_api_url": self.mineru_api_url,
+            "mineru_backend": self.mineru_backend,
             "start_run_at": self.start_run_at,
             "end_run_at": self.end_run_at,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,

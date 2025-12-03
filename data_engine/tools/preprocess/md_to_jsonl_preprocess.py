@@ -168,7 +168,7 @@ class MdToJsonlPreprocess(TOOL):
                 :param upload_path: path with files to upload
                 :return: branch name
                 """
-                # 🔍 诊断日志: 检查上传路径
+
                 logger.info(f'='*80)
                 logger.info(f'[EXPORT DEBUG] Starting export_from_files()')
                 logger.info(f'[EXPORT DEBUG] Upload path type: {type(upload_path)}, value: {upload_path}')
@@ -179,7 +179,7 @@ class MdToJsonlPreprocess(TOOL):
                     logger.error(f'[EXPORT DEBUG] Upload path does not exist!')
                     return None
                     
-                # 🔍 诊断日志: 列出所有要上传的文件
+
                 try:
                     files_to_upload = os.listdir(upload_path)
                     logger.info(f'[EXPORT DEBUG] Files in upload directory: {len(files_to_upload)} files')
@@ -204,7 +204,7 @@ class MdToJsonlPreprocess(TOOL):
                     logger.info('[EXPORT DEBUG] No repo_id specified, skip upload.')
                     return 'N/A'
                 
-                # 🔍 诊断日志: repo信息
+
                 logger.info(f'[EXPORT DEBUG] Target repo_id: {self.parent.tool_def.repo_id}')
                 logger.info(f'[EXPORT DEBUG] User token (first 10 chars): {self.parent.executed_params.user_token[:10] if self.parent.executed_params.user_token else "None"}...')
                 
@@ -216,7 +216,7 @@ class MdToJsonlPreprocess(TOOL):
                     output_branch_name = self.parent._get_available_branch(branch)
                     logger.info(f'[EXPORT DEBUG] Output branch name: {output_branch_name}')
                     
-                    # 🔍 诊断日志: 上传参数
+
                     endpoint = get_endpoint(endpoint=GetHubEndpoint())
                     logger.info(f'[EXPORT DEBUG] Upload parameters:')
                     logger.info(f'[EXPORT DEBUG]   - repo_id: {self.parent.tool_def.repo_id}')
@@ -701,7 +701,7 @@ class MdToJsonlPreprocess(TOOL):
                 "token": "token",
                 "sentence": "sentence"
             }, "token"),
-            Param("hf_tokenizer", DataType.SEARCH_SELECT, {
+            Param("hf_tokenizer", DataType.SELECT_MODEL, {
                 "EleutherAI/pythia-6.9b-deduped": "EleutherAI/pythia-6.9b-deduped",
                 "hfl/chinese-bert-wwm-ext": "hfl/chinese-bert-wwm-ext"
             }, "EleutherAI/pythia-6.9b-deduped"),
