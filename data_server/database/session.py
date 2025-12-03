@@ -251,8 +251,11 @@ def initialize_database():
         mark_deletion_as_executed,
         has_table_alteration_been_executed,
         mark_table_alteration_as_executed,
-        alter_tables_add_description_columns
+        alter_tables_add_description_columns,
+        INIT_DATA_VERSION
     )
+    
+    logger.info(f"Current initialization data version: {INIT_DATA_VERSION}")
 
     should_alter_tables = not has_table_alteration_been_executed()
     should_delete = not has_deletion_been_executed()
