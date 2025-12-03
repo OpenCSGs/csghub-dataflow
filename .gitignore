@@ -4,6 +4,7 @@ outputs/
 assets/
 temp/
 demo/
+tests/
 # setup
 data_juicer.egg-info/
 py_data_juicer.egg-info/
