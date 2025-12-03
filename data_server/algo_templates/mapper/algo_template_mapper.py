@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from typing import List, Optional, Tuple
 import yaml
 
@@ -141,7 +142,7 @@ def get_templates_by_query(db: Session, user_id: str,
 
     total = query.count()
     
-
-    templates = query.offset((page - 1) * page_size).limit(page_size).all()
+    # desc_by_id
+    templates = query.order_by(desc(AlgoTemplate.id)).offset((page - 1) * page_size).limit(page_size).all()
     
     return templates, total
