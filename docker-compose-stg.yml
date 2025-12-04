@@ -4,7 +4,7 @@ services:
     restart: unless-stopped
     image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/postgres:15.10
     volumes:
-      - /root/dataflow/dataflow-v2/postgres_db_data:/var/lib/postgresql/data
+      - /dataflow_data/postgres_db_data:/var/lib/postgresql/data
     command: -p 5432
     environment:
       - POSTGRES_DB=data_flow
@@ -19,7 +19,7 @@ services:
     restart: unless-stopped
     image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
     volumes:
-      - /root/dataflow/dataflow-v2/mongodata:/data/db
+      - /dataflow_data/mongodata:/data/db
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=example
@@ -32,7 +32,7 @@ services:
     restart: unless-stopped
     image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
     volumes:
-      - /root/dataflow/dataflow-v2/celery_redis_data:/data
+      - /dataflow_data/celery_redis_data:/data
     ports:
       - "16379:6379"
     networks:
@@ -40,7 +40,7 @@ services:
 
   dataflow_celery_worker:
     restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250916
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20251130.1
     command: >
       sh -c "
         MILLISECOND_TIMESTAMP=$$(date +%s%3N);
@@ -48,7 +48,7 @@ services:
         celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent -n $$NODENAME
       "
     volumes:
-      - /root/dataflow/dataflow-v2/apidata:/data/dataflow_data
+      - /dataflow_data/apidata:/data/dataflow_data
     environment:
       - DATA_DIR=/data/dataflow_data
       - CSGHUB_ENDPOINT=https://hub.opencsg-stg.com
@@ -76,48 +76,10 @@ services:
     networks:
       - csg-network
 
-  dataflow_api_server:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20250916
-    command: >
-      sh -c "
-        uvicorn data_server.main:app --host 0.0.0.0 --port 8000
-      "
-    volumes:
-      - /root/dataflow/dataflow-v2/apidata:/data/dataflow_data
-    environment:
-      - DATA_DIR=/data/dataflow_data
-      - CSGHUB_ENDPOINT=https://hub.opencsg-stg.com
-      - MAX_WORKERS=99
-      - RAY_ADDRESS=auto
-      - RAY_ENABLE=False
-      - RAY_LOG_DIR=/home/output
-      - API_SERVER=0.0.0.0
-      - API_PORT=8000
-      - ENABLE_OPENTELEMETRY=False
-      - DATABASE_DB=data_flow
-      - DATABASE_USERNAME=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_HOSTNAME=dataflow_postgres_db
-      - DATABASE_PORT=5432
-      - STUDIO_JUMP_URL=https://data-label.opencsg.com
-      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
-      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
-    ports:
-      - "8000:8000"
-    depends_on:
-      - dataflow_celery_redis
-      - dataflow_mongo_db
-      - dataflow_postgres_db
-      - dataflow_celery_worker
-    networks:
-      - csg-network
-
   dataflow_label_studio:
     stdin_open: true
     tty: true
-    build: .
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/label-studio:latest
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/label-studio:20251128
     restart: unless-stopped
     expose:
       - "8002"
@@ -133,17 +95,53 @@ services:
       - LABEL_STUDIO_HOST=${LABEL_STUDIO_HOST:-}
       - JSON_LOG=1
       - LABEL_STUDIO_HOST=0.0.0.0
-      - CSG_HUB_ENDPOINT= https://hub.opencsg-stg.com
+      - CSGHUB_ENDPOINT= https://hub.opencsg-stg.com
       - LABEL_STUDIO_PORT=8002
-  #    - LOG_LEVEL=DEBUG
     volumes:
-      - /root/dataflow/dataflow-v2/label-studio:/label-studio/data:rw
+      - /dataflow_data/label-studio:/label-studio/data:rw
     ports:
       - "8002:8002"
     command: label-studio
     networks:
       - csg-network
+
+  dataflow_api_server:
+    restart: unless-stopped
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20251130.1
+    command: >
+      sh -c "
+        uvicorn data_server.main:app --host 0.0.0.0 --port 8000
+      "
+    volumes:
+      - /dataflow_data/apidata:/data/dataflow_data
+    environment:
+      - DATA_DIR=/data/dataflow_data
+      - CSGHUB_ENDPOINT=https://hub.opencsg-stg.com
+      - MAX_WORKERS=99
+      - RAY_ADDRESS=auto
+      - RAY_ENABLE=False
+      - RAY_LOG_DIR=/home/output
+      - API_SERVER=0.0.0.0
+      - API_PORT=8000
+      - ENABLE_OPENTELEMETRY=False
+      - DATABASE_DB=data_flow
+      - DATABASE_USERNAME=postgres
+      - DATABASE_PASSWORD=postgres
+      - DATABASE_HOSTNAME=dataflow_postgres_db
+      - DATABASE_PORT=5432
+      - STUDIO_JUMP_URL=http://39.102.214.107:8002
+      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
+      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
+    ports:
+      - "8000:8000"
+    depends_on:
+      - dataflow_celery_redis
+      - dataflow_mongo_db
+      - dataflow_postgres_db
+      - dataflow_celery_worker
+    networks:
+      - csg-network
+
 networks:
   csg-network:
     driver: bridge
-
