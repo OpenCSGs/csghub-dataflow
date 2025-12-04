@@ -16,7 +16,7 @@ attrs==25.3.0
 audioread==3.0.1
 av==16.0.1
 bcrypt==4.3.0
-beautifulsoup4==4.13.4
+beautifulsoup4>=4.13.5,<5
 betterproto-fw==2.0.3
 billiard==4.2.1
 blinker==1.9.0
