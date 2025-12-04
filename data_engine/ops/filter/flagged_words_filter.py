@@ -13,6 +13,13 @@ from ..base_op import OPERATORS, Filter, Sample, Param, DataType
 from ..common import (SPECIAL_CHARACTERS, get_words_from_document,
                       words_refinement)
 from ..op_fusion import INTER_WORDS
+from loguru import logger
+import os
+from data_celery.mongo_tools.tools import (
+    insert_pipline_job_run_task_log_info,
+    insert_pipline_job_run_task_log_warning,
+    insert_pipline_job_run_task_log_error
+)
 
 OP_NAME = 'flagged_words_filter'
 
@@ -63,16 +70,58 @@ class FlaggedWordFilter(Filter):
         self.words_aug_join_char = words_aug_join_char
         self.model_key = None
 
+        # Log flagged_words_filter initialization
+        msg = f"[flagged_words_filter] Initializing with lang='{lang}', tokenization={tokenization}"
+        logger.info(msg)
+        insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
+        
+        msg = f"[flagged_words_filter] flagged_words_dir: {flagged_words_dir}"
+        logger.info(msg)
+        insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
+        
+        # Check if flagged_words file exists before loading
+        expected_file = os.path.join(flagged_words_dir, 'flagged_words.json')
+        if os.path.exists(expected_file):
+            msg = f"[flagged_words_filter] ✓ Found local flagged_words.json at: {expected_file}"
+            logger.info(msg)
+            insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
+        else:
+            msg = f"[flagged_words_filter] ✗ Local flagged_words.json NOT found at: {expected_file}, will attempt download"
+            logger.warning(msg)
+            insert_pipline_job_run_task_log_warning(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
+        
+        # Load flagged words
+        msg = "[flagged_words_filter] Loading flagged words..."
+        logger.info(msg)
+        insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
+        
         self.FLAGGED_WORDS = load_words_asset(words_dir=flagged_words_dir,
                                               words_type='flagged_words')
+        
+        total_words = sum(len(words) for words in self.FLAGGED_WORDS.values())
+        msg = f"[flagged_words_filter] ✓ Successfully loaded flagged_words: {len(self.FLAGGED_WORDS)} languages, {total_words} total words"
+        logger.info(msg)
+        insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
 
         if 'all' not in self.FLAGGED_WORDS:
             self.FLAGGED_WORDS['all'] = [
                 val for vals in self.FLAGGED_WORDS.values() for val in vals
             ]
+        
         if tokenization:
+            msg = f"[flagged_words_filter] Tokenization enabled, preparing sentencepiece model for lang='{lang}'"
+            logger.info(msg)
+            insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
+            
+            msg = f"[flagged_words_filter] Expected model file: {lang}.sp.model"
+            logger.info(msg)
+            insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
+            
             self.model_key = prepare_model(model_type='sentencepiece',
                                            lang=lang)
+            msg = f"[flagged_words_filter] ✓ Successfully prepared sentencepiece model"
+            logger.info(msg)
+            insert_pipline_job_run_task_log_info(self.job_uid, msg, operator_name=OP_NAME, operator_index=self.pipline_index)
 
     def compute_stats(self, sample, context=False):
         # check if it's computed already

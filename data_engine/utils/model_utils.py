@@ -65,38 +65,53 @@ def check_model(model_name, force=False):
         the model file maybe incomplete for some reason, so need to
         download again forcefully.
     """
+    logger.info(f'[check_model] Checking model: {model_name}, force={force}')
+    
     # check for local model
     if os.path.exists(model_name):
+        logger.info(f'[check_model] ✓ Found model at absolute path: {model_name}')
         return model_name
 
     if not os.path.exists(DJMC):
+        logger.info(f'[check_model] Creating models cache directory: {DJMC}')
         os.makedirs(DJMC)
 
     # check if the specified model exists. If it does not exist, download it
     cached_model_path = os.path.join(DJMC, model_name)
+    logger.info(f'[check_model] Expected model path: {cached_model_path}')
+    
+    if os.path.exists(cached_model_path):
+        logger.info(f'[check_model] ✓ Found cached model (no network access needed)')
+        if not force:
+            return cached_model_path
+    
     if force:
         if os.path.exists(cached_model_path):
             os.remove(cached_model_path)
-            logger.info(
-                f'Model [{cached_model_path}] invalid, force to downloading...'
+            logger.warning(
+                f'[check_model] Model [{cached_model_path}] marked invalid, force downloading...'
             )
         else:
-            logger.info(
-                f'Model [{cached_model_path}] not found. Downloading...')
+            logger.warning(
+                f'[check_model] ✗ Model [{cached_model_path}] not found. Attempting download...')
 
         try:
             model_link = os.path.join(MODEL_LINKS, model_name)
+            logger.info(f'[check_model] ⬇ Downloading from primary link: {model_link}')
             wget.download(model_link, cached_model_path, bar=None)
+            logger.info(f'[check_model] ✓ Successfully downloaded to: {cached_model_path}')
         except:  # noqa: E722
             try:
                 backup_model_link = os.path.join(
                     get_backup_model_link(model_name), model_name)
+                logger.warning(f'[check_model] Primary download failed, trying backup: {backup_model_link}')
                 wget.download(backup_model_link, cached_model_path, bar=None)
+                logger.info(f'[check_model] ✓ Successfully downloaded from backup')
             except:  # noqa: E722
                 logger.error(
-                    f'Downloading model [{model_name}] error. '
-                    f'Please retry later or download it into {DJMC} '
-                    f'manually from {model_link} or {backup_model_link} ')
+                    f'[check_model] ✗ Download failed for [{model_name}]. '
+                    f'Please download it manually into {DJMC} '
+                    f'from {model_link} or {backup_model_link} ')
                 exit(1)
     return cached_model_path
 
@@ -127,12 +142,18 @@ def prepare_sentencepiece_model(model_path):
     """
     import sentencepiece
 
-    logger.info('Loading sentencepiece model...')
+    logger.info(f'[prepare_sentencepiece_model] Preparing sentencepiece model: {model_path}')
     sentencepiece_model = sentencepiece.SentencePieceProcessor()
     try:
-        sentencepiece_model.load(check_model(model_path))
+        model_file = check_model(model_path)
+        logger.info(f'[prepare_sentencepiece_model] Loading model from: {model_file}')
+        sentencepiece_model.load(model_file)
+        logger.info(f'[prepare_sentencepiece_model] ✓ Successfully loaded sentencepiece model (no download needed)')
     except:  # noqa: E722
-        sentencepiece_model.load(check_model(model_path, force=True))
+        logger.warning(f'[prepare_sentencepiece_model] First load attempt failed, retrying with force=True...')
+        model_file = check_model(model_path, force=True)
+        sentencepiece_model.load(model_file)
+        logger.info(f'[prepare_sentencepiece_model] ✓ Successfully loaded sentencepiece model after download')
     return sentencepiece_model
 
 
