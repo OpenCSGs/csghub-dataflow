@@ -54,5 +54,26 @@ RUN git config --global user.email "dataflow@opencsg.com" && \
     git config --global user.name "dataflow" && \
     git config --global --add safe.directory '*'
 
+# Download required resources for offline deployment
+# Create default cache directories
+RUN mkdir -p /root/.cache/data_engine/assets && \
+    mkdir -p /root/.cache/data_engine/models
+
+# Download JSON resources (flagged_words and stopwords)
+RUN wget -O /root/.cache/data_engine/assets/flagged_words.json \
+    https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/flagged_words.json && \
+    wget -O /root/.cache/data_engine/assets/stopwords.json \
+    https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/stopwords.json
+
+# Download SentencePiece models (Chinese and English)
+RUN wget -O /root/.cache/data_engine/models/zh.sp.model \
+    https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/models/zh.sp.model && \
+    wget -O /root/.cache/data_engine/models/en.sp.model \
+    https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/models/en.sp.model
+
+# Verify downloaded files
+RUN ls -lh /root/.cache/data_engine/assets/ && \
+    ls -lh /root/.cache/data_engine/models/
+
 # Start fastapi API Server
 EXPOSE 8000
