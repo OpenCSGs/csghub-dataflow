@@ -264,38 +264,17 @@ def list_models(
         # Send request
         response = requests.get(api_url, params=params, timeout=30)
         response.raise_for_status()
-        data = response.json()
+        api_data = response.json()
         
-        # Extract required fields
-        models_data = []
-        if data.get('data'):
-            for model in data['data']:
-                # Find the first tag with category == "task" and get its show_name
-                first_tag_show_name = ''
-                if model.get('tags'):
-                    for tag in model['tags']:
-                        if tag.get('category') == 'task':
-                            first_tag_show_name = tag.get('show_name', '')
-                            break
-                
-                model_info = {
-                    'path': model.get('path', ''),
-                    'updated_at': model.get('updated_at', ''),
-                    'first_tag': first_tag_show_name,
-                    'downloads': model.get('downloads', 0),
-                    'description': model.get('description', '')
-                }
-                models_data.append(model_info)
-        
-        # Build result
+        # Build result in the required format
         result = {
-            'models': models_data,
-            'total': data.get('total', 0),
+            'models': api_data.get('data', []),  # All model data from API
+            'total': api_data.get('total', 0),
             'page': page,
             'per_page': per_page
         }
         
-        logger.info(f'Successfully fetched {len(models_data)} models')
+        logger.info(f'Successfully fetched {len(result["models"])} models')
         return response_success(data=result, msg='获取模型列表成功')
         
     except requests.RequestException as e:
