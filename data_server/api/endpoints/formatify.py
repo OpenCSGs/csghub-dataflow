@@ -222,7 +222,7 @@ def get_progress_from_mongodb_logs(task_uid: str) -> Optional[dict]:
             collection = get_formatity_collection(client, task_uid)
             
             # Find logs containing progress information (sorted by time descending)
-            # Match format: Updated and uploaded meta.json (total: X, success: Y, failure: Z)
+            # Match format: Updated and uploaded meta.log (total: X, success: Y, failure: Z)
             # Or: All files processed. Total: X, Success: Y, Failure: Z
             progress_patterns = [
                 r'\(total:\s*(\d+),\s*success:\s*(\d+),\s*failure:\s*(\d+)\)',  # (total: X, success: Y, failure: Z)

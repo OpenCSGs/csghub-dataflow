@@ -17,6 +17,7 @@ from data_engine.exporter.load import load_exporter
 from data_server.formatify.FormatifyModels import DataFormatTask, DataFormatTaskStatusEnum, DataFormatTypeEnum, \
     getFormatTypeName
 from data_server.database.session import get_sync_session
+from sqlalchemy import text
 from data_engine.ingester.load import load_ingester
 import pandas as pd
 import mammoth
@@ -82,9 +83,45 @@ def format_task(task_id: int, user_name: str, user_token: str):
         converted_dir = Path(tmp_path).joinpath('converted')
         ensure_directory_exists(str(converted_dir))
         
-        # Create meta folder
-        meta_dir = converted_dir / "meta"
-        ensure_directory_exists(str(meta_dir))
+        # Check if skip_meta is enabled
+        # Note: skip_meta=True means upload meta file, skip_meta=False means skip uploading meta file
+        # Get skip_meta from database
+        skip_meta = False  # Default value
+        try:
+            # Refresh the object to ensure we have latest data from database
+            db_session.refresh(format_task)
+            # Get skip_meta value directly from the object
+            skip_meta_value = getattr(format_task, 'skip_meta', None)
+            if skip_meta_value is not None:
+                skip_meta = bool(skip_meta_value)
+            else:
+                # If None, try raw SQL query as fallback
+                result = db_session.execute(text("""
+                    SELECT skip_meta 
+                    FROM data_format_tasks 
+                    WHERE id = :task_id
+                """), {"task_id": format_task.id})
+                row = result.fetchone()
+                if row and row[0] is not None:
+                    skip_meta = bool(row[0])
+                else:
+                    skip_meta = False
+        except Exception as e:
+            # Column doesn't exist in database or query failed, default to False (don't upload meta file)
+            logger.warning(f"Could not read skip_meta from database: {e}, defaulting to False")
+            skip_meta = False
+        
+        insert_formatity_task_log_info(format_task.task_uid, f'skip_meta value: {skip_meta} (True=upload meta.log, False=skip meta.log)')
+        
+        # Create meta folder (only if skip_meta is True, meaning we should upload meta file)
+        meta_dir = None
+        if skip_meta:
+            meta_dir = converted_dir / "meta"
+            ensure_directory_exists(str(meta_dir))
+            insert_formatity_task_log_info(format_task.task_uid, f'Creating meta.log file and meta folder (skip_meta=True)')
+            insert_formatity_task_log_info(format_task.task_uid, f'Created meta directory: {meta_dir}')
+        else:
+            insert_formatity_task_log_info(format_task.task_uid, 'Skipping meta.log file and meta folder creation (skip_meta=False)')
         
         # Get target file extension list
         type_map: Dict[int, List[str]] = {
@@ -119,26 +156,29 @@ def format_task(task_id: int, user_name: str, user_token: str):
         success_count = 0
         failure_count = 0
         
-        # Initialize meta.json data structure (with correct total)
-        # Note: total is set during initialization and not modified afterwards, only success and failure are updated
-        meta_data = {
-            "job_id": format_task.id,
-            "job_name": format_task.name,
-            "source_repo": format_task.from_csg_hub_repo_id,
-            "source_branch": format_task.from_csg_hub_dataset_branch,
-            "files": [],
-            "result": {
-                "total": total_count,  # Fixed total, not modified afterwards
-                "success": 0,
-                "failure": 0
+        # Initialize meta.log data structure (only if skip_meta is True, meaning we should upload meta file)
+        meta_data = None
+        meta_file_path = None
+        if skip_meta:
+            # Note: total is set during initialization and not modified afterwards, only success and failure are updated
+            meta_data = {
+                "job_id": format_task.id,
+                "job_name": format_task.name,
+                "source_repo": format_task.from_csg_hub_repo_id,
+                "source_branch": format_task.from_csg_hub_dataset_branch,
+                "files": [],
+                "result": {
+                    "total": total_count,  # Fixed total, not modified afterwards
+                    "success": 0,
+                    "failure": 0
+                }
             }
-        }
-        meta_file_path = meta_dir / "meta.json"
-        
-        # First upload meta.json file containing total count
-        with open(meta_file_path, 'w', encoding='utf-8') as f:
-            json.dump(meta_data, f, indent=2, ensure_ascii=False)
-        insert_formatity_task_log_info(format_task.task_uid, f'Generated initial meta.json file with total: {total_count} (total will remain fixed)')
+            meta_file_path = meta_dir / "meta.log"
+            
+            # First upload meta.log file containing total count
+            with open(meta_file_path, 'w', encoding='utf-8') as f:
+                json.dump(meta_data, f, indent=2, ensure_ascii=False)
+            insert_formatity_task_log_info(format_task.task_uid, f'Generated initial meta.log file with total: {total_count} (total will remain fixed)')
         
         # Create exporter (reuse the same instance)
         exporter = load_exporter(
@@ -151,58 +191,60 @@ def format_task(task_id: int, user_name: str, user_token: str):
             work_dir=str(work_dir)
         )
         
-        # First upload meta.json containing total count (important: must upload successfully, containing total file count)
+        # First upload meta.log containing total count (only if skip_meta is True, meaning we should upload meta file)
         # If it fails 3 times, the task terminates immediately
         # Note: First attempt doesn't count in retry count, retry counting only starts after failure
-        initial_upload_success = False
-        initial_upload_retry_count = 0
-        max_initial_retries = 3  # Maximum 3 retries for initial upload
-        
-        # First attempt (doesn't count in retry count)
-        try:
-            insert_formatity_task_log_info(format_task.task_uid, f'开始上传初始 meta.json (总文件数: {total_count})')
-            exporter.export_large_folder()
-            insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.json 上传成功 (总文件数: {total_count})')
-            initial_upload_success = True
-            upload_failure_count = 0  # Reset failure count
-        except Exception as e:
-            # First failure, start retrying
-            initial_upload_retry_count += 1
-            error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.json 上传失败: {str(e)}'
-            insert_formatity_task_log_error(format_task.task_uid, error_msg)
-            logger.error(error_msg)
+        initial_upload_success = True  # Default to True if skipping meta (skip_meta=False)
+        if skip_meta:
+            initial_upload_success = False
+            initial_upload_retry_count = 0
+            max_initial_retries = 3  # Maximum 3 retries for initial upload
             
-            # Retry up to 3 times
-            while not initial_upload_success and initial_upload_retry_count < max_initial_retries:
-                try:
-                    initial_upload_retry_count += 1
-                    insert_formatity_task_log_info(format_task.task_uid, f'[重试 {initial_upload_retry_count}/{max_initial_retries}] 开始上传初始 meta.json (总文件数: {total_count})')
-                    exporter.export_large_folder()
-                    insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.json 上传成功 (总文件数: {total_count})')
-                    initial_upload_success = True
-                    upload_failure_count = 0  # Reset failure count
-                except Exception as e:
-                    error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.json 上传失败: {str(e)}'
-                    insert_formatity_task_log_error(format_task.task_uid, error_msg)
-                    logger.error(error_msg)
-                    
-                    if initial_upload_retry_count >= max_initial_retries:
-                        # Initial upload failed 3 times, task terminates immediately
-                        final_error_msg = f'[任务终止] 初始 meta.json 上传失败 {max_initial_retries} 次，任务已停止。总文件数: {total_count}'
+            # First attempt (doesn't count in retry count)
+            try:
+                insert_formatity_task_log_info(format_task.task_uid, f'开始上传初始 meta.log (总文件数: {total_count})')
+                exporter.export_large_folder()
+                insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.log 上传成功 (总文件数: {total_count})')
+                initial_upload_success = True
+                upload_failure_count = 0  # Reset failure count
+            except Exception as e:
+                # First failure, start retrying
+                initial_upload_retry_count += 1
+                error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.log 上传失败: {str(e)}'
+                insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                logger.error(error_msg)
+                
+                # Retry up to 3 times
+                while not initial_upload_success and initial_upload_retry_count < max_initial_retries:
+                    try:
+                        initial_upload_retry_count += 1
+                        insert_formatity_task_log_info(format_task.task_uid, f'[重试 {initial_upload_retry_count}/{max_initial_retries}] 开始上传初始 meta.log (总文件数: {total_count})')
+                        exporter.export_large_folder()
+                        insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.log 上传成功 (总文件数: {total_count})')
+                        initial_upload_success = True
+                        upload_failure_count = 0  # Reset failure count
+                    except Exception as e:
+                        error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.log 上传失败: {str(e)}'
+                        insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                        logger.error(error_msg)
+                        
+                        if initial_upload_retry_count >= max_initial_retries:
+                            # Initial upload failed 3 times, task terminates immediately
+                            final_error_msg = f'[任务终止] 初始 meta.log 上传失败 {max_initial_retries} 次，任务已停止。总文件数: {total_count}'
                         insert_formatity_task_log_error(format_task.task_uid, final_error_msg)
                         logger.error(final_error_msg)
                         format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
                         db_session.commit()
-                        raise RuntimeError(f'初始 meta.json 上传失败 {max_initial_retries} 次，任务已终止。总文件数: {total_count}')
+                        raise RuntimeError(f'初始 meta.log 上传失败 {max_initial_retries} 次，任务已终止。总文件数: {total_count}')
         
         # If initial upload fails, should not continue execution
         if not initial_upload_success:
-            error_msg = f'[任务终止] 初始 meta.json 上传失败，任务已停止。总文件数: {total_count}'
+            error_msg = f'[任务终止] 初始 meta.log 上传失败，任务已停止。总文件数: {total_count}'
             insert_formatity_task_log_error(format_task.task_uid, error_msg)
             logger.error(error_msg)
             format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
             db_session.commit()
-            raise RuntimeError(f'初始 meta.json 上传失败，任务已终止。总文件数: {total_count}')
+            raise RuntimeError(f'初始 meta.log 上传失败，任务已终止。总文件数: {total_count}')
         
         # Select conversion function
         convert_func = None
@@ -279,7 +321,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
                 to_file = result['to']
                 status = result['status']
                 
-                # Calculate relative path of original file (relative to base_path) for meta.json
+                # Calculate relative path of original file (relative to base_path) for meta.log
                 try:
                     from_rel_path = str(Path(from_file).relative_to(base_path))
                 except ValueError:
@@ -322,12 +364,13 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         
                         # Update statistics only after file upload succeeds
                         success_count += 1
-                        meta_data["files"].append({
-                            "from": from_rel_path,
-                            "to": to_rel_path,
-                            "status": "success"
-                        })
-                        meta_data["result"]["success"] = success_count
+                        if skip_meta:
+                            meta_data["files"].append({
+                                "from": from_rel_path,
+                                "to": to_rel_path,
+                                "status": "success"
+                            })
+                            meta_data["result"]["success"] = success_count
                         upload_failure_count = 0  # Reset failure count
                     except Exception as e:
                         upload_failure_count += 1
@@ -335,32 +378,33 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         insert_formatity_task_log_error(format_task.task_uid, error_msg)
                         logger.error(error_msg)
                         
-                        # File upload failed, immediately update statistics to failure and update meta.json
+                        # File upload failed, immediately update statistics to failure and update meta.log
                         failure_count += 1
-                        meta_data["files"].append({
-                            "from": from_rel_path,
-                            "to": to_rel_path,
-                            "status": "failure",
-                            "error": f"上传失败: {str(e)}"
-                        })
-                        meta_data["result"]["failure"] = failure_count
-                        
-                        # Ensure total remains unchanged (should not be modified)
-                        assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
-                        
-                        # Immediately update and upload meta.json (record failed uploads)
-                        with open(meta_file_path, 'w', encoding='utf-8') as f:
-                            json.dump(meta_data, f, indent=2, ensure_ascii=False)
-                        try:
-                            exporter.export_large_folder()
-                            insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.json with upload failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                            # Note: meta.json upload success doesn't reset upload_failure_count, only file upload success resets it
-                        except Exception as e:
-                            # meta.json update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
-                            error_msg = f'meta.json 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
-                            insert_formatity_task_log_error(format_task.task_uid, error_msg)
-                            logger.error(error_msg)
-                            # Don't increment upload_failure_count, doesn't affect file upload failure count
+                        if skip_meta:
+                            meta_data["files"].append({
+                                "from": from_rel_path,
+                                "to": to_rel_path,
+                                "status": "failure",
+                                "error": f"上传失败: {str(e)}"
+                            })
+                            meta_data["result"]["failure"] = failure_count
+                            
+                            # Ensure total remains unchanged (should not be modified)
+                            assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
+                            
+                            # Immediately update and upload meta.log (record failed uploads)
+                            with open(meta_file_path, 'w', encoding='utf-8') as f:
+                                json.dump(meta_data, f, indent=2, ensure_ascii=False)
+                            try:
+                                exporter.export_large_folder()
+                                insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.log with upload failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
+                                # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
+                            except Exception as e:
+                                # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
+                                error_msg = f'meta.log 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
+                                insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                                logger.error(error_msg)
+                                # Don't increment upload_failure_count, doesn't affect file upload failure count
                         
                         # If too many consecutive upload failures, stop task
                         if upload_failure_count >= max_upload_failures:
@@ -371,52 +415,54 @@ def format_task(task_id: int, user_name: str, user_token: str):
                             db_session.commit()
                             raise RuntimeError(f'连续上传失败 {upload_failure_count} 次，任务已停止')
                     
-                    # Ensure total remains unchanged (should not be modified)
-                    assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
-                    
-                    # When file upload succeeds, update and upload meta.json
-                    if upload_failure_count == 0:  # Only update when upload succeeds (already updated above on failure)
+                    # When file upload succeeds, update and upload meta.log (only if skip_meta is True)
+                    if skip_meta:
+                        # Ensure total remains unchanged (should not be modified)
+                        assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
+                        
+                        if upload_failure_count == 0:  # Only update when upload succeeds (already updated above on failure)
+                            with open(meta_file_path, 'w', encoding='utf-8') as f:
+                                json.dump(meta_data, f, indent=2, ensure_ascii=False)
+                            try:
+                                exporter.export_large_folder()
+                                insert_formatity_task_log_info(format_task.task_uid, f'Updated and uploaded meta.log (total: {total_count}, success: {success_count}, failure: {failure_count})')
+                                # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
+                            except Exception as e:
+                                # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
+                                error_msg = f'meta.log 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
+                                insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                                logger.error(error_msg)
+                                # Don't increment upload_failure_count, doesn't affect file upload failure count
+                else:
+                    # Also record failed conversions to meta.log (only if skip_meta is True)
+                    failure_count += 1
+                    if skip_meta:
+                        meta_entry = {
+                            "from": from_rel_path,
+                            "to": None,
+                            "status": "failure"
+                        }
+                        # If there's error message, also record to meta.log
+                        if "error" in result:
+                            meta_entry["error"] = result["error"]
+                        meta_data["files"].append(meta_entry)
+                        meta_data["result"]["failure"] = failure_count
+                        # Ensure total remains unchanged (should not be modified)
+                        assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
+                        
+                        # Update and upload meta.log (include failure records, don't raise exception, only log)
                         with open(meta_file_path, 'w', encoding='utf-8') as f:
                             json.dump(meta_data, f, indent=2, ensure_ascii=False)
                         try:
                             exporter.export_large_folder()
-                            insert_formatity_task_log_info(format_task.task_uid, f'Updated and uploaded meta.json (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                            # Note: meta.json upload success doesn't reset upload_failure_count, only file upload success resets it
+                            insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.log with failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
+                            # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
                         except Exception as e:
-                            # meta.json update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
-                            error_msg = f'meta.json 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
+                            # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
+                            error_msg = f'meta.log 更新上传失败 (转换失败的文件), 错误: {str(e)}'
                             insert_formatity_task_log_error(format_task.task_uid, error_msg)
                             logger.error(error_msg)
                             # Don't increment upload_failure_count, doesn't affect file upload failure count
-                else:
-                    # Also record failed conversions to meta.json
-                    failure_count += 1
-                    meta_entry = {
-                        "from": from_rel_path,
-                        "to": None,
-                        "status": "failure"
-                    }
-                    # If there's error message, also record to meta.json
-                    if "error" in result:
-                        meta_entry["error"] = result["error"]
-                    meta_data["files"].append(meta_entry)
-                    meta_data["result"]["failure"] = failure_count
-                    # Ensure total remains unchanged (should not be modified)
-                    assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
-                    
-                    # Update and upload meta.json (include failure records, don't raise exception, only log)
-                    with open(meta_file_path, 'w', encoding='utf-8') as f:
-                        json.dump(meta_data, f, indent=2, ensure_ascii=False)
-                    try:
-                        exporter.export_large_folder()
-                        insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.json with failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                        # Note: meta.json upload success doesn't reset upload_failure_count, only file upload success resets it
-                    except Exception as e:
-                        # meta.json update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
-                        error_msg = f'meta.json 更新上传失败 (转换失败的文件), 错误: {str(e)}'
-                        insert_formatity_task_log_error(format_task.task_uid, error_msg)
-                        logger.error(error_msg)
-                        # Don't increment upload_failure_count, doesn't affect file upload failure count
         
         insert_formatity_task_log_info(format_task.task_uid, f'All files processed. Total: {total_count}, Success: {success_count}, Failure: {failure_count}')
         format_task.task_status = DataFormatTaskStatusEnum.COMPLETED.value
