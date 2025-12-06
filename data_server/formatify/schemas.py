@@ -17,3 +17,4 @@ class DataFormatTaskRequest(BaseModel):
     to_data_type: Optional[int] = None
     mineru_api_url: Optional[str] = None
     mineru_backend: Optional[str] = None
+    skip_meta: Optional[bool] = False  # 如果为 True，则生成并上传 meta.log 文件；如果为 False，则不生成 meta.log 文件

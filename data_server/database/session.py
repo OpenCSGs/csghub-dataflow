@@ -185,6 +185,31 @@ def add_mineru_backend_column():
                 logger.info("Column 'mineru_backend' added successfully to data_format_tasks table")
 
 
+def add_skip_meta_column():
+    """Add skip_meta column to data_format_tasks table"""
+    try:
+        logger.info("Checking if skip_meta column exists in data_format_tasks table...")
+        with get_sync_session() as session:
+            with session.begin():
+                result = session.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'data_format_tasks' AND column_name = 'skip_meta';
+                """))
+
+                if not result.fetchone():
+                    logger.info("skip_meta column does not exist, adding it...")
+                    session.execute(text("ALTER TABLE data_format_tasks ADD COLUMN skip_meta BOOLEAN DEFAULT FALSE;"))
+                    logger.info("Column 'skip_meta' added successfully to data_format_tasks table")
+                else:
+                    logger.info("Column 'skip_meta' already exists in data_format_tasks table")
+    except Exception as e:
+        logger.error(f"Error adding skip_meta column: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        logger.warning("Continuing despite error...")
+
+
 _initialized = False
 from data_server.database.bean.work import Worker
 from data_server.job.JobModels import Job
@@ -215,9 +240,28 @@ def create_tables():
 
     _initialized = True
 
-    add_first_op_column()
-    add_mineru_api_url_column()
-    add_mineru_backend_column()
+    logger.info("Starting database column migrations...")
+    try:
+        add_first_op_column()
+    except Exception as e:
+        logger.error(f"Error in add_first_op_column: {e}")
+    
+    try:
+        add_mineru_api_url_column()
+    except Exception as e:
+        logger.error(f"Error in add_mineru_api_url_column: {e}")
+    
+    try:
+        add_mineru_backend_column()
+    except Exception as e:
+        logger.error(f"Error in add_mineru_backend_column: {e}")
+    
+    try:
+        add_skip_meta_column()
+    except Exception as e:
+        logger.error(f"Error in add_skip_meta_column: {e}")
+    
+    logger.info("Database column migrations completed")
 def is_table_initialized(table_name: str) -> bool:
     """
     Check if a specific table contains any data.
@@ -236,6 +280,12 @@ def initialize_database():
     Automatically executes one-time deletion on first startup (tracked in deletion_status table).
     This should be called once when the application starts.
     """
+    # Ensure database schema migrations are applied (check on every startup)
+    try:
+        add_skip_meta_column()
+    except Exception as e:
+        logger.warning(f"Could not check/add skip_meta column: {e}")
+    
     tables_to_initialize = [
         'operator_info',
         'operator_config',

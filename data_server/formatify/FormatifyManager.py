@@ -4,6 +4,7 @@ from data_server.formatify.schemas import DataFormatTaskRequest
 import uuid, os
 from typing import List, Tuple, Optional
 from data_server.formatify.FormatifyTask import run_format_task, stop_celery_task
+from loguru import logger
 
 
 def greate_task_uid():
@@ -16,6 +17,10 @@ def create_formatify_task(db_session: Session, dataFormatTask: DataFormatTaskReq
 
     # create db model
     task_uid = greate_task_uid()
+    
+    # Prepare skip_meta value (use provided value or default to False)
+    skip_meta_value = dataFormatTask.skip_meta if dataFormatTask.skip_meta is not None else False
+    
     data_format_task_db = DataFormatTask(name=dataFormatTask.name,
                                          des=dataFormatTask.des,
                                          from_csg_hub_dataset_name=dataFormatTask.from_csg_hub_dataset_name,
@@ -30,9 +35,12 @@ def create_formatify_task(db_session: Session, dataFormatTask: DataFormatTaskReq
                                          to_data_type=dataFormatTask.to_data_type,
                                          mineru_api_url=dataFormatTask.mineru_api_url,
                                          mineru_backend=dataFormatTask.mineru_backend,
+                                         skip_meta=skip_meta_value,
                                          task_uid=task_uid,
                                          task_status=DataFormatTaskStatusEnum.WAITING.value,
                                          owner_id=user_id)
+    
+    logger.info(f"Created task with skip_meta={skip_meta_value} for task {task_uid}")
 
     db_session.add(data_format_task_db)
     db_session.commit()
@@ -76,7 +84,7 @@ def update_formatify_task(db_session: Session, formatify_id: int, dataFormatTask
         'name', 'des', 'from_csg_hub_dataset_name', 'from_csg_hub_dataset_id',
         'from_csg_hub_dataset_branch', 'from_data_type', 'to_csg_hub_dataset_name',
         'to_csg_hub_dataset_id', 'to_csg_hub_dataset_default_branch', 'to_data_type',
-        'mineru_api_url', 'mineru_backend'
+        'mineru_api_url', 'mineru_backend'  # 'skip_meta' temporarily removed
     }
     for field in updatable_fields:
         value = getattr(dataFormatTaskRequest, field, None)

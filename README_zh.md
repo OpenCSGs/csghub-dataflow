@@ -10,6 +10,7 @@ pip install -r docker/requirements.txt
 ### 启动api-server
 ```cmd
 uvicorn data_server.main:app --reload
+uvicorn data_server.main:app --host 0.0.0.0 --port 8001
 ```
 
 ### 启动celery
