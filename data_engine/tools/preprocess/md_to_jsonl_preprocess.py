@@ -147,6 +147,24 @@ class MdToJsonlPreprocess(TOOL):
         else:
             self.min_sentences_per_chunk = 1  # Not used for token-based chunking
         
+        # Get generate_meta_log parameter (default: False)
+        # This controls whether to generate meta.log file
+        generate_meta_log_value = next(
+            (item.value for item in self.tool_def.params if item.name == "generate_meta_log"),
+            False)
+        try:
+            # Handle boolean values (may come as string "true"/"false" or boolean)
+            if isinstance(generate_meta_log_value, str):
+                self.generate_meta_log = generate_meta_log_value.lower() in ('true', '1', 'yes')
+            elif isinstance(generate_meta_log_value, bool):
+                self.generate_meta_log = generate_meta_log_value
+            else:
+                self.generate_meta_log = bool(generate_meta_log_value) if generate_meta_log_value is not None else False
+        except (ValueError, TypeError):
+            self.generate_meta_log = False
+        
+        logger.info(f'[META_LOG] generate_meta_log parameter: {self.generate_meta_log} (will {"generate" if self.generate_meta_log else "NOT generate"} meta.log)')
+        
         # text_key is fixed as 'text' since MD files are converted to this format before passing to tool
         self.text_key = "text"
     
@@ -289,20 +307,23 @@ class MdToJsonlPreprocess(TOOL):
             if not os.path.exists(self.tool_def.export_path):
                 os.makedirs(self.tool_def.export_path, exist_ok=True)
             
-            # Create meta directory for meta.json
-            meta_dir = Path(self.tool_def.export_path) / "meta"
-            meta_dir.mkdir(parents=True, exist_ok=True)
-            meta_file_path = meta_dir / "meta.json"
+            # Create meta directory and file path only if generate_meta_log is True
+            meta_file_path = None
+            if self.generate_meta_log:
+                meta_dir = Path(self.tool_def.export_path) / "meta"
+                meta_dir.mkdir(parents=True, exist_ok=True)
+                meta_file_path = meta_dir / "meta.log"
             
-            # Try to extract job_name from work_dir path
+            # Try to extract job_name from work_dir path (only needed if generating meta.log)
             job_name = self.tool_def.name
-            work_dir_path = Path(self.executed_params.work_dir)
-            if work_dir_path.name and '_' in work_dir_path.name:
-                parts = work_dir_path.name.split('_')
-                if len(parts) >= 2:
-                    potential_job_name = '_'.join(parts[:-1])
-                    if potential_job_name:
-                        job_name = potential_job_name
+            if self.generate_meta_log:
+                work_dir_path = Path(self.executed_params.work_dir)
+                if work_dir_path.name and '_' in work_dir_path.name:
+                    parts = work_dir_path.name.split('_')
+                    if len(parts) >= 2:
+                        potential_job_name = '_'.join(parts[:-1])
+                        if potential_job_name:
+                            job_name = potential_job_name
             
             formatter = load_formatter(
                 dataset_path=self.tool_def.dataset_path,
@@ -334,11 +355,81 @@ class MdToJsonlPreprocess(TOOL):
             dataset.to_json(output_file, force_ascii=False, num_proc=self.tool_def.np)
             logger.info(f'Dataset saved to {output_file} ({num_chunks} chunks)')
             
-            # Generate meta.json for fallback case
-            # Keep original dataset_path (including Chinese chars if any)
-            dataset_path_for_meta = self.tool_def.dataset_path or "unknown"
-            if dataset_path_for_meta != "unknown":
-                dataset_path_for_meta = os.path.basename(dataset_path_for_meta)
+            # Generate meta.log for fallback case (only if generate_meta_log is True)
+            if self.generate_meta_log and meta_file_path:
+                # Keep original dataset_path (including Chinese chars if any)
+                dataset_path_for_meta = self.tool_def.dataset_path or "unknown"
+                if dataset_path_for_meta != "unknown":
+                    dataset_path_for_meta = os.path.basename(dataset_path_for_meta)
+                
+                meta_data = {
+                    "job_name": job_name,
+                    "tool_name": TOOL_NAME,
+                    "source_repo": self.tool_def.repo_id or "",
+                    "source_branch": self.tool_def.branch or "main",
+                    "target_repo": self.tool_def.repo_id or "",
+                    "files": [
+                        {
+                            "from": dataset_path_for_meta,
+                            "to": "x.jsonl",
+                            "status": "success",
+                            "chunks": num_chunks
+                        }
+                    ],
+                    "result": {
+                        "total": 1,
+                        "success": 1,
+                        "failure": 0
+                    },
+                    "parameters": {
+                        "chunk_method": self.chunk_method,
+                        "chunk_size": self.chunk_size,
+                        "overlap": self.overlap,
+                        "hf_tokenizer": self.hf_tokenizer,
+                        "min_sentences_per_chunk": self.min_sentences_per_chunk
+                    },
+                    "statistics": {
+                        "total_chunks": num_chunks,
+                        "avg_chunks_per_file": float(num_chunks)
+                    },
+                    "note": "Fallback mode: processed as single dataset (no MD files found)"
+                }
+                
+                with open(meta_file_path, 'w', encoding='utf-8') as f:
+                    json.dump(meta_data, f, indent=2, ensure_ascii=False)
+                logger.info(f'Generated meta.log for fallback mode (total_chunks: {num_chunks})')
+            
+            return Path(self.tool_def.export_path)
+        
+        logger.info(f'Found {len(md_files)} MD file(s) to process')
+        
+        # Ensure the export directory exists
+        if not os.path.exists(self.tool_def.export_path):
+            os.makedirs(self.tool_def.export_path, exist_ok=True)
+        
+        # Create meta directory and file path only if generate_meta_log is True
+        meta_file_path = None
+        meta_data = None
+        if self.generate_meta_log:
+            meta_dir = Path(self.tool_def.export_path) / "meta"
+            meta_dir.mkdir(parents=True, exist_ok=True)
+            meta_file_path = meta_dir / "meta.log"
+            
+            # Initialize meta.log data structure
+            total_count = len(md_files)
+            base_path = Path(self.tool_def.dataset_path)
+            
+            # Try to extract job_name from work_dir path (format: job_name_uuid)
+            job_name = self.tool_def.name  # Use tool name as default
+            work_dir_path = Path(self.executed_params.work_dir)
+            if work_dir_path.name and '_' in work_dir_path.name:
+                # Try to extract job_name from path like "job_name_uuid"
+                parts = work_dir_path.name.split('_')
+                if len(parts) >= 2:
+                    # Assume last part is uuid, rest is job_name
+                    potential_job_name = '_'.join(parts[:-1])
+                    if potential_job_name:
+                        job_name = potential_job_name
             
             meta_data = {
                 "job_name": job_name,
@@ -346,17 +437,10 @@ class MdToJsonlPreprocess(TOOL):
                 "source_repo": self.tool_def.repo_id or "",
                 "source_branch": self.tool_def.branch or "main",
                 "target_repo": self.tool_def.repo_id or "",
-                "files": [
-                    {
-                        "from": dataset_path_for_meta,
-                        "to": "x.jsonl",
-                        "status": "success",
-                        "chunks": num_chunks
-                    }
-                ],
+                "files": [],
                 "result": {
-                    "total": 1,
-                    "success": 1,
+                    "total": total_count,
+                    "success": 0,
                     "failure": 0
                 },
                 "parameters": {
@@ -367,74 +451,18 @@ class MdToJsonlPreprocess(TOOL):
                     "min_sentences_per_chunk": self.min_sentences_per_chunk
                 },
                 "statistics": {
-                    "total_chunks": num_chunks,
-                    "avg_chunks_per_file": float(num_chunks)
-                },
-                "note": "Fallback mode: processed as single dataset (no MD files found)"
+                    "total_chunks": 0,
+                    "avg_chunks_per_file": 0.0
+                }
             }
             
+            # Save initial meta.log
             with open(meta_file_path, 'w', encoding='utf-8') as f:
                 json.dump(meta_data, f, indent=2, ensure_ascii=False)
-            logger.info(f'Generated meta.json for fallback mode (total_chunks: {num_chunks})')
-            
-            return Path(self.tool_def.export_path)
+            logger.info(f'Generated initial meta.log file with total: {total_count} files')
         
-        logger.info(f'Found {len(md_files)} MD file(s) to process')
-        
-        # Ensure the export directory exists
-        if not os.path.exists(self.tool_def.export_path):
-            os.makedirs(self.tool_def.export_path, exist_ok=True)
-        
-        # Create meta directory for meta.json
-        meta_dir = Path(self.tool_def.export_path) / "meta"
-        meta_dir.mkdir(parents=True, exist_ok=True)
-        meta_file_path = meta_dir / "meta.json"
-        
-        # Initialize meta.json data structure
         total_count = len(md_files)
         base_path = Path(self.tool_def.dataset_path)
-        
-        # Try to extract job_name from work_dir path (format: job_name_uuid)
-        job_name = self.tool_def.name  # Use tool name as default
-        work_dir_path = Path(self.executed_params.work_dir)
-        if work_dir_path.name and '_' in work_dir_path.name:
-            # Try to extract job_name from path like "job_name_uuid"
-            parts = work_dir_path.name.split('_')
-            if len(parts) >= 2:
-                # Assume last part is uuid, rest is job_name
-                potential_job_name = '_'.join(parts[:-1])
-                if potential_job_name:
-                    job_name = potential_job_name
-        
-        meta_data = {
-            "job_name": job_name,
-            "tool_name": TOOL_NAME,
-            "source_repo": self.tool_def.repo_id or "",
-            "source_branch": self.tool_def.branch or "main",
-            "target_repo": self.tool_def.repo_id or "",
-            "files": [],
-            "result": {
-                "total": total_count,
-                "success": 0,
-                "failure": 0
-            },
-            "parameters": {
-                "chunk_method": self.chunk_method,
-                "chunk_size": self.chunk_size,
-                "overlap": self.overlap,
-                "hf_tokenizer": self.hf_tokenizer,
-                "min_sentences_per_chunk": self.min_sentences_per_chunk
-            },
-            "statistics": {
-                "total_chunks": 0,
-                "avg_chunks_per_file": 0.0
-            }
-        }
-        
-        # Save initial meta.json
-        with open(meta_file_path, 'w', encoding='utf-8') as f:
-            json.dump(meta_data, f, indent=2, ensure_ascii=False)
-        logger.info(f'Generated initial meta.json file with total: {total_count} files')
         
         # Create mapper operator (can be reused for all files, using downloaded model path)
         if self.chunk_method == "sentence":
@@ -550,25 +578,26 @@ class MdToJsonlPreprocess(TOOL):
                 processed_files.append(output_file)
                 total_chunks += num_chunks
                 
-                # Record success in meta.json
-                to_rel_path = output_filename.replace('\\', '/')
-                file_record = {
-                    "from": original_rel_path,  # Keep original relative path with Chinese chars
-                    "to": to_rel_path,           # Output filename with Chinese chars preserved
-                    "status": "success",
-                    "chunks": num_chunks
-                }
-                
-                # Add note if numeric suffix was added due to duplicate filename
-                if suffix > 0:
-                    file_record["note"] = f"Duplicate filename, added suffix {suffix}"
-                
-                meta_data["files"].append(file_record)
-                meta_data["result"]["success"] += 1
-                
-                # Update meta.json immediately with UTF-8 encoding
-                with open(meta_file_path, 'w', encoding='utf-8') as f:
-                    json.dump(meta_data, f, indent=2, ensure_ascii=False)
+                # Record success in meta.log (only if generate_meta_log is True)
+                if self.generate_meta_log and meta_data is not None:
+                    to_rel_path = output_filename.replace('\\', '/')
+                    file_record = {
+                        "from": original_rel_path,  # Keep original relative path with Chinese chars
+                        "to": to_rel_path,           # Output filename with Chinese chars preserved
+                        "status": "success",
+                        "chunks": num_chunks
+                    }
+                    
+                    # Add note if numeric suffix was added due to duplicate filename
+                    if suffix > 0:
+                        file_record["note"] = f"Duplicate filename, added suffix {suffix}"
+                    
+                    meta_data["files"].append(file_record)
+                    meta_data["result"]["success"] += 1
+                    
+                    # Update meta.log immediately with UTF-8 encoding
+                    with open(meta_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(meta_data, f, indent=2, ensure_ascii=False)
                 
                 logger.info(f'Successfully saved {os.path.basename(md_file_path)} -> {output_filename} ({num_chunks} chunks)')
                 
@@ -577,39 +606,44 @@ class MdToJsonlPreprocess(TOOL):
                 logger.error(error_msg)
                 failed_files.append((md_file_path, str(e)))
                 
-                # Record failure in meta.json
-                failure_record = {
-                    "from": original_rel_path,  # Keep original path with Chinese chars
-                    "to": None,
-                    "status": "failure",
-                    "error": str(e)
-                }
-                
-                meta_data["files"].append(failure_record)
-                meta_data["result"]["failure"] += 1
-                
-                # Update meta.json immediately with UTF-8 encoding
-                with open(meta_file_path, 'w', encoding='utf-8') as f:
-                    json.dump(meta_data, f, indent=2, ensure_ascii=False)
+                # Record failure in meta.log (only if generate_meta_log is True)
+                if self.generate_meta_log and meta_data is not None:
+                    failure_record = {
+                        "from": original_rel_path,  # Keep original path with Chinese chars
+                        "to": None,
+                        "status": "failure",
+                        "error": str(e)
+                    }
+                    
+                    meta_data["files"].append(failure_record)
+                    meta_data["result"]["failure"] += 1
+                    
+                    # Update meta.log immediately with UTF-8 encoding
+                    with open(meta_file_path, 'w', encoding='utf-8') as f:
+                        json.dump(meta_data, f, indent=2, ensure_ascii=False)
                 
                 # Continue processing other files even if one fails
         
-        # Calculate final statistics
-        success_count = meta_data["result"]["success"]
-        failure_count = meta_data["result"]["failure"]
-        avg_chunks = total_chunks / success_count if success_count > 0 else 0.0
-        
-        meta_data["statistics"]["total_chunks"] = total_chunks
-        meta_data["statistics"]["avg_chunks_per_file"] = round(avg_chunks, 2)
-        
-        # Ensure total remains correct
-        assert meta_data["result"]["total"] == total_count, \
-            f"Total should remain {total_count}, but got {meta_data['result']['total']}"
-        
-        # Save final meta.json with statistics
-        with open(meta_file_path, 'w', encoding='utf-8') as f:
-            json.dump(meta_data, f, indent=2, ensure_ascii=False)
-        logger.info(f'Updated final meta.json (total: {total_count}, success: {success_count}, failure: {failure_count}, total_chunks: {total_chunks})')
+        # Calculate final statistics and save final meta.log (only if generate_meta_log is True)
+        if self.generate_meta_log and meta_data is not None:
+            success_count = meta_data["result"]["success"]
+            failure_count = meta_data["result"]["failure"]
+            avg_chunks = total_chunks / success_count if success_count > 0 else 0.0
+            
+            meta_data["statistics"]["total_chunks"] = total_chunks
+            meta_data["statistics"]["avg_chunks_per_file"] = round(avg_chunks, 2)
+            
+            # Ensure total remains correct
+            assert meta_data["result"]["total"] == total_count, \
+                f"Total should remain {total_count}, but got {meta_data['result']['total']}"
+            
+            # Save final meta.log with statistics
+            with open(meta_file_path, 'w', encoding='utf-8') as f:
+                json.dump(meta_data, f, indent=2, ensure_ascii=False)
+            logger.info(f'Updated final meta.log (total: {total_count}, success: {success_count}, failure: {failure_count}, total_chunks: {total_chunks})')
+        else:
+            success_count = len(processed_files)
+            failure_count = len(failed_files)
         
         # Summary
         logger.info(f'Processing completed. Successfully processed {len(processed_files)} file(s)')
@@ -708,5 +742,6 @@ class MdToJsonlPreprocess(TOOL):
             Param("chunk_size", DataType.PositiveFloat, None, 512),
             Param("overlap", DataType.PositiveFloat, None, 0),
             Param("min_sentences_per_chunk", DataType.PositiveFloat, None, 1),
+            Param("generate_meta_log", DataType.BOOLEAN, None, False),
         ]
 
