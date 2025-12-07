@@ -132,6 +132,7 @@ services:
       - STUDIO_JUMP_URL=http://39.102.214.107:8002
       - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
       - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
+      - MINERU_API_URL=http://111.4.242.20:30000
     ports:
       - "8000:8000"
     depends_on:
