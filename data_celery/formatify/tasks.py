@@ -31,21 +31,79 @@ from pycsghub.utils import (build_csg_headers,
                             get_endpoint,
                             REPO_TYPE_DATASET)
 from data_engine.utils.env import GetHubEndpoint
+
+def _refresh_task_with_reconnect(db_session: Session, format_task: DataFormatTask, task_id: int) -> Tuple[Session, DataFormatTask]:
+    """
+    Refresh task status, automatically reconnect if database connection fails
+    
+    Returns:
+        Tuple[Session, DataFormatTask]: New session and task object
+    """
+    try:
+        db_session.refresh(format_task)
+        return db_session, format_task
+    except Exception as db_error:
+        logger.warning(f"Database connection error during refresh: {db_error}, attempting to reconnect")
+        try:
+            db_session.rollback()
+        except:
+            pass
+        try:
+            db_session.close()
+        except:
+            pass
+        # Re-acquire session and task object
+        new_session = get_sync_session()
+        new_task = FormatifyManager.get_formatify_task(new_session, task_id)
+        return new_session, new_task
+
+def _commit_with_retry(db_session: Session, format_task: DataFormatTask, task_id: int, task_status: int):
+    """
+    Commit database changes, retry with new session if failed
+    
+    Args:
+        db_session: Current database session
+        format_task: Task object
+        task_id: Task ID
+        task_status: Task status to set
+    """
+    try:
+        format_task.task_status = task_status
+        db_session.commit()
+    except Exception as commit_error:
+        logger.error(f"Failed to commit task status: {commit_error}")
+        try:
+            db_session.rollback()
+            db_session.close()
+        except:
+            pass
+        # Try to commit with new session
+        try:
+            new_session = get_sync_session()
+            retry_task = FormatifyManager.get_formatify_task(new_session, task_id)
+            retry_task.task_status = task_status
+            new_session.commit()
+            new_session.close()
+        except Exception as retry_error:
+            logger.error(f"Failed to retry commit: {retry_error}")
+
 @celery_app.task
 def format_task(task_id: int, user_name: str, user_token: str):
 
     tmp_path: str = None
     db_session: Session = None
     format_task: DataFormatTask = None
+    task_uid: str = None  # Save task_uid to avoid accessing database object in finally block
 
     try:
         db_session: Session = get_sync_session()
         format_task: DataFormatTask = FormatifyManager.get_formatify_task(db_session, task_id)
-        tmp_path = get_format_folder_path(format_task.task_uid)
-        insert_formatity_task_log_info(format_task.task_uid, f"Create temporary directory：{tmp_path}")
+        task_uid = format_task.task_uid  # Save to local variable
+        tmp_path = get_format_folder_path(task_uid)
+        insert_formatity_task_log_info(task_uid, f"Create temporary directory：{tmp_path}")
         ensure_directory_exists(tmp_path)
 
-        insert_formatity_task_log_info(format_task.task_uid, f"Start downloading directory....")
+        insert_formatity_task_log_info(task_uid, f"Start downloading directory....")
         try:
             ingesterCSGHUB = load_ingester(
                 dataset_path=tmp_path,
@@ -55,29 +113,27 @@ def format_task(task_id: int, user_name: str, user_token: str):
                 user_token=user_token,
             )
             ingester_result = ingesterCSGHUB.ingest()
-            insert_formatity_task_log_info(format_task.task_uid, f"Download directory completed... Directory address：{ingester_result}")
+            insert_formatity_task_log_info(task_uid, f"Download directory completed... Directory address：{ingester_result}")
         except Exception as e:
             error_msg = str(e)
             # Check if it's an authentication error
             if "401" in error_msg or "Unauthorized" in error_msg:
                 detailed_error = f"认证失败：无法访问数据集 {format_task.from_csg_hub_repo_id}。可能原因：1) Token 已过期，请重新登录；2) Token 无效；3) 没有访问该数据集的权限。错误详情：{error_msg}"
-                insert_formatity_task_log_error(format_task.task_uid, detailed_error)
-                logger.error(f"Authentication failed for task {format_task.task_uid}: {error_msg}")
+                insert_formatity_task_log_error(task_uid, detailed_error)
+                logger.error(f"Authentication failed for task {task_uid}: {error_msg}")
             else:
-                insert_formatity_task_log_error(format_task.task_uid, f"Failed to download dataset: {error_msg}")
-                logger.error(f"Failed to download dataset for task {format_task.task_uid}: {error_msg}")
-            format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
-            db_session.commit()
+                insert_formatity_task_log_error(task_uid, f"Failed to download dataset: {error_msg}")
+                logger.error(f"Failed to download dataset for task {task_uid}: {error_msg}")
+            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
             return
         work_dir = Path(tmp_path).joinpath('work')
         file_bool = search_files(tmp_path,[format_task.from_data_type])
 
         if not file_bool:
-            insert_formatity_task_log_info(format_task.task_uid, f"file not found. task ended....")
-            format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
-            db_session.commit()
+            insert_formatity_task_log_info(task_uid, f"file not found. task ended....")
+            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
             return
-        insert_formatity_task_log_info(format_task.task_uid, f"Start converting file...")
+        insert_formatity_task_log_info(task_uid, f"Start converting file...")
         
         # Create new directory containing only successfully converted files
         converted_dir = Path(tmp_path).joinpath('converted')
@@ -111,17 +167,17 @@ def format_task(task_id: int, user_name: str, user_token: str):
             logger.warning(f"Could not read skip_meta from database: {e}, defaulting to False")
             skip_meta = False
         
-        insert_formatity_task_log_info(format_task.task_uid, f'skip_meta value: {skip_meta} (True=upload meta.log, False=skip meta.log)')
+        insert_formatity_task_log_info(task_uid, f'skip_meta value: {skip_meta} (True=upload meta.log, False=skip meta.log)')
         
         # Create meta folder (only if skip_meta is True, meaning we should upload meta file)
         meta_dir = None
         if skip_meta:
             meta_dir = converted_dir / "meta"
             ensure_directory_exists(str(meta_dir))
-            insert_formatity_task_log_info(format_task.task_uid, f'Creating meta.log file and meta folder (skip_meta=True)')
-            insert_formatity_task_log_info(format_task.task_uid, f'Created meta directory: {meta_dir}')
+            insert_formatity_task_log_info(task_uid, f'Creating meta.log file and meta folder (skip_meta=True)')
+            insert_formatity_task_log_info(task_uid, f'Created meta directory: {meta_dir}')
         else:
-            insert_formatity_task_log_info(format_task.task_uid, 'Skipping meta.log file and meta folder creation (skip_meta=False)')
+            insert_formatity_task_log_info(task_uid, 'Skipping meta.log file and meta folder creation (skip_meta=False)')
         
         # Get target file extension list
         type_map: Dict[int, List[str]] = {
@@ -148,9 +204,9 @@ def format_task(task_id: int, user_name: str, user_token: str):
                     total_count += 1
                     file_list_for_count.append(file_path_full)
         
-        insert_formatity_task_log_info(format_task.task_uid, f'Found {total_count} files to convert')
+        insert_formatity_task_log_info(task_uid, f'Found {total_count} files to convert')
         if total_count > 0:
-            insert_formatity_task_log_info(format_task.task_uid, f'Files to convert: {[Path(f).name for f in file_list_for_count[:5]]}{"..." if total_count > 5 else ""}')
+            insert_formatity_task_log_info(task_uid, f'Files to convert: {[Path(f).name for f in file_list_for_count[:5]]}{"..." if total_count > 5 else ""}')
         
         # Initialize statistics
         success_count = 0
@@ -178,7 +234,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
             # First upload meta.log file containing total count
             with open(meta_file_path, 'w', encoding='utf-8') as f:
                 json.dump(meta_data, f, indent=2, ensure_ascii=False)
-            insert_formatity_task_log_info(format_task.task_uid, f'Generated initial meta.log file with total: {total_count} (total will remain fixed)')
+            insert_formatity_task_log_info(task_uid, f'Generated initial meta.log file with total: {total_count} (total will remain fixed)')
         
         # Create exporter (reuse the same instance)
         exporter = load_exporter(
@@ -202,48 +258,46 @@ def format_task(task_id: int, user_name: str, user_token: str):
             
             # First attempt (doesn't count in retry count)
             try:
-                insert_formatity_task_log_info(format_task.task_uid, f'开始上传初始 meta.log (总文件数: {total_count})')
+                insert_formatity_task_log_info(task_uid, f'开始上传初始 meta.log (总文件数: {total_count})')
                 exporter.export_large_folder()
-                insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.log 上传成功 (总文件数: {total_count})')
+                insert_formatity_task_log_info(task_uid, f'[成功] 初始 meta.log 上传成功 (总文件数: {total_count})')
                 initial_upload_success = True
                 upload_failure_count = 0  # Reset failure count
             except Exception as e:
                 # First failure, start retrying
                 initial_upload_retry_count += 1
                 error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.log 上传失败: {str(e)}'
-                insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                insert_formatity_task_log_error(task_uid, error_msg)
                 logger.error(error_msg)
                 
                 # Retry up to 3 times
                 while not initial_upload_success and initial_upload_retry_count < max_initial_retries:
                     try:
                         initial_upload_retry_count += 1
-                        insert_formatity_task_log_info(format_task.task_uid, f'[重试 {initial_upload_retry_count}/{max_initial_retries}] 开始上传初始 meta.log (总文件数: {total_count})')
+                        insert_formatity_task_log_info(task_uid, f'[重试 {initial_upload_retry_count}/{max_initial_retries}] 开始上传初始 meta.log (总文件数: {total_count})')
                         exporter.export_large_folder()
-                        insert_formatity_task_log_info(format_task.task_uid, f'[成功] 初始 meta.log 上传成功 (总文件数: {total_count})')
+                        insert_formatity_task_log_info(task_uid, f'[成功] 初始 meta.log 上传成功 (总文件数: {total_count})')
                         initial_upload_success = True
                         upload_failure_count = 0  # Reset failure count
                     except Exception as e:
                         error_msg = f'[上传失败 {initial_upload_retry_count}/{max_initial_retries}] 初始 meta.log 上传失败: {str(e)}'
-                        insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                        insert_formatity_task_log_error(task_uid, error_msg)
                         logger.error(error_msg)
                         
                         if initial_upload_retry_count >= max_initial_retries:
                             # Initial upload failed 3 times, task terminates immediately
                             final_error_msg = f'[任务终止] 初始 meta.log 上传失败 {max_initial_retries} 次，任务已停止。总文件数: {total_count}'
-                        insert_formatity_task_log_error(format_task.task_uid, final_error_msg)
+                        insert_formatity_task_log_error(task_uid, final_error_msg)
                         logger.error(final_error_msg)
-                        format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
-                        db_session.commit()
+                        _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
                         raise RuntimeError(f'初始 meta.log 上传失败 {max_initial_retries} 次，任务已终止。总文件数: {total_count}')
         
         # If initial upload fails, should not continue execution
         if not initial_upload_success:
             error_msg = f'[任务终止] 初始 meta.log 上传失败，任务已停止。总文件数: {total_count}'
-            insert_formatity_task_log_error(format_task.task_uid, error_msg)
+            insert_formatity_task_log_error(task_uid, error_msg)
             logger.error(error_msg)
-            format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
-            db_session.commit()
+            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
             raise RuntimeError(f'初始 meta.log 上传失败，任务已终止。总文件数: {total_count}')
         
         # Select conversion function
@@ -271,12 +325,11 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         convert_func = convert_pdf_to_markdown
         
         if convert_func is None:
-            insert_formatity_task_log_error(format_task.task_uid, f"Unsupported conversion: {getFormatTypeName(format_task.from_data_type)} -> {getFormatTypeName(format_task.to_data_type)}")
-            format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
-            db_session.commit()
+            insert_formatity_task_log_error(task_uid, f"Unsupported conversion: {getFormatTypeName(format_task.from_data_type)} -> {getFormatTypeName(format_task.to_data_type)}")
+            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
             return
         
-        insert_formatity_task_log_info(format_task.task_uid,
+        insert_formatity_task_log_info(task_uid,
                                        f"Change the table of contents：{ingester_result}，Source file type：{getFormatTypeName(format_task.from_data_type)}，Target file type：{getFormatTypeName(format_task.to_data_type)}")
         
         # Track used filenames to handle duplicate names
@@ -287,17 +340,17 @@ def format_task(task_id: int, user_name: str, user_token: str):
         max_upload_failures = 3  # Maximum consecutive upload failures
         
         for root, dirs, files in os.walk(ingester_result):
-            # Check if task is stopped
-            db_session.refresh(format_task)
+            # Check if task is stopped - with database connection error handling
+            db_session, format_task = _refresh_task_with_reconnect(db_session, format_task, task_id)
             if format_task.task_status == DataFormatTaskStatusEnum.STOP.value:
-                insert_formatity_task_log_info(format_task.task_uid, "Task stopped by user")
+                insert_formatity_task_log_info(task_uid, "Task stopped by user")
                 return
             
             for file in files:
-                # Check if task is stopped
-                db_session.refresh(format_task)
+                # Check if task is stopped - with database connection error handling
+                db_session, format_task = _refresh_task_with_reconnect(db_session, format_task, task_id)
                 if format_task.task_status == DataFormatTaskStatusEnum.STOP.value:
-                    insert_formatity_task_log_info(format_task.task_uid, "Task stopped by user")
+                    insert_formatity_task_log_info(task_uid, "Task stopped by user")
                     return
                 
                 file_path_full = os.path.join(root, file)
@@ -310,9 +363,9 @@ def format_task(task_id: int, user_name: str, user_token: str):
                 # Execute conversion
                 # For PDF to MD conversion, need to pass mineru_api_url and mineru_backend parameters
                 if format_task.from_data_type == DataFormatTypeEnum.PDF.value and format_task.to_data_type == DataFormatTypeEnum.Markdown.value:
-                    result = convert_func(file_path_full, format_task.task_uid, format_task.mineru_api_url, format_task.mineru_backend)
+                    result = convert_func(file_path_full, task_uid, format_task.mineru_api_url, format_task.mineru_backend)
                 else:
-                    result = convert_func(file_path_full, format_task.task_uid)
+                    result = convert_func(file_path_full, task_uid)
                 
                 if not isinstance(result, dict):
                     continue
@@ -344,12 +397,12 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         used_names[new_name] = 1
                         dst_path = converted_dir / new_name
                         final_to_file = new_name
-                        insert_formatity_task_log_info(format_task.task_uid, f'Copied converted file (renamed due to conflict): {file_name} -> {new_name}')
+                        insert_formatity_task_log_info(task_uid, f'Copied converted file (renamed due to conflict): {file_name} -> {new_name}')
                     else:
                         dst_path = converted_dir / file_name
                         used_names[file_name] = 1
                         final_to_file = file_name
-                        insert_formatity_task_log_info(format_task.task_uid, f'Copied converted file: {file_name}')
+                        insert_formatity_task_log_info(task_uid, f'Copied converted file: {file_name}')
                     
                     # Copy file to converted directory
                     shutil.copy2(src_path, dst_path)
@@ -360,7 +413,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
                     # Immediately upload successfully converted file (update statistics only after successful upload)
                     try:
                         exporter.export_large_folder()
-                        insert_formatity_task_log_info(format_task.task_uid, f'Uploaded converted file: {final_to_file}')
+                        insert_formatity_task_log_info(task_uid, f'Uploaded converted file: {final_to_file}')
                         
                         # Update statistics only after file upload succeeds
                         success_count += 1
@@ -375,7 +428,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
                     except Exception as e:
                         upload_failure_count += 1
                         error_msg = f'[上传失败 {upload_failure_count}/{max_upload_failures}] 文件上传失败: {final_to_file}, 错误: {str(e)}'
-                        insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                        insert_formatity_task_log_error(task_uid, error_msg)
                         logger.error(error_msg)
                         
                         # File upload failed, immediately update statistics to failure and update meta.log
@@ -397,22 +450,21 @@ def format_task(task_id: int, user_name: str, user_token: str):
                                 json.dump(meta_data, f, indent=2, ensure_ascii=False)
                             try:
                                 exporter.export_large_folder()
-                                insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.log with upload failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
+                                insert_formatity_task_log_info(task_uid, f'Updated meta.log with upload failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
                                 # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
                             except Exception as e:
                                 # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
                                 error_msg = f'meta.log 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
-                                insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                                insert_formatity_task_log_error(task_uid, error_msg)
                                 logger.error(error_msg)
                                 # Don't increment upload_failure_count, doesn't affect file upload failure count
                         
                         # If too many consecutive upload failures, stop task
                         if upload_failure_count >= max_upload_failures:
                             error_msg = f'[任务终止] 连续上传失败 {upload_failure_count} 次，任务已停止。'
-                            insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                            insert_formatity_task_log_error(task_uid, error_msg)
                             logger.error(error_msg)
-                            format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
-                            db_session.commit()
+                            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
                             raise RuntimeError(f'连续上传失败 {upload_failure_count} 次，任务已停止')
                     
                     # When file upload succeeds, update and upload meta.log (only if skip_meta is True)
@@ -425,12 +477,12 @@ def format_task(task_id: int, user_name: str, user_token: str):
                                 json.dump(meta_data, f, indent=2, ensure_ascii=False)
                             try:
                                 exporter.export_large_folder()
-                                insert_formatity_task_log_info(format_task.task_uid, f'Updated and uploaded meta.log (total: {total_count}, success: {success_count}, failure: {failure_count})')
+                                insert_formatity_task_log_info(task_uid, f'Updated and uploaded meta.log (total: {total_count}, success: {success_count}, failure: {failure_count})')
                                 # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
                             except Exception as e:
                                 # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
                                 error_msg = f'meta.log 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
-                                insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                                insert_formatity_task_log_error(task_uid, error_msg)
                                 logger.error(error_msg)
                                 # Don't increment upload_failure_count, doesn't affect file upload failure count
                 else:
@@ -455,30 +507,54 @@ def format_task(task_id: int, user_name: str, user_token: str):
                             json.dump(meta_data, f, indent=2, ensure_ascii=False)
                         try:
                             exporter.export_large_folder()
-                            insert_formatity_task_log_info(format_task.task_uid, f'Updated meta.log with failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
+                            insert_formatity_task_log_info(task_uid, f'Updated meta.log with failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
                             # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
                         except Exception as e:
                             # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
                             error_msg = f'meta.log 更新上传失败 (转换失败的文件), 错误: {str(e)}'
-                            insert_formatity_task_log_error(format_task.task_uid, error_msg)
+                            insert_formatity_task_log_error(task_uid, error_msg)
                             logger.error(error_msg)
                             # Don't increment upload_failure_count, doesn't affect file upload failure count
         
-        insert_formatity_task_log_info(format_task.task_uid, f'All files processed. Total: {total_count}, Success: {success_count}, Failure: {failure_count}')
-        format_task.task_status = DataFormatTaskStatusEnum.COMPLETED.value
-        db_session.commit()
+        insert_formatity_task_log_info(task_uid, f'All files processed. Total: {total_count}, Success: {success_count}, Failure: {failure_count}')
+        _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.COMPLETED.value)
         pass
     except Exception as e:
         traceback.print_exc()
-        format_task.task_status = DataFormatTaskStatusEnum.ERROR.value
-        db_session.commit()
-        insert_formatity_task_log_error(format_task.task_uid, f"Conversion task failed: {str(e)}")
+        # Use saved task_uid to avoid accessing potentially invalid database object
+        if task_uid:
+            insert_formatity_task_log_error(task_uid, f"Conversion task failed: {str(e)}")
+        
+        # Try to update task status to ERROR
+        try:
+            if db_session and format_task:
+                _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
+        except Exception as db_error:
+            logger.error(f"Failed to update task status to ERROR: {db_error}")
+            # If current session fails, try with new session
+            try:
+                new_session = get_sync_session()
+                retry_task = FormatifyManager.get_formatify_task(new_session, task_id)
+                retry_task.task_status = DataFormatTaskStatusEnum.ERROR.value
+                new_session.commit()
+                new_session.close()
+            except Exception as retry_error:
+                logger.error(f"Failed to retry update task status: {retry_error}")
     finally:
-        pass
+        # Safely cleanup resources
+        if db_session:
+            try:
+                db_session.close()
+            except:
+                pass
 
         if tmp_path:
-            shutil.rmtree(tmp_path)
-            insert_formatity_task_log_info(format_task.task_uid, f"Delete temporary directory：{tmp_path}")
+            try:
+                shutil.rmtree(tmp_path)
+                if task_uid:  # Use saved task_uid to avoid accessing database object
+                    insert_formatity_task_log_info(task_uid, f"Delete temporary directory：{tmp_path}")
+            except Exception as cleanup_error:
+                logger.error(f"Failed to cleanup temporary directory {tmp_path}: {cleanup_error}")
 
 
 def format_task_func(
@@ -489,8 +565,8 @@ def format_task_func(
         mineru_api_url: Optional[str] = None
 ) -> List[Dict[str, str]]:
     """
-    执行格式转换任务
-    返回转换结果列表，每个结果包含 from, to, status
+    Execute format conversion task
+    Returns a list of conversion results, each containing from, to, status
     """
     insert_formatity_task_log_info(task_uid,
                                    f"Change the table of contents：{tmp_path}，Source file type：{getFormatTypeName(from_type)}，Target file type：{getFormatTypeName(to_type)}")
@@ -522,8 +598,8 @@ def format_task_func(
 
 def traverse_files(file_path: str, func, task_uid, mineru_api_url: Optional[str] = None) -> List[Dict[str, str]]:
     """
-    遍历文件并执行转换函数
-    返回转换结果列表，每个结果包含 from, to, status
+    Traverse files and execute conversion function
+    Returns a list of conversion results, each containing from, to, status
     """
     conversion_results = []
     for root, dirs, files in os.walk(file_path):
