@@ -33,11 +33,12 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
     try:
         db_session = get_sync_session()
         job_celery_uuid = ""
-        for i in range(10):
+        for i in range(15):
             job_obj = get_pipline_job_by_uid(db_session, job_uuid)
             if job_obj is not None and job_obj.job_celery_uuid is not None and job_obj.job_celery_uuid != "":
                 job_celery_uuid = job_obj.job_celery_uuid
                 break
+            db_session.expire_all()
             time.sleep(1)
         if job_celery_uuid == "":
             insert_pipline_job_run_task_log_error(job_uuid, f"not found job celery uuid : {job_uuid}")
@@ -55,9 +56,6 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
             return False
         current_process_id = os.getpid()
         add_process_to_redis(job_uuid,current_process_id, current_ip,work_name)
-        # for i in range(100000):
-        #     print(f"任务进行中:{i}")
-        #     time.sleep(1)
 
         job_obj.task_run_host = current_ip
         job_obj.job_celery_work_name = work_name
@@ -94,16 +92,14 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
     except Exception as e:
         if job_obj is not None and db_session:
             try:
-                # 确保任务状态被正确更新为 FAILED
                 job_obj.status = JOB_STATUS.FAILED.value
                 job_obj.date_finish = get_current_time()
-                db_session.flush()  # 先 flush 确保更改被记录
-                db_session.commit()  # 然后 commit 确保持久化
+                db_session.flush()
+                db_session.commit()
             except Exception as db_error:
                 logger.error(f"Failed to update job status to FAILED in outer exception handler: {db_error}")
                 try:
                     db_session.rollback()
-                    # 重新查询 job 对象
                     job_obj_refreshed = get_pipline_job_by_uid(db_session, job_uuid)
                     if job_obj_refreshed:
                         job_obj_refreshed.status = JOB_STATUS.FAILED.value
@@ -117,10 +113,8 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
     finally:
         if job_obj and db_session:
             try:
-                # 确保完成时间被设置（如果之前没有设置）
                 if not job_obj.date_finish:
                     job_obj.date_finish = get_current_time()
-                # 如果状态还是 PROCESSING，说明异常处理可能没有正确执行，设置为 FAILED
                 if job_obj.status == JOB_STATUS.PROCESSING.value:
                     job_obj.status = JOB_STATUS.FAILED.value
                 db_session.commit()
@@ -228,17 +222,13 @@ def run_pipline_job_task(config,job,session,user_id, user_name, user_token):
         job.export_branch_name = branch_name
         session.commit()
     except Exception as e:
-        # 当操作符执行失败时，确保任务状态被正确更新为 FAILED
         try:
-            # 使用 flush 和 commit 确保状态被正确保存
             job.status = JOB_STATUS.FAILED.value
             job.date_finish = get_current_time()
-            session.flush()  # 先 flush 确保更改被记录
-            session.commit()  # 然后 commit 确保持久化
+            session.flush()
+            session.commit()
         except Exception as db_error:
-            # 如果更新失败，记录错误但继续抛出原始异常
             logger.error(f"Failed to update job status to FAILED: {db_error}")
-            # 尝试回滚并重新提交
             try:
                 session.rollback()
                 from data_celery.db.JobsManager import get_pipline_job_by_uid
