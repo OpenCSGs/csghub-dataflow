@@ -5,6 +5,7 @@ import traceback
 import json
 import subprocess
 import sys
+import re
 from typing import List, Dict, Tuple, Optional
 from data_celery.main import celery_app
 from sqlalchemy.orm import Session
@@ -719,6 +720,76 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
         return None  # Not a target file, return None
 
 
+def fix_email_links_in_html(html_content: str) -> str:
+    """
+    修复HTML中邮箱链接的href属性错误格式
+    
+    Word文档中的邮箱链接可能包含Office特有的 \o 属性，mammoth转换时
+    会将这些属性错误地放到href值中，导致格式如：
+    href="http://email@domain.com&quot; \o &quot;http://email@domain.com"
+    或
+    href="mailto:email@domain.com&quot; \o &quot;mailto:email@domain.com"
+    
+    此函数会提取正确的邮箱地址并修复href属性。
+    
+    Args:
+        html_content: 原始HTML内容
+        
+    Returns:
+        修复后的HTML内容
+    """
+    # 模式1: 匹配 href="http://email@domain.com&quot; \o &quot;http://email@domain.com"
+    # 提取第二个邮箱地址（通常是完整的）
+    pattern1 = r'href="(http://[^@]+@[^"]+?)&quot;\s*\\o\s*&quot;(http://[^"]+?)"'
+    
+    def replace_email_link1(match):
+        email1 = match.group(1)  # 第一个邮箱地址
+        email2 = match.group(2)  # 第二个邮箱地址（通常是完整的）
+        # 使用第二个邮箱地址，提取邮箱部分（去掉http://）
+        email = email2.replace('http://', '')
+        if '@' in email:
+            return f'href="mailto:{email}"'
+        return match.group(0)  # 如果提取失败，保持原样
+    
+    # 模式2: 匹配 href="mailto:email@domain.com&quot; \o &quot;mailto:email@domain.com"
+    # 移除多余的 \o 部分
+    pattern2 = r'href="(mailto:[^@]+@[^"]+?)&quot;\s*\\o\s*&quot;mailto:[^"]+?"'
+    
+    def replace_email_link2(match):
+        email = match.group(1)  # mailto:email@domain.com
+        return f'href="{email}"'
+    
+    # 模式3: 匹配 href="http://@domain.com&quot; \o &quot;http://email@domain.com"
+    # 这种情况第一个是@domain，第二个是完整邮箱
+    pattern3 = r'href="http://@([^"]+?)&quot;\s*\\o\s*&quot;http://([^"]+?)"'
+    
+    def replace_email_link3(match):
+        domain = match.group(1)  # domain部分
+        email = match.group(2)   # 完整邮箱地址
+        if '@' in email:
+            return f'href="mailto:{email}"'
+        return match.group(0)
+    
+    # 模式4: 匹配简单的 http://email@domain.com 格式（没有 \o 部分）
+    # 转换为 mailto: 格式
+    pattern4 = r'href="http://([^@]+@[^/"]+?)"'
+    
+    def replace_email_link4(match):
+        email = match.group(1)
+        # 确保是邮箱格式（包含@和域名）
+        if '@' in email and '.' in email.split('@')[1]:
+            return f'href="mailto:{email}"'
+        return match.group(0)  # 如果不是邮箱，保持原样
+    
+    # 按顺序应用所有修复模式
+    fixed_html = re.sub(pattern1, replace_email_link1, html_content)
+    fixed_html = re.sub(pattern2, replace_email_link2, fixed_html)
+    fixed_html = re.sub(pattern3, replace_email_link3, fixed_html)
+    fixed_html = re.sub(pattern4, replace_email_link4, fixed_html)
+    
+    return fixed_html
+
+
 def convert_word_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]]:
     if file_path.lower().endswith(('.docx', '.doc')):
         insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
@@ -726,6 +797,8 @@ def convert_word_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str
             with open(file_path, "rb") as docx_file:
                 result = mammoth.convert_to_html(docx_file)
                 html_content = result.value
+            # 修复HTML中错误的邮箱链接格式
+            html_content = fix_email_links_in_html(html_content)
             markdown_content = md(html_content)
             markdown_file_path = os.path.splitext(file_path)[0] + '.md'
             with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
