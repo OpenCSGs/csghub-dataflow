@@ -5,6 +5,7 @@ import traceback
 import json
 import subprocess
 import sys
+import re
 from typing import List, Dict, Tuple, Optional
 from data_celery.main import celery_app
 from sqlalchemy.orm import Session
@@ -719,6 +720,110 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
         return None  # Not a target file, return None
 
 
+def fix_email_links_in_html(html_content: str) -> str:
+    """
+    修复HTML中邮箱链接的href属性错误格式
+    
+    Word文档中的邮箱链接可能包含Office特有的 \o 属性，mammoth转换时
+    会将这些属性错误地放到href值中，导致格式如：
+    href="http://@domain.com&quot; \o &quot;http://email@domain.com"
+    或
+    href="http://email1@domain.com&quot; \o &quot;http://email2@domain.com"
+    或
+    href="mailto:email@domain.com&quot; \o &quot;mailto:email@domain.com"
+    
+    注意：HTML中的引号会被编码为 &quot;，\o 前后都有引号和空格。
+    
+    此函数会：
+    1. 移除href属性值中错误的 \o 部分
+    2. 如果检测到两个不同的邮箱地址，会将单个链接替换为两个链接
+    3. 保持原始协议不变（http://保持为http://，mailto:保持为mailto:）
+    4. 使用原始地址，不构造或修改地址内容
+    
+    Args:
+        html_content: 原始HTML内容
+        
+    Returns:
+        修复后的HTML内容，邮箱链接格式已修复，但保持原始协议和地址不变
+    """
+    # 模式1: 匹配 href="http://email1@domain.com&quot; \o &quot;http://email2@domain.com"
+    # 如果两个地址不同，生成两个链接，保持原始协议（http://或mailto:）
+    pattern1 = r'<a href="(http://[^@]+@[^"]+?)&quot;\s*\\o\s*&quot;(http://[^"]+?)">([^<]+)</a>'
+    
+    def replace_email_link1(match):
+        url1 = match.group(1)  # 第一个URL（如 http://email1@domain.com）
+        url2 = match.group(2)   # 第二个URL（如 http://email2@domain.com）
+        link_text = match.group(3)  # 链接文本
+        
+        # 保持原始地址不变（包含http://）
+        address1 = url1  # http://email1@domain.com
+        address2 = url2  # http://email2@domain.com
+        
+        # 如果两个地址不同，生成两个链接，都使用原始链接文本
+        if address1 != address2:
+            return f'<a href="{address1}">{link_text}</a> <a href="{address2}">{link_text}</a>'
+        # 如果相同，只使用一个链接，使用原始链接文本
+        return f'<a href="{address2}">{link_text}</a>'
+    
+    # 模式2: 匹配 href="mailto:email1@domain.com&quot; \o &quot;mailto:email2@domain.com"
+    # 如果两个地址不同，生成两个链接，保持原始协议（mailto:）
+    pattern2 = r'<a href="(mailto:[^@]+@[^"]+?)&quot;\s*\\o\s*&quot;mailto:([^"]+?)">([^<]+)</a>'
+    
+    def replace_email_link2(match):
+        address1_full = match.group(1)  # mailto:email1@domain.com
+        address2 = match.group(2)       # email2@domain.com
+        link_text = match.group(3)   # 链接文本
+        
+        # 保持原始地址不变
+        address1 = address1_full  # mailto:email1@domain.com
+        address2_full = f'mailto:{address2}'  # mailto:email2@domain.com
+        
+        # 如果两个地址不同，生成两个链接，都使用原始链接文本
+        if address1 != address2_full:
+            return f'<a href="{address1}">{link_text}</a> <a href="{address2_full}">{link_text}</a>'
+        # 如果相同，只保留一个链接，使用原始链接文本
+        return f'<a href="{address1}">{link_text}</a>'
+    
+    # 模式3: 匹配 href="http://@domain.com&quot; \o &quot;http://email@domain.com"
+    # 这种情况第一个是@domain，第二个是完整邮箱，如果不同则生成两个链接
+    # 使用原始地址，保持原始协议（http://）
+    pattern3 = r'<a href="http://@([^"]+?)&quot;\s*\\o\s*&quot;http://([^"]+?)">([^<]+)</a>'
+    
+    def replace_email_link3(match):
+        domain = match.group(1)  # domain部分（如 asiainfo.com）
+        email2 = match.group(2)   # 完整邮箱地址（如 liuys9@asiainfo.com）
+        link_text = match.group(3)  # 链接文本（如 @asiainfo.com）
+        
+        # 保持原始地址不变（包含http://）
+        address1 = f'http://@{domain}'  # 第一个地址：http://@asiainfo.com
+        address2 = f'http://{email2}'   # 第二个地址：http://liuys9@asiainfo.com
+        
+        # 如果两个地址不同，生成两个链接，都使用原始链接文本
+        if address1 != address2:
+            return f'<a href="{address1}">{link_text}</a> <a href="{address2}">{link_text}</a>'
+        # 如果相同，只使用一个链接，使用原始链接文本
+        return f'<a href="{address2}">{link_text}</a>'
+    
+    # 模式4: 匹配简单的 http://email@domain.com 格式（没有 \o 部分）
+    # 保持原始协议（http://），不转换为mailto:
+    pattern4 = r'<a href="http://([^@]+@[^/"]+?)">([^<]+)</a>'
+    
+    def replace_email_link4(match):
+        email = match.group(1)
+        link_text = match.group(2)
+        # 保持原始地址不变（包含http://）
+        address = f'http://{email}'
+        return f'<a href="{address}">{link_text}</a>'
+    
+    # 按顺序应用所有修复模式
+    fixed_html = re.sub(pattern1, replace_email_link1, html_content)
+    fixed_html = re.sub(pattern2, replace_email_link2, fixed_html)
+    fixed_html = re.sub(pattern3, replace_email_link3, fixed_html)
+    fixed_html = re.sub(pattern4, replace_email_link4, fixed_html)
+    
+    return fixed_html
+
+
 def convert_word_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]]:
     if file_path.lower().endswith(('.docx', '.doc')):
         insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
@@ -726,6 +831,8 @@ def convert_word_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str
             with open(file_path, "rb") as docx_file:
                 result = mammoth.convert_to_html(docx_file)
                 html_content = result.value
+            # 修复HTML中错误的邮箱链接格式
+            html_content = fix_email_links_in_html(html_content)
             markdown_content = md(html_content)
             markdown_file_path = os.path.splitext(file_path)[0] + '.md'
             with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
