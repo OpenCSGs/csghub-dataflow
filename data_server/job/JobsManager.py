@@ -272,6 +272,8 @@ def run_pipline_job_only(job, user_id, user_name, user_token,session,task_run_ti
         run_time = None
     job_celery_uid = run_pipline_task(job.uuid, user_id, user_name, user_token,run_time)
     job.job_celery_uuid = job_celery_uid
+    job.status = responses.JOB_STATUS.PROCESSING.value
+    session.flush()
     session.commit()
     return True
 

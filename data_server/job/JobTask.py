@@ -12,7 +12,7 @@ def run_pipline_task(task_uuid: str,user_id:int,user_name:str,user_token:str,tas
                                        eta=parse_shanghai_datetime(task_run_time))
         return task_celery.id
     else:
-        task_celery = run_pipline_job.delay(task_uuid, user_id,user_name, user_token)
+        task_celery = run_pipline_job.apply_async(args=[task_uuid, user_id,user_name, user_token], countdown=1)
         return task_celery.id
 
 
