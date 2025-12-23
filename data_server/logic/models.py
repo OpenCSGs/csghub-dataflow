@@ -177,7 +177,10 @@ def make_ops(ops: list) -> list[Op]:
             for key in op_params.keys():
                 for org_param in op.params:
                     if org_param.name == key:
+                        # Set both tempVal and value simultaneously to ensure backward compatibility
+                        org_param.tempVal = op_params[key]
                         org_param.value = op_params[key]
+                        break
 
         ops_obj.append(op)
 
@@ -188,7 +191,10 @@ def reverse_ops(ops: list):
     for op in ops:
         params = {}
         for param in op["params"]:
-            params[param["name"]] = param["value"]
+            # Use tempVal instead of value because tempVal stores the value configured by the user
+            param_value = param.get("tempVal") if param.get("tempVal") is not None else param.get("value")
+            if param_value is not None:
+                params[param["name"]] = param_value
 
         ops_reverse.append({op["name"]: (params if len(params) > 0 else None)})
 

@@ -641,9 +641,21 @@ def update_op_process(cfg, parser):
                                           excludes=['config'])
         temp_args = ['--config', temp_cfg.config[0].absolute] + temp_args
         temp_parser.parse_args(temp_args)
-    except:
-        logger.error('Config initialization failed')
-        raise "Config initialization failed"
+    except SystemExit as e:
+        has_replace_content_mapper = any(
+            'replace_content_mapper' in str(op)
+            for op in cfg.process
+        )
+
+        if has_replace_content_mapper:
+            logger.warning(f'replace_content_mapper bug（jsonargparse Union 类型已知 bug，退出码: {e.code}）')
+        else:
+            logger.error(f'Config initialization failed with exit code: {e.code}')
+            raise Exception(f"Config initialization failed") from e
+    except Exception as e:
+        logger.error(f'Config initialization failed: {str(e)}')
+        raise Exception("Config initialization failed") from e
+
     return cfg
 
 
