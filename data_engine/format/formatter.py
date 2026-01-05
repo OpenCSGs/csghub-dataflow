@@ -61,14 +61,110 @@ class LocalFormatter(BaseFormatter):
         :param global_cfg: global cfg used in consequent processes,
         :return: formatted dataset
         """
+        from datasets.exceptions import DatasetGenerationError
+        
         self.data_files = find_files_with_suffix(self.dataset_path, self.suffixes)
-        datasets = load_dataset(self.type,
-                                data_files={
-                                    key.strip('.'): self.data_files[key]
-                                    for key in self.data_files
-                                },
-                                num_proc=num_proc,
-                                **self.kwargs)
+        
+        # Try to load dataset normally first
+        try:
+            datasets = load_dataset(
+                self.type,
+                data_files={
+                    key.strip('.'): self.data_files[key]
+                    for key in self.data_files
+                },
+                num_proc=num_proc,
+                **self.kwargs
+            )
+        except Exception as e:
+            # Only handle type conversion/inference errors, other errors should be raised directly
+            error_msg = str(e).lower()
+            is_type_error = (
+                isinstance(e, DatasetGenerationError) or
+                'type' in error_msg or
+                'arrow' in error_msg or
+                'inference' in error_msg or
+                'conversion' in error_msg or
+                'schema' in error_msg
+            )
+            
+            if not is_type_error:
+                # Not a type conversion error, raise directly
+                raise
+            
+            # If loading fails due to type inference issues (e.g., empty strings in any field)
+            # Clean the data files by replacing ALL empty strings with None
+            original_error = e
+            logger.warning(f"Dataset loading failed with type conversion error: {e}")
+            logger.info("Attempting to fix data by cleaning empty strings in all fields...")
+            
+            import json
+            import tempfile
+            import os
+            from pathlib import Path
+            
+            # Clean all fields: replace empty strings with None to avoid type conversion errors
+            cleaned_files = {}
+            try:
+                for suffix, file_list in self.data_files.items():
+                    cleaned_list = []
+                    for file_path in file_list:
+                        # Create a temporary cleaned file using NamedTemporaryFile (Windows compatible)
+                        temp_file = tempfile.NamedTemporaryFile(
+                            mode='w', 
+                            suffix=suffix, 
+                            delete=False, 
+                            encoding='utf-8'
+                        )
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f_in:
+                                for line in f_in:
+                                    try:
+                                        data = json.loads(line)
+                                        # Replace empty strings with None for ALL fields
+                                        # This prevents PyArrow type inference errors for any field type
+                                        for field, value in list(data.items()):
+                                            if value == '':
+                                                data[field] = None
+                                        temp_file.write(json.dumps(data, ensure_ascii=False) + '\n')
+                                    except json.JSONDecodeError:
+                                        # If not valid JSON, write as-is
+                                        temp_file.write(line)
+                            temp_file.close()
+                            cleaned_list.append(temp_file.name)
+                        except Exception as cleanup_error:
+                            temp_file.close()
+                            try:
+                                os.unlink(temp_file.name)
+                            except:
+                                pass
+                            raise cleanup_error
+                    cleaned_files[suffix] = cleaned_list
+                
+                # Retry loading with cleaned files
+                datasets = load_dataset(
+                    self.type,
+                    data_files={
+                        key.strip('.'): cleaned_files[key]
+                        for key in cleaned_files
+                    },
+                    num_proc=num_proc,
+                    **self.kwargs
+                )
+                logger.info("Successfully loaded dataset after cleaning all empty strings")
+            except Exception as retry_error:
+                # If retry also fails, raise the original error with context
+                logger.error(f"Failed to load dataset even after cleaning. Original error: {original_error}")
+                logger.error(f"Retry error: {retry_error}")
+                raise original_error from retry_error
+            finally:
+                # Clean up temporary files
+                for file_list in cleaned_files.values():
+                    for temp_file in file_list:
+                        try:
+                            os.unlink(temp_file)
+                        except:
+                            pass
         if self.add_suffix:
             logger.info('Add suffix info into dataset...')
             datasets = add_suffixes(datasets, num_proc)
