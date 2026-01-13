@@ -128,24 +128,33 @@ class TemplateExecutor(TOOL):
                 for param in op.params:
                     if param.name == 'model_url' and self.model_url:
                         param.value = self.model_url
+                        param.tempVal = self.model_url
                     elif param.name == 'dimensions' and self.dimensions:
                         param.value = self.dimensions
+                        param.tempVal = self.dimensions
                     elif param.name == 'model_name' and self.model_name:
                         param.value = self.model_name
+                        param.tempVal = self.model_name
                     elif param.name == 'auth_token' and self.auth_token:
                         param.value = self.auth_token
+                        param.tempVal = self.auth_token
                     elif param.name == 'query_text' and self.query_text:
                         param.value = self.query_text
+                        param.tempVal = self.query_text
                     elif param.name == 'text_key' and self.text_key:
                         param.value = self.text_key
+                        param.tempVal = self.text_key
             if op.name == 'text_high_score_filter':
                 for param in op.params:
                     if param.name == 'min_score' and self.min_score:
                         param.value = float(self.min_score)
+                        param.tempVal = float(self.min_score)
                     elif param.name == 'max_score' and self.max_score:
                         param.value = float(self.max_score)
+                        param.tempVal = float(self.max_score)
                     elif param.name == 'score_field' and self.text_key:
                         param.value = f"{self.text_key}_score"
+                        param.tempVal = f"{self.text_key}_score"
 
 
     @classmethod
