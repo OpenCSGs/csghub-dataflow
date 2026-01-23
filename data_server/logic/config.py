@@ -92,12 +92,24 @@ def build_templates_with_filepath(userid: str = None, isadmin: bool = False):
     return templates
 
 def build_tools(userid: str = None, isadmin: bool = False):
+    # List of tools to hide from frontend (add tool names here)
+    HIDDEN_TOOLS = [
+        'opencsg_scrape_url_data_preprocess_internal',
+        'raw_alpaca_cot_merge_add_meta_preprocess_internal',
+        'raw_stackexchange_to_jsonl_preprocess_internal',
+        'count_token_postprocess_internal',
+    ]
+    
     tools_sorted_by_types = sort_tool_by_types_and_names(TOOLS.modules.items())
     tools: dict(str, TOOL) = {}
 
     tool_class: TOOL = None
     for tool_name, tool_class in tools_sorted_by_types:
         if not tool_class.description:
+            continue
+        
+        # Skip tools in the hidden list
+        if tool_name in HIDDEN_TOOLS:
             continue
 
         params: list[Param] = []

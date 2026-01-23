@@ -3,6 +3,7 @@ from data_engine import is_cuda_available
 from data_engine.utils.process_utils import calculate_np
 from loguru import logger
 import time
+import glob
 from data_engine.utils.registry import Registry
 from data_server.logic.models import Tool as Tool_def, ExecutedParams
 from pathlib import Path
@@ -113,6 +114,10 @@ class TOOL:
             tend = time.time()
             logger.info(f'Tool are done in {tend - tstart:.3f}s.')
 
+        # Count data lines before exporting (before files are deleted)
+        data_count = self._count_data_lines(target_path)
+        logger.info(f'Data count before export: {data_count}')
+
         # 2. data export
         with TRACE_HELPER_TOOL.trace_block(
             "export",
@@ -122,7 +127,60 @@ class TOOL:
             # TODO Add more exporter, for csghub, for local dist .etc
             output_branch_name = self.exporter.export_from_files(target_path)
 
-        return None, output_branch_name    
+        return data_count, output_branch_name
+    
+    def _count_data_lines(self, target_path: Path) -> int:
+        """
+        Count total data lines in all jsonl/json files in the target directory.
+        This must be called before exporter deletes the files.
+        
+        :param target_path: Path to the directory containing output files
+        :return: Total number of data lines
+        """
+        data_count = 0
+        try:
+            if not target_path or not os.path.exists(target_path):
+                return 0
+            
+            target_path_str = str(target_path)
+            
+            # If it's a file, count lines directly
+            if os.path.isfile(target_path_str):
+                with open(target_path_str, 'r', encoding='utf-8') as f:
+                    data_count = sum(1 for _ in f)
+                return data_count
+            
+            # If it's a directory, recursively find all jsonl/json files and count lines
+            # Use recursive glob pattern (**/) to search in subdirectories as well
+            # because Executor's exporter creates _data subdirectory
+            jsonl_files = glob.glob(os.path.join(target_path_str, '**', '*.jsonl'), recursive=True)
+            json_files = glob.glob(os.path.join(target_path_str, '**', '*.json'), recursive=True)
+            
+            # Also check the current directory
+            jsonl_files += glob.glob(os.path.join(target_path_str, '*.jsonl'))
+            json_files += glob.glob(os.path.join(target_path_str, '*.json'))
+            
+            # Remove duplicates
+            all_files = list(set(jsonl_files + json_files))
+            
+            # Filter out stats files (they contain metadata, not data)
+            all_files = [f for f in all_files if '_stats' not in os.path.basename(f)]
+            
+            logger.debug(f'Found {len(all_files)} data files to count: {all_files}')
+            
+            for file_path in all_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        file_lines = sum(1 for _ in f)
+                        data_count += file_lines
+                        logger.debug(f'Counted {file_lines} lines in {file_path}')
+                except Exception as e:
+                    logger.warning(f'Failed to count lines in {file_path}: {e}')
+                    
+        except Exception as e:
+            logger.warning(f'Failed to count data lines: {e}')
+            
+        return data_count    
 
     def process(self) -> Path:
         raise NotImplementedError
