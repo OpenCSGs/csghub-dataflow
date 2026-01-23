@@ -101,6 +101,16 @@ def resource_callback(resource_type: str, event_type: str, resource: dict, job_i
                                     with open(count_filepath, 'r') as f:
                                         data_lines = f.read().strip()
                                         data_count = int(data_lines)
+                            elif job.job_source == "tool":
+                                # Count data lines from output file for tool jobs
+                                export_path = job.data_target
+                                if export_path and os.path.exists(export_path):
+                                    try:
+                                        # Count lines in output file (usually jsonl format)
+                                        with open(export_path, 'r', encoding='utf-8') as f:
+                                            data_count = sum(1 for _ in f)
+                                    except Exception:
+                                        data_count = 0
 
                             setattr(job, 'data_count', data_count)
                             setattr(job, 'process_count', data_count)

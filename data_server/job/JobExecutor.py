@@ -19,6 +19,7 @@ RAY_ENABLE = os.environ.get("RAY_ENABLE", False)
 # Launch Job
 def run_executor(config, job_id, job_name, user_id, user_name, user_token):
     uuid_str = str(uuid.uuid4())
+    job_successfully_completed = False  # Track if job completed successfully
     try:
         if config.dataset_path is not None and os.path.exists(config.dataset_path) and not config.repo_id:
             logger.info(
@@ -99,10 +100,49 @@ def run_executor(config, job_id, job_name, user_id, user_name, user_token):
                     setattr(job, 'data_target', config.export_path)
                     setattr(job, 'work_dir', work_dir)
                     setattr(job, 'status', JOB_STATUS.PROCESSING.value)
-        _, branch_name = executor.run()
+        result_data_count, branch_name = executor.run()
 
-        # write data to db after pipeline finish
+        # write data to db after pipeline finish - MUST be inside try block before finally executes
         date_finish = datetime.datetime.now()
+        if config.job_source == "tool":
+            # Use data_count returned from tool executor (counted before files are deleted)
+            data_count = result_data_count if result_data_count is not None else 0
+            logger.info(f'Tool job {job_id} data_count from executor: {data_count}')
+
+            with get_sync_session() as session:
+                with session.begin():
+                    job = session.query(Job).filter(Job.job_id == job_id).first()
+                    if job:
+                        setattr(job, 'data_count', data_count)
+                        setattr(job, 'process_count', data_count)
+                        setattr(job, 'status', JOB_STATUS.FINISHED.value)
+                        setattr(job, 'export_repo_id', repo_id)
+                        setattr(job, 'export_branch_name', branch_name)
+                        setattr(job, 'date_finish', date_finish)
+                        logger.info(f'Job {job_id} marked as FINISHED (tool job)')
+            job_successfully_completed = True  # Mark as successfully completed
+        else:
+            trace_dir = os.path.join(work_dir, 'trace')
+            first_op = list(cfg.process[0])[0]
+            count_filename = f"count-{first_op}.txt"
+            count_filepath = os.path.join(trace_dir, count_filename)
+            data_count = 0
+            if os.path.exists(count_filepath):
+                with open(count_filepath, 'r') as f:
+                    data_lines = f.read().strip()
+                    data_count = int(data_lines)
+            with get_sync_session() as session:
+                with session.begin():
+                    job = session.query(Job).filter(Job.job_id == job_id).first()
+                    if job:
+                        setattr(job, 'data_count', data_count)
+                        setattr(job, 'status', JOB_STATUS.FINISHED.value)
+                        setattr(job, 'process_count', data_count)
+                        setattr(job, 'export_repo_id', repo_id)
+                        setattr(job, 'export_branch_name', branch_name)
+                        setattr(job, 'date_finish', date_finish)
+                        logger.info(f'Job {job_id} marked as FINISHED (pipeline job)')
+            job_successfully_completed = True  # Mark as successfully completed
     except Exception as e:
         logger.error(f'Job {job_id} execution failed with error: {str(e)}')
         # write data to db after pipeline failed
@@ -120,49 +160,20 @@ def run_executor(config, job_id, job_name, user_id, user_name, user_token):
         return
     finally:
         # Final safety check: ensure job status is not stuck in PROCESSING
-        try:
-            with get_sync_session() as session:
-                job = session.query(Job).filter(Job.job_id == job_id).first()
-                if job and job.status == JOB_STATUS.PROCESSING.value:
-                    logger.warning(
-                        f'Job {job_id} still in PROCESSING state in finally block, '
-                        f'marking as FAILED'
-                    )
-                    job.status = JOB_STATUS.FAILED.value
-                    if not job.date_finish:
-                        job.date_finish = datetime.datetime.now()
-                    session.commit()
-        except Exception as final_error:
-            logger.error(f'Failed to update job {job_id} in finally block: {str(final_error)}')
-
-    # Continue with success path
-    date_finish = datetime.datetime.now()
-    if config.job_source == "tool":
-        with get_sync_session() as session:
-            with session.begin():
-                job = session.query(Job).filter(Job.job_id == job_id).first()
-                if job:
-                    setattr(job, 'status', JOB_STATUS.FINISHED.value)
-                    setattr(job, 'export_repo_id', repo_id)
-                    setattr(job, 'export_branch_name', branch_name)
-                    setattr(job, 'date_finish', date_finish)
-    else:
-        trace_dir = os.path.join(work_dir, 'trace')
-        first_op = list(cfg.process[0])[0]
-        count_filename = f"count-{first_op}.txt"
-        count_filepath = os.path.join(trace_dir, count_filename)
-        data_count = 0
-        if os.path.exists(count_filepath):
-            with open(count_filepath, 'r') as f:
-                data_lines = f.read().strip()
-                data_count = int(data_lines)
-        with get_sync_session() as session:
-            with session.begin():
-                job = session.query(Job).filter(Job.job_id == job_id).first()
-                if job:
-                    setattr(job, 'data_count', data_count)
-                    setattr(job, 'status', JOB_STATUS.FINISHED.value)
-                    setattr(job, 'process_count', data_count)
-                    setattr(job, 'export_repo_id', repo_id)
-                    setattr(job, 'export_branch_name', branch_name)
-                    setattr(job, 'date_finish', date_finish)
+        # Only mark as FAILED if job didn't complete successfully and status is still PROCESSING
+        if not job_successfully_completed:
+            try:
+                with get_sync_session() as session:
+                    with session.begin():
+                        job = session.query(Job).filter(Job.job_id == job_id).first()
+                        if job:
+                            # Only mark as FAILED if still in PROCESSING state
+                            # If already FINISHED or FAILED, don't modify
+                            if job.status == JOB_STATUS.PROCESSING.value:
+                                # Silently mark as FAILED without warning log
+                                # This is a safety check for jobs that didn't complete successfully
+                                job.status = JOB_STATUS.FAILED.value
+                                if not job.date_finish:
+                                    job.date_finish = datetime.datetime.now()
+            except Exception as final_error:
+                logger.error(f'Failed to update job {job_id} in finally block: {str(final_error)}')

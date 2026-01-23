@@ -27,6 +27,23 @@ def check_dict_non_nan(obj):
     return no_nan
 
 
+def replace_nan_with_none(obj):
+    """
+    Recursively replace all NaN values with None in a dict object.
+    This ensures JSON compliance since JSON only supports null, not NaN.
+    :param obj: a dict object that may contain NaN values
+    :return: dict object with NaN values replaced by None
+    """
+    if isinstance(obj, dict):
+        return {key: replace_nan_with_none(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [replace_nan_with_none(item) for item in obj]
+    elif pd.isna(obj) or pd.isnull(obj):
+        return None
+    else:
+        return obj
+
+
 def get_non_nan_features(src_dir):
     """
     Get the first object feature which does not contain Nan value.
@@ -51,6 +68,8 @@ def reformat_jsonl(fp, jsonl_fp, features):
     """
     with jsonlines.open(fp, 'r') as reader:
         objs = [obj for obj in reader]
+    # Replace all NaN values with None to ensure JSON compliance
+    objs = [replace_nan_with_none(obj) for obj in objs]
     ds = Dataset.from_list(objs, features=features)
     ds.to_json(jsonl_fp, force_ascii=False)
 
