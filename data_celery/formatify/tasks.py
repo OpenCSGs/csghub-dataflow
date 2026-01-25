@@ -518,7 +518,19 @@ def format_task(task_id: int, user_name: str, user_token: str):
                             # Don't increment upload_failure_count, doesn't affect file upload failure count
         
         insert_formatity_task_log_info(task_uid, f'All files processed. Total: {total_count}, Success: {success_count}, Failure: {failure_count}')
-        _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.COMPLETED.value)
+        
+        # Determine final task status based on conversion results
+        if success_count == 0 and failure_count > 0:
+            # All files failed to convert
+            insert_formatity_task_log_error(task_uid, f'Task failed: All {failure_count} file(s) failed to convert')
+            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
+        elif failure_count > 0:
+            # Partial failure: some files succeeded, some failed
+            insert_formatity_task_log_info(task_uid, f'Task completed with partial failures: {success_count} succeeded, {failure_count} failed')
+            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.COMPLETED.value)
+        else:
+            # All files converted successfully
+            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.COMPLETED.value)
         pass
     except Exception as e:
         traceback.print_exc()
