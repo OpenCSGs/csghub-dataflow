@@ -61,6 +61,9 @@ class StopWordsFilter(Filter):
         self.words_aug_group_sizes = words_aug_group_sizes
         self.words_aug_join_char = words_aug_join_char
         self.model_key = None
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
         self.STOPWORDS = load_words_asset(words_dir=stopwords_dir,
                                           words_type='stopwords')
@@ -117,6 +120,24 @@ class StopWordsFilter(Filter):
             stopwords_ratio = 1.0
 
         sample[Fields.stats][StatsKeys.stopwords_ratio] = stopwords_ratio
+        
+        # Determine filter result and reason for detailed logging
+        if stopwords_ratio >= self.min_ratio:
+            keep = True
+            reason = 'kept'
+        else:
+            keep = False
+            reason = 'below_min'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.stopwords_ratio}_detail'] = {
+            'ratio': str(stopwords_ratio),
+            'keep': keep,
+            'reason': reason,
+            'num_words': len(words),
+            'stopwords_count': len([word for word in words if word in self.STOPWORDS[self.lang]])
+        }
+        
         return sample
 
     def process(self, sample):

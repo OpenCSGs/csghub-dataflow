@@ -42,6 +42,12 @@ class RemoveWordsWithIncorrectSubstringsMapper(Mapper):
         if tokenization:
             self.model_key = prepare_model(model_type='sentencepiece',
                                            lang=lang)
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.modified_samples = 0
+        self.unmodified_samples = 0
 
     def should_keep_word_with_incorrect_substrings(self, word, substrings):
         word = strip(word, SPECIAL_CHARACTERS)
@@ -49,6 +55,12 @@ class RemoveWordsWithIncorrectSubstringsMapper(Mapper):
         return should_keep
 
     def process(self, sample):
+        # Track statistics
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples += 1
+        
+        original_text = sample[self.text_key]
+        
         if self.tokenization:
             tokenizer = get_model(self.model_key)
             sentences = get_words_from_document(
@@ -69,6 +81,14 @@ class RemoveWordsWithIncorrectSubstringsMapper(Mapper):
                     word, self.substrings)
             ] for subsentence in sentence] for sentence in sentences]
             sample[self.text_key] = merge_on_whitespace_tab_newline(sentences)
+        
+        # Track if modified
+        if getattr(self, 'enable_detailed_logging', False):
+            if sample[self.text_key] != original_text:
+                self.modified_samples += 1
+            else:
+                self.unmodified_samples += 1
+        
         return sample
 
     @classmethod
@@ -93,3 +113,40 @@ class RemoveWordsWithIncorrectSubstringsMapper(Mapper):
             Param("tokenization", DataType.BOOLEAN, None, False),
             Param("substrings", DataType.LIST, None, ['http', 'www', '.com', 'href', '//']),
         ]
+    
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.modified_samples = 0
+            self.unmodified_samples = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        return result
+    
+    def _log_mapper_summary(self):
+        try:
+            from loguru import logger
+            total = self.total_samples
+            modified = self.modified_samples
+            unmodified = self.unmodified_samples
+            if total == 0:
+                return
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Incorrect Substrings Removal Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total samples processed: {total}")
+            self._log_line(f"Samples with incorrect substrings removed: {modified} ({modified/total*100:.2f}%)")
+            self._log_line(f"Samples unchanged: {unmodified} ({unmodified/total*100:.2f}%)")
+            self._log_line("="*60)
+        except Exception as e:
+            import traceback
+            from loguru import logger
+            logger.error(f"Failed to generate mapper logging: {e}\n{traceback.format_exc()}")
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

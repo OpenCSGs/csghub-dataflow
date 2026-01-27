@@ -35,18 +35,43 @@ class SpecialCharactersFilter(Filter):
         super().__init__(*args, **kwargs)
         self.min_ratio = min_ratio
         self.max_ratio = max_ratio
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample):
         # check if it's computed already
         if StatsKeys.special_char_ratio in sample[Fields.stats]:
             return sample
 
+        text = sample[self.text_key]
+        text_len = len(text)
+        special_char_count = len([c for c in text if c in SPECIAL_CHARACTERS])
+        ratio = (special_char_count / text_len) if text_len != 0 else 0.0
+        
         # get ratio of special characters
-        sample[Fields.stats][StatsKeys.special_char_ratio] = (
-            len([c
-                 for c in sample[self.text_key] if c in SPECIAL_CHARACTERS]) /
-            len(sample[self.text_key])) if len(
-                sample[self.text_key]) != 0 else 0.0
+        sample[Fields.stats][StatsKeys.special_char_ratio] = ratio
+        
+        # Determine filter result and reason for detailed logging
+        if ratio < self.min_ratio:
+            keep = False
+            reason = 'below_min'
+        elif ratio > self.max_ratio:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.special_char_ratio}_detail'] = {
+            'ratio': str(ratio),
+            'special_char_count': special_char_count,
+            'text_length': text_len,
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):

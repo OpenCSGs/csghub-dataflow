@@ -94,6 +94,12 @@ class NlpaugEnMapper(Mapper):
                            f'requires more memory and disk space.')
         self.sequential = sequential
         self.keep_original_sample = keep_original_sample
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.augmented_samples = 0
+        self.original_kept = 0
 
         aug_pipeline = []
         # word level
@@ -127,12 +133,18 @@ class NlpaugEnMapper(Mapper):
         # no augmentation methods are opened
         if len(self.aug) == 0:
             if self.keep_original_sample:
+                if getattr(self, 'enable_detailed_logging', False):
+                    self.total_samples += len(samples[self.text_key])
+                    self.original_kept += len(samples[self.text_key])
                 return samples
             else:
                 return {key: [] for key in samples}
 
         texts_to_aug = samples[self.text_key][0]  # batch_size = 1
         res_samples = deepcopy(samples)
+        
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples += 1
 
         # get augmented texts
         if self.sequential:
@@ -146,8 +158,13 @@ class NlpaugEnMapper(Mapper):
         # add augmented samples to the batch with other replicate fields
         if self.keep_original_sample:
             res_samples[self.text_key] += aug_texts
+            if getattr(self, 'enable_detailed_logging', False):
+                self.original_kept += 1
+                self.augmented_samples += len(aug_texts)
         else:
             res_samples[self.text_key] = aug_texts
+            if getattr(self, 'enable_detailed_logging', False):
+                self.augmented_samples += len(aug_texts)
         # add other replicate fields
         for key in res_samples:
             if key != self.text_key:
@@ -189,3 +206,34 @@ class NlpaugEnMapper(Mapper):
             Param("insert_random_char", DataType.BOOLEAN,
                 None, False),
         ]
+    
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.augmented_samples = 0
+            self.original_kept = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        return result
+    
+    def _log_mapper_summary(self):
+        try:
+            from loguru import logger
+            total, augmented, kept = self.total_samples, self.augmented_samples, self.original_kept
+            if total == 0: return
+            final_total = kept + augmented
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] English Augmentation Summary")
+            self._log_line("="*60)
+            self._log_line(f"Original: {total}, Kept: {kept}, Augmented: {augmented}")
+            self._log_line(f"Final Total: {final_total} (Expansion: {final_total/total:.2f}x)")
+            self._log_line("="*60)
+        except: pass
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

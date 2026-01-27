@@ -34,6 +34,9 @@ class MaximumLineLengthFilter(Filter):
         super().__init__(*args, **kwargs)
         self.min_len = min_len
         self.max_len = max_len
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample, context=False):
         # check if it's computed already
@@ -48,8 +51,28 @@ class MaximumLineLengthFilter(Filter):
             if context:
                 sample[Fields.context][context_key] = lines
         line_lengths = list(map(len, lines))
-        sample[Fields.stats][StatsKeys.max_line_length] = max(
-            line_lengths) if line_lengths else 0
+        max_len = max(line_lengths) if line_lengths else 0
+        sample[Fields.stats][StatsKeys.max_line_length] = max_len
+        
+        # Determine filter result and reason for detailed logging
+        if max_len < self.min_len:
+            keep = False
+            reason = 'below_min'
+        elif max_len > self.max_len:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.max_line_length}_detail'] = {
+            'max_line_length': max_len,
+            'num_lines': len(lines),
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):

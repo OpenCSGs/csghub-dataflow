@@ -43,6 +43,10 @@ class TokenNumFilter(Filter):
         self.min_num = min_num
         self.max_num = max_num
         self.hf_tokenizer = hf_tokenizer
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
+        
         self.model_key = prepare_model(
             model_type='huggingface',
             pretrained_model_name_or_path=hf_tokenizer,
@@ -57,7 +61,27 @@ class TokenNumFilter(Filter):
         tokens = get_words_from_document(
             sample[self.text_key],
             token_func=tokenizer.tokenize if tokenizer else None)
-        sample[Fields.stats][StatsKeys.num_token] = len(tokens)
+        num_tokens = len(tokens)
+        sample[Fields.stats][StatsKeys.num_token] = num_tokens
+        
+        # Determine filter result and reason for detailed logging
+        if num_tokens < self.min_num:
+            keep = False
+            reason = 'below_min'
+        elif num_tokens > self.max_num:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.num_token}_detail'] = {
+            'num_tokens': num_tokens,
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):

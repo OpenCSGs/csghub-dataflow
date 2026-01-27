@@ -45,6 +45,10 @@ class LanguageIDScoreFilter(Filter):
             # lang is a list of multiple languages
             self.lang = lang
         self.min_score = min_score
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
+        
         self.model_key = prepare_model(model_type='fasttext')
 
     def compute_stats(self, sample):
@@ -65,6 +69,30 @@ class LanguageIDScoreFilter(Filter):
 
         sample[Fields.stats][StatsKeys.lang] = lang_id
         sample[Fields.stats][StatsKeys.lang_score] = lang_score
+        
+        # Determine filter result and reason for detailed logging
+        if self.lang:
+            lang_match = lang_id in self.lang
+            score_ok = lang_score >= self.min_score
+            keep = lang_match and score_ok
+            if not lang_match:
+                reason = 'lang_not_match'
+            elif not score_ok:
+                reason = 'score_too_low'
+            else:
+                reason = 'kept'
+        else:
+            keep = lang_score >= self.min_score
+            reason = 'kept' if keep else 'score_too_low'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.lang_score}_detail'] = {
+            'lang_id': lang_id,
+            'lang_score': str(lang_score),
+            'keep': keep,
+            'reason': reason,
+            'target_langs': str(self.lang) if self.lang else 'any'
+        }
 
         return sample
 

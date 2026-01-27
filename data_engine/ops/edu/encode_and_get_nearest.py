@@ -192,6 +192,12 @@ class EncodeAndGetNearestSelector(Selector):
         self.model_name = model_name
         self.dimensions = dimensions
         self.client = None
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.encoded_samples = 0
+        self.failed_samples = 0
 
     def _get_client(self):
         """Get or create OpenAI client instance"""
@@ -210,6 +216,9 @@ class EncodeAndGetNearestSelector(Selector):
     def process(self, dataset):
         logger.info(f"[encode_and_get_nearest_mapper] Input: {len(dataset)} samples")
         
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = len(dataset)
+        
         if len(dataset) <= 0:
             logger.info(f"[encode_and_get_nearest_mapper] Output: Empty dataset, returning as-is")
             return dataset
@@ -218,22 +227,32 @@ class EncodeAndGetNearestSelector(Selector):
         first_prompt_list = dataset["first_prompt"].tolist()
         logger.info(f"[encode_and_get_nearest_mapper] Processing {len(first_prompt_list)} prompts for embedding")
         
-        client = self._get_client()
-        embeddings = encode_texts(first_prompt_list, client, self.model_name, self.dimensions)
-        dataset['embedding'] = embeddings
-        logger.info(f"[encode_and_get_nearest_mapper] Generated embeddings with shape: {len(embeddings)}x{len(embeddings[0]) if embeddings else 0}")
+        try:
+            client = self._get_client()
+            embeddings = encode_texts(first_prompt_list, client, self.model_name, self.dimensions)
+            dataset['embedding'] = embeddings
+            logger.info(f"[encode_and_get_nearest_mapper] Generated embeddings with shape: {len(embeddings)}x{len(embeddings[0]) if embeddings else 0}")
 
-        nearest_neighbour = FaissNearestNeighbour()
-        nearest_neighbour.device = None
-        nearest_neighbour.metric_type = faiss.METRIC_INNER_PRODUCT
-        nearest_neighbour.k = 5
-        nearest_neighbour.string_factory = "Flat"
-        nearest_neighbour.train_size = None
-        nearest_neighbour.search_batch_size = 100
+            nearest_neighbour = FaissNearestNeighbour()
+            nearest_neighbour.device = None
+            nearest_neighbour.metric_type = faiss.METRIC_INNER_PRODUCT
+            nearest_neighbour.k = 5
+            nearest_neighbour.string_factory = "Flat"
+            nearest_neighbour.train_size = None
+            nearest_neighbour.search_batch_size = 100
 
-        result = nearest_neighbour.process(dataset)
-        logger.info(f"[encode_and_get_nearest_mapper] Output: {len(result)} samples with nearest neighbor info")
-        return result
+            result = nearest_neighbour.process(dataset)
+            logger.info(f"[encode_and_get_nearest_mapper] Output: {len(result)} samples with nearest neighbor info")
+            
+            if getattr(self, 'enable_detailed_logging', False):
+                self.encoded_samples = len(result)
+            
+            return result
+        except Exception as e:
+            logger.error(f"[encode_and_get_nearest_mapper] Error: {e}")
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples = self.total_samples
+            return dataset
 
     @classmethod
     @property
@@ -258,3 +277,32 @@ class EncodeAndGetNearestSelector(Selector):
             Param("model_name", DataType.STRING, {}, "text-embedding-v4"),
             Param("dimensions", DataType.INTEGER, {}, 1024),
         ]
+
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.encoded_samples = 0
+            self.failed_samples = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_selector_summary()
+        return result
+    
+    def _log_selector_summary(self):
+        try:
+            from loguru import logger
+            total, encoded, failed = self.total_samples, self.encoded_samples, self.failed_samples
+            if total == 0: return
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Encode and Nearest Neighbor Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total: {total}, Encoded: {encoded} ({encoded/total*100:.2f}%), Failed: {failed} ({failed/total*100:.2f}%)")
+            self._log_line("="*60)
+        except: pass
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

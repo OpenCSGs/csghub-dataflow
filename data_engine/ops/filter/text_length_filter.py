@@ -32,13 +32,36 @@ class TextLengthFilter(Filter):
         super().__init__(*args, **kwargs)
         self.min_len = min_len
         self.max_len = max_len
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample):
         # check if it's computed already
         if StatsKeys.text_len in sample[Fields.stats]:
             return sample
 
-        sample[Fields.stats][StatsKeys.text_len] = len(sample[self.text_key])
+        text_len = len(sample[self.text_key])
+        sample[Fields.stats][StatsKeys.text_len] = text_len
+        
+        # Determine filter result and reason for detailed logging
+        if text_len < self.min_len:
+            keep = False
+            reason = 'below_min'
+        elif text_len > self.max_len:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.text_len}_detail'] = {
+            'length': str(text_len),
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):
