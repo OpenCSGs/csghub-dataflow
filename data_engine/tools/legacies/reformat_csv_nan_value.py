@@ -66,6 +66,9 @@ def main(src_dir,
 
     if is_tsv:
         kwargs['sep'] = '\t'
+    else:
+        # 显式设置 CSV 分隔符为逗号，确保正确解析列名
+        kwargs['sep'] = ','
 
     if isinstance(suffixes, str):
         suffixes = [suffixes]
