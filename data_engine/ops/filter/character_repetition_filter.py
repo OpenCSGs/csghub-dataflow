@@ -38,15 +38,34 @@ class CharacterRepetitionFilter(Filter):
         self.n = rep_len
         self.min_ratio = min_ratio
         self.max_ratio = max_ratio
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample):
         # check if it's computed already
         if StatsKeys.char_rep_ratio in sample[Fields.stats]:
             return sample
 
+        text = sample[self.text_key]
+        text_len = len(text)
+        
+        # Handle empty or very short text
+        if text_len < self.n:
+            sample[Fields.stats][StatsKeys.char_rep_ratio] = 0.0
+            # Store detailed information for logging
+            sample[Fields.stats][f'{StatsKeys.char_rep_ratio}_detail'] = {
+                'ratio': '0.0',
+                'keep': False,
+                'reason': 'empty_text',
+                'text_length': text_len,
+                'rep_len': self.n
+            }
+            return sample
+
         char_ngrams = [
-            sample[self.text_key][i:i + self.n]
-            for i in range(len(sample[self.text_key]) - self.n + 1)
+            text[i:i + self.n]
+            for i in range(text_len - self.n + 1)
         ]
         freq_char_ngrams = {}
         for char_ngram in char_ngrams:
@@ -54,20 +73,42 @@ class CharacterRepetitionFilter(Filter):
                 freq_char_ngrams.get(char_ngram, 0) + 1)
 
         if len(freq_char_ngrams) == 0:
-            sample[Fields.stats][StatsKeys.char_rep_ratio] = 0.0
-            return sample
-
-        freq_char_ngrams = sorted(list(freq_char_ngrams.values()),
-                                  reverse=True)
-        num_no_rep_char_ngrams = len(
-            [el for el in freq_char_ngrams if el == 1])
-        num_rep_char_ngrams = min(
-            int(np.sqrt(len(freq_char_ngrams))),
-            len(freq_char_ngrams) - num_no_rep_char_ngrams,
-        )
-        sample[Fields.stats][StatsKeys.char_rep_ratio] = (sum(
-            freq_char_ngrams[:num_rep_char_ngrams]) / sum(freq_char_ngrams)) \
-            if sum(freq_char_ngrams) != 0 else 0.0
+            char_rep_ratio = 0.0
+        else:
+            freq_char_ngrams = sorted(list(freq_char_ngrams.values()),
+                                      reverse=True)
+            num_no_rep_char_ngrams = len(
+                [el for el in freq_char_ngrams if el == 1])
+            num_rep_char_ngrams = min(
+                int(np.sqrt(len(freq_char_ngrams))),
+                len(freq_char_ngrams) - num_no_rep_char_ngrams,
+            )
+            char_rep_ratio = (sum(
+                freq_char_ngrams[:num_rep_char_ngrams]) / sum(freq_char_ngrams)) \
+                if sum(freq_char_ngrams) != 0 else 0.0
+        
+        sample[Fields.stats][StatsKeys.char_rep_ratio] = char_rep_ratio
+        
+        # Determine filter result and reason for detailed logging
+        if char_rep_ratio < self.min_ratio:
+            keep = False
+            reason = 'below_min'
+        elif char_rep_ratio > self.max_ratio:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.char_rep_ratio}_detail'] = {
+            'ratio': str(char_rep_ratio),
+            'keep': keep,
+            'reason': reason,
+            'text_length': text_len,
+            'rep_len': self.n
+        }
+        
         return sample
 
     def process(self, sample):

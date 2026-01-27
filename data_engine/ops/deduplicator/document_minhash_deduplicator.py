@@ -202,6 +202,9 @@ class DocumentMinhashDeduplicator(Deduplicator):
             ) for _ in range(self.num_permutation)],
             dtype=np.uint64,
         ).T
+        
+        # Enable detailed logging for this deduplicator
+        self.enable_detailed_logging = True
 
     def compute_hash(self, sample):
         """
@@ -276,8 +279,13 @@ class DocumentMinhashDeduplicator(Deduplicator):
             open.
         :return: deduplicated dataset and the sampled duplicate pairs.
         """
+        # Store original dataset size for logging
+        original_size = len(dataset)
+        
         # no need to deduplicate because too few samples
         if len(dataset) <= 1:
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_dedup_summary(original_size, original_size, 0, 0)
             return dataset, {}
 
         minhashes = dataset[HashKeys.minhash]
@@ -307,7 +315,9 @@ class DocumentMinhashDeduplicator(Deduplicator):
                 idx = min(cluster)
                 for x in cluster:
                     union_find.union(x, idx)
-        logger.info(f'There are {len(set(union_find.parent.values()))} '
+        
+        num_clusters = len(set(union_find.parent.values()))
+        logger.info(f'There are {num_clusters} '
                     f'clusters that includes multiple near-duplicate samples.')
 
         # record the duplicate sample pairs
@@ -335,6 +345,12 @@ class DocumentMinhashDeduplicator(Deduplicator):
             with_indices=True,
         )
         logger.info(f'Keep {len(dataset)} samples after MinHash dedup.')
+        
+        # Generate detailed logging if enabled
+        if getattr(self, 'enable_detailed_logging', False):
+            deduplicated_size = len(dataset)
+            self._log_dedup_summary(original_size, deduplicated_size,
+                                   original_size - deduplicated_size, num_clusters)
 
         return dataset, dup_pairs
 
@@ -372,3 +388,67 @@ class DocumentMinhashDeduplicator(Deduplicator):
             Param("num_rows_per_band", DataType.PositiveFloat, None, None),
             Param("tokenizer_model", DataType.STRING, None, None),
         ]
+    
+    def _log_dedup_summary(self, total, kept, removed, num_clusters):
+        """
+        Generate and log summary statistics for MinHash deduplication.
+        
+        :param total: Total number of documents before deduplication
+        :param kept: Number of unique documents kept
+        :param removed: Number of duplicate documents removed
+        :param num_clusters: Number of clusters found
+        """
+        try:
+            from loguru import logger
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            
+            # Output logs line by line for better display in UI
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] MinHash Deduplication Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total documents: {total}")
+            self._log_line(f"Unique documents kept: {kept} ({kept/total*100:.2f}%)")
+            self._log_line(f"Duplicate documents removed: {removed} ({removed/total*100:.2f}%)")
+            self._log_line("")
+            self._log_line(f"Similarity clusters found: {num_clusters}")
+            
+            # Add deduplicator-specific parameters
+            self._log_line("")
+            self._log_line("Deduplicator parameters:")
+            self._log_line(f"  - Tokenization: {self.tokenization}")
+            self._log_line(f"  - Window size: {self.window_size}")
+            self._log_line(f"  - Lowercase: {self.lowercase}")
+            self._log_line(f"  - Num permutations: {self.num_permutation}")
+            self._log_line(f"  - Jaccard threshold: {self.jaccard_threshold}")
+            self._log_line(f"  - Num bands: {self.num_bands}")
+            self._log_line(f"  - Rows per band: {self.num_rows_per_band}")
+            self._log_line(f"  - Hash algorithm: MinHash LSH")
+            
+            self._log_line("="*60)
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Failed to generate MinHash deduplication logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            if hasattr(self, 'job_uid') and self.job_uid:
+                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                insert_pipline_job_run_task_log_error(
+                    self.job_uid,
+                    error_msg,
+                    operator_name=self._name,
+                    operator_index=self.pipline_index
+                )
+    
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        from loguru import logger
+        logger.info(message)
+        # Only write to MongoDB if job_uid exists
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )

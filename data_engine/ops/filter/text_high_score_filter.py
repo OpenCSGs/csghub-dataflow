@@ -17,15 +17,53 @@ class TextHighScoreFilter(Filter):
         self.score_field = score_field
         self.min_score = min_score
         self.max_score = max_score
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample, context=False):
         if StatsKeys.high_score in sample[Fields.stats]:
             return sample
 
         score = sample[self.score_field]
-        stats = (self.min_score <= score < self.max_score) if isinstance(score, (int, float)) else False
+        
+        # Determine filter result and reason
+        if score is None:
+            # Field exists but value is null
+            keep = False
+            reason = 'null_value'
+            score_value = 'null'
+        elif not isinstance(score, (int, float)):
+            # Invalid type (string, dict, list, etc.)
+            keep = False
+            reason = 'invalid_type'
+            score_value = str(score)
+        elif score < self.min_score:
+            # Score below minimum threshold
+            keep = False
+            reason = 'below_min'
+            score_value = str(score)
+        elif score >= self.max_score:
+            # Score at or above maximum threshold
+            keep = False
+            reason = 'above_max'
+            score_value = str(score)
+        else:
+            # Score within valid range
+            keep = True
+            reason = 'kept'
+            score_value = str(score)
 
-        sample[Fields.stats][StatsKeys.high_score] = stats
+        # Store result in stats
+        sample[Fields.stats][StatsKeys.high_score] = keep
+        
+        # Store detailed information for logging (all as strings to avoid type issues)
+        sample[Fields.stats][f'{StatsKeys.high_score}_detail'] = {
+            'score': score_value,
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):

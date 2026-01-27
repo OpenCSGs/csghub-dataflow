@@ -64,11 +64,20 @@ class GenerateCodeQAPairMapper(Mapper):
         if sampling_params is None:
             sampling_params = {'temperature': 0.2, 'top_k': 10, 'top_p': 0.95}
         self.sampling_params = sampling_params
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.generated_samples = 0
+        self.failed_samples = 0
 
     def build_prompt(self, code_snippet):
         return DEFAULT_PROMPT_TEMPLATE.format(input_data=code_snippet)
 
     def process(self, sample=None, rank=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples += 1
+        
         try:
             data = sample[self.text_key]
             input_prompt = self.build_prompt(data)
@@ -113,6 +122,8 @@ class GenerateCodeQAPairMapper(Mapper):
             
             if 'choices' not in result:
                 logger.error(f'API response missing "choices" field: {result}')
+                if getattr(self, 'enable_detailed_logging', False):
+                    self.failed_samples += 1
                 return sample
                 
             response_str = result['choices'][0]['message']['content']
@@ -128,18 +139,27 @@ class GenerateCodeQAPairMapper(Mapper):
                     'response': data
                 }
             }
+            
+            if getattr(self, 'enable_detailed_logging', False):
+                self.generated_samples += 1
 
             return message_list
 
         except requests.exceptions.RequestException as e:
             logger.error(f'HTTP request error: {e}')
             logger.warning(f'API call failed, returning original sample')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples += 1
         except (KeyError, IndexError, json.JSONDecodeError) as e:
             logger.error(f'API response parsing error: {e}')
             logger.warning(f'Response parsing failed, returning original sample')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples += 1
         except Exception as e:
             logger.error(f'Unexpected error: {e}')
             logger.warning(f'Exception occurred, returning original sample')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples += 1
 
         # Return original sample on failure
         return sample
@@ -176,3 +196,32 @@ class GenerateCodeQAPairMapper(Mapper):
             }, "deepseek-chat"),
             Param("auth_token", DataType.STRING, {}, ""),
         ]
+    
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.generated_samples = 0
+            self.failed_samples = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        return result
+    
+    def _log_mapper_summary(self):
+        try:
+            from loguru import logger
+            total, generated, failed = self.total_samples, self.generated_samples, self.failed_samples
+            if total == 0: return
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Code QA Generation Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total: {total}, Generated: {generated} ({generated/total*100:.2f}%), Failed: {failed} ({failed/total*100:.2f}%)")
+            self._log_line("="*60)
+        except: pass
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

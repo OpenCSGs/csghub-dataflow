@@ -33,6 +33,12 @@ class ReplaceContentMapper(Mapper):
         elif isinstance(pattern, list):
             for p in pattern:
                 self.compiled_patterns.append(self._prepare_pattern(p))
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.modified_samples = 0
+        self.unmodified_samples = 0
 
     def _prepare_pattern(self, pattern: str) -> re.Pattern:
         """Prepare the regular expression pattern."""
@@ -43,7 +49,13 @@ class ReplaceContentMapper(Mapper):
         return re.compile(pattern, flags=re.DOTALL)
 
     def process(self, sample):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples += 1
+        original_text = sample[self.text_key]
+        
         if self.pattern is None:
+            if getattr(self, 'enable_detailed_logging', False):
+                self.unmodified_samples += 1
             return sample
 
         for i, pattern in enumerate(self.compiled_patterns):
@@ -59,6 +71,11 @@ class ReplaceContentMapper(Mapper):
             sample[self.text_key] = pattern.sub(replacement,
                                                 sample[self.text_key])
 
+        if getattr(self, 'enable_detailed_logging', False):
+            if sample[self.text_key] != original_text:
+                self.modified_samples += 1
+            else:
+                self.unmodified_samples += 1
         return sample
 
     @classmethod
@@ -81,3 +98,32 @@ class ReplaceContentMapper(Mapper):
             Param("pattern", DataType.LIST, None, []),
             Param("repl", DataType.LIST, None, [])
         ]
+    
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.modified_samples = 0
+            self.unmodified_samples = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        return result
+    
+    def _log_mapper_summary(self):
+        try:
+            from loguru import logger
+            total, modified, unmodified = self.total_samples, self.modified_samples, self.unmodified_samples
+            if total == 0: return
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Replace Content Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total: {total}, Replaced: {modified} ({modified/total*100:.2f}%), Unchanged: {unmodified} ({unmodified/total*100:.2f}%)")
+            self._log_line("="*60)
+        except: pass
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

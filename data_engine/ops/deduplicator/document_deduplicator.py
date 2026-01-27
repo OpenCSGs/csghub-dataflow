@@ -41,6 +41,9 @@ class DocumentDeduplicator(Deduplicator):
         self.remove_non_character_regex = re.compile(
             f'\s+|\d+|[{re.escape(string.punctuation)}]'  # noqa: W605
         ) if ignore_non_character else None
+        
+        # Enable detailed logging for this deduplicator
+        self.enable_detailed_logging = True
 
     def compute_hash(self, sample):
         """
@@ -74,16 +77,24 @@ class DocumentDeduplicator(Deduplicator):
             open.
         :return: deduplicated dataset and the sampled duplicate pairs.
         """
+        # Store original dataset size for logging
+        original_size = len(dataset)
+        
         # no need to deduplicate because too few samples
         if len(dataset) <= 1:
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_dedup_summary(original_size, original_size, 0, {})
             return dataset, {}
 
         dup_hashes = None
+        hash2ids: Dict[int, Set[int]] = defaultdict(set)
+        
+        # Build hash to sample IDs mapping
+        for sid, hash_val in enumerate(dataset[HashKeys.hash]):
+            hash2ids[hash_val].add(sid)
+        
         if show_num > 0:
             # sample duplicate pairs
-            hash2ids: Dict[int, Set[int]] = defaultdict(set)
-            for sid, hash_val in enumerate(dataset[HashKeys.hash]):
-                hash2ids[hash_val].add(sid)
             dup_samples = sorted(list(hash2ids.items()),
                                  key=lambda x: len(x[1]),
                                  reverse=True)
@@ -109,6 +120,13 @@ class DocumentDeduplicator(Deduplicator):
             _filter_dup_helper,
             fn_kwargs=dict(hashes=hashes),
             load_from_cache_file=False if show_num > 0 else True)  # num_proc=1
+        
+        # Generate detailed logging if enabled
+        if getattr(self, 'enable_detailed_logging', False):
+            deduplicated_size = len(dataset)
+            self._log_dedup_summary(original_size, deduplicated_size, 
+                                   original_size - deduplicated_size, hash2ids)
+        
         return dataset, dup_pairs
 
     @classmethod
@@ -143,3 +161,71 @@ class DocumentDeduplicator(Deduplicator):
             Param("lowercase", DataType.BOOLEAN, None, False),
             Param("ignore_non_character", DataType.BOOLEAN, None, False)
         ]
+    
+    def _log_dedup_summary(self, total, kept, removed, hash2ids):
+        """
+        Generate and log summary statistics for deduplication.
+        
+        :param total: Total number of documents before deduplication
+        :param kept: Number of unique documents kept
+        :param removed: Number of duplicate documents removed
+        :param hash2ids: Mapping from hash values to document IDs
+        """
+        try:
+            from loguru import logger
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            
+            # Calculate statistics
+            unique_hashes = len(hash2ids)
+            duplicate_groups = sum(1 for ids in hash2ids.values() if len(ids) > 1)
+            
+            # Find largest duplicate group
+            max_dup_count = max((len(ids) for ids in hash2ids.values()), default=0)
+            
+            # Output logs line by line for better display in UI
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Deduplication Summary Statistics")
+            self._log_line("="*60)
+            self._log_line(f"Total documents: {total}")
+            self._log_line(f"Unique documents kept: {kept} ({kept/total*100:.2f}%)")
+            self._log_line(f"Duplicate documents removed: {removed} ({removed/total*100:.2f}%)")
+            self._log_line("")
+            self._log_line(f"Unique hash values: {unique_hashes}")
+            self._log_line(f"Duplicate groups: {duplicate_groups}")
+            self._log_line(f"Largest duplicate group: {max_dup_count} documents")
+            
+            # Add deduplicator-specific parameters
+            self._log_line("")
+            self._log_line("Deduplicator parameters:")
+            self._log_line(f"  - Lowercase: {self.lowercase}")
+            self._log_line(f"  - Ignore non-character: {self.remove_non_character_regex is not None}")
+            self._log_line(f"  - Hash algorithm: MD5")
+            
+            self._log_line("="*60)
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Failed to generate deduplication logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            if hasattr(self, 'job_uid') and self.job_uid:
+                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                insert_pipline_job_run_task_log_error(
+                    self.job_uid,
+                    error_msg,
+                    operator_name=self._name,
+                    operator_index=self.pipline_index
+                )
+    
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        from loguru import logger
+        logger.info(message)
+        # Only write to MongoDB if job_uid exists
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )

@@ -35,6 +35,9 @@ class TextBloomFilter(Filter):
             "sha256": sha256_digest,  # type: ignore
             "xxh3": xxh3_128_digest,  # type: ignore
         }[hash_func]
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
         self.bf = ScalableBloomFilter(
             initial_capacity=initial_capacity,
@@ -61,6 +64,19 @@ class TextBloomFilter(Filter):
         # Record whether it is a duplicate
         sample[Fields.stats][StatsKeys.bloom] = is_duplicate
         self.flags.add(is_duplicate)
+        
+        # Determine filter result and reason for detailed logging
+        keep = not is_duplicate
+        reason = 'duplicate' if is_duplicate else 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.bloom}_detail'] = {
+            'is_duplicate': is_duplicate,
+            'keep': keep,
+            'reason': reason,
+            'hash_value': hash_value[:16] if len(hash_value) > 16 else hash_value  # Truncate for readability
+        }
+        
         return sample
 
     def process(self, sample):

@@ -28,6 +28,9 @@ class DedupAndSaveDeduplicator(Deduplicator):
         self.nn_indices_key = nn_indices_key
         self.nn_scores_key = nn_scores_key
         self.fields_to_filter = fields_to_filter or ['embedding', 'nn_indices', 'nn_scores', 'text', 'instruction', 'response']
+        
+        # Enable detailed logging for this deduplicator
+        self.enable_detailed_logging = True
 
     def compute_hash(self, sample):
         # This method is a placeholder to fit the framework.
@@ -40,10 +43,15 @@ class DedupAndSaveDeduplicator(Deduplicator):
         return sample
 
     def process(self, dataset, show_num=0):
-        print(f"[dedup_and_save_deduplicator] Input: {len(dataset)} samples")
+        # Store original dataset size for logging
+        original_size = len(dataset)
+        
+        print(f"[dedup_and_save_deduplicator] Input: {original_size} samples")
         
         if len(dataset) <= 1:
             print(f"[dedup_and_save_deduplicator] Output: {len(dataset)} samples (no deduplication needed)")
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_dedup_summary(original_size, original_size, 0, 0)
             return dataset, {}
 
         # Convert dataset to pandas DataFrame for easier graph processing
@@ -118,6 +126,13 @@ class DedupAndSaveDeduplicator(Deduplicator):
         final_dataset = filtered_dataset.map(move_fields_to_stats)
         print(f"[dedup_and_save_deduplicator] Filtered fields {self.fields_to_filter} to stats")
         
+        # Generate detailed logging if enabled
+        if getattr(self, 'enable_detailed_logging', False):
+            deduplicated_size = len(final_dataset)
+            self._log_dedup_summary(original_size, deduplicated_size,
+                                   original_size - deduplicated_size,
+                                   len(connected_components))
+        
         return final_dataset, dup_pairs
 
     @classmethod
@@ -153,3 +168,64 @@ class DedupAndSaveDeduplicator(Deduplicator):
             Param("nn_scores_key", DataType.STRING, {}, "nn_scores"),
             Param("fields_to_filter", DataType.LIST, {}, ["embedding", "nn_indices", "nn_scores", "text", "instruction", "response"]),
         ]
+    
+    def _log_dedup_summary(self, total, kept, removed, num_components):
+        """
+        Generate and log summary statistics for graph-based deduplication.
+        
+        :param total: Total number of documents before deduplication
+        :param kept: Number of unique documents kept
+        :param removed: Number of duplicate documents removed
+        :param num_components: Number of connected components found
+        """
+        try:
+            from loguru import logger
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            
+            # Output logs line by line for better display in UI
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Graph-Based Deduplication Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total documents: {total}")
+            self._log_line(f"Unique documents kept: {kept} ({kept/total*100:.2f}%)")
+            self._log_line(f"Duplicate documents removed: {removed} ({removed/total*100:.2f}%)")
+            self._log_line("")
+            self._log_line(f"Connected components found: {num_components}")
+            
+            # Add deduplicator-specific parameters
+            self._log_line("")
+            self._log_line("Deduplicator parameters:")
+            self._log_line(f"  - Similarity threshold: {self.similarity_threshold}")
+            self._log_line(f"  - NN indices key: {self.nn_indices_key}")
+            self._log_line(f"  - NN scores key: {self.nn_scores_key}")
+            self._log_line(f"  - Fields to filter: {self.fields_to_filter}")
+            self._log_line(f"  - Algorithm: Graph connectivity")
+            
+            self._log_line("="*60)
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Failed to generate graph deduplication logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            if hasattr(self, 'job_uid') and self.job_uid:
+                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                insert_pipline_job_run_task_log_error(
+                    self.job_uid,
+                    error_msg,
+                    operator_name=self._name,
+                    operator_index=self.pipline_index
+                )
+    
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        from loguru import logger
+        logger.info(message)
+        # Only write to MongoDB if job_uid exists
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )

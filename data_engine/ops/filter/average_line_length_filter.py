@@ -34,6 +34,9 @@ class AverageLineLengthFilter(Filter):
         super().__init__(*args, **kwargs)
         self.min_len = min_len
         self.max_len = max_len
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample, context=False):
         # check if it's computed already
@@ -47,9 +50,29 @@ class AverageLineLengthFilter(Filter):
             lines = sample[self.text_key].splitlines()
             if context:
                 sample[Fields.context][context_key] = lines
-        sample[Fields.stats][StatsKeys.avg_line_length] = \
-            len(sample[self.text_key]) / len(lines) \
-            if len(lines) != 0 else 0.0
+        
+        avg_len = len(sample[self.text_key]) / len(lines) if len(lines) != 0 else 0.0
+        sample[Fields.stats][StatsKeys.avg_line_length] = avg_len
+        
+        # Determine filter result and reason for detailed logging
+        if avg_len < self.min_len:
+            keep = False
+            reason = 'below_min'
+        elif avg_len > self.max_len:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.avg_line_length}_detail'] = {
+            'avg_line_length': avg_len,
+            'num_lines': len(lines),
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):

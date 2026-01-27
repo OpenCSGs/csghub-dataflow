@@ -56,14 +56,26 @@ class RangeSpecifiedFieldSelector(Selector):
         self.upper_percentile = upper_percentile
         self.lower_rank = lower_rank
         self.upper_rank = upper_rank
+        
+        # Enable detailed logging for this selector
+        self.enable_detailed_logging = True
 
     def process(self, dataset):
+        # Store original dataset size for logging
+        original_size = len(dataset)
+        
         if len(dataset) <= 1 or not self.field_key:
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_selector_summary(original_size, original_size, 0, 0, 0, None, None)
             return dataset
 
         if self.lower_percentile is None and self.lower_rank is None:
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_selector_summary(original_size, original_size, 0, 0, 0, None, None)
             return dataset
         if self.upper_percentile is None and self.upper_rank is None:
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_selector_summary(original_size, original_size, 0, 0, 0, None, None)
             return dataset
 
         lower_bound, upper_bound = 0, len(dataset)
@@ -106,7 +118,20 @@ class RangeSpecifiedFieldSelector(Selector):
                                       range(len(sub_dataset)),
                                       field_value_list.__getitem__)
 
-        return sub_dataset.select(select_index)
+        selected_dataset = sub_dataset.select(select_index)
+        
+        # Generate detailed logging if enabled
+        if getattr(self, 'enable_detailed_logging', False):
+            selected_size = len(selected_dataset)
+            # Get min and max values from selected dataset
+            final_field_values = get_field_value_list(selected_dataset, field_keys)
+            min_val = min(final_field_values) if final_field_values else None
+            max_val = max(final_field_values) if final_field_values else None
+            self._log_selector_summary(original_size, selected_size,
+                                      original_size - selected_size,
+                                      lower_bound, upper_bound, min_val, max_val)
+        
+        return selected_dataset
 
     @classmethod
     @property
@@ -142,3 +167,74 @@ class RangeSpecifiedFieldSelector(Selector):
             Param("lower_rank", DataType.PositiveFloat, None, None),
             Param("upper_rank", DataType.PositiveFloat, None, None),
         ]
+    
+    def _log_selector_summary(self, total, selected, filtered, lower_bound, upper_bound, min_val, max_val):
+        """
+        Generate and log summary statistics for range-based selection.
+        
+        :param total: Total number of samples before selection
+        :param selected: Number of samples selected
+        :param filtered: Number of samples filtered out
+        :param lower_bound: Lower bound rank
+        :param upper_bound: Upper bound rank
+        :param min_val: Minimum field value in selected samples
+        :param max_val: Maximum field value in selected samples
+        """
+        try:
+            from loguru import logger
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            
+            # Output logs line by line for better display in UI
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Range Selection Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total samples: {total}")
+            self._log_line(f"Selected samples: {selected} ({selected/total*100:.2f}%)")
+            self._log_line(f"Filtered samples: {filtered} ({filtered/total*100:.2f}%)")
+            self._log_line("")
+            self._log_line(f"Selection range: rank {lower_bound} to {upper_bound}")
+            
+            if min_val is not None and max_val is not None:
+                self._log_line(f"Field value range: {min_val:.4f} to {max_val:.4f}")
+            
+            # Add selector-specific parameters
+            self._log_line("")
+            self._log_line("Selector parameters:")
+            self._log_line(f"  - Field key: {self.field_key}")
+            if self.lower_percentile is not None:
+                self._log_line(f"  - Lower percentile: {self.lower_percentile} ({self.lower_percentile*100:.1f}%)")
+            if self.upper_percentile is not None:
+                self._log_line(f"  - Upper percentile: {self.upper_percentile} ({self.upper_percentile*100:.1f}%)")
+            if self.lower_rank is not None:
+                self._log_line(f"  - Lower rank: {self.lower_rank}")
+            if self.upper_rank is not None:
+                self._log_line(f"  - Upper rank: {self.upper_rank}")
+            
+            self._log_line("="*60)
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Failed to generate selector logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            if hasattr(self, 'job_uid') and self.job_uid:
+                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                insert_pipline_job_run_task_log_error(
+                    self.job_uid,
+                    error_msg,
+                    operator_name=self._name,
+                    operator_index=self.pipline_index
+                )
+    
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        from loguru import logger
+        logger.info(message)
+        # Only write to MongoDB if job_uid exists
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )

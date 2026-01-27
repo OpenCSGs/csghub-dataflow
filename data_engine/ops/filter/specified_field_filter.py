@@ -32,8 +32,43 @@ class SpecifiedFieldFilter(Filter):
         super().__init__(*args, **kwargs)
         self.field_key = field_key
         self.target_value = target_value
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample):
+        # specified_field_filter doesn't compute stats, but we add detail for logging
+        if not (self.field_key and self.target_value):
+            keep = True
+            reason = 'kept'
+            field_value = 'N/A'
+        else:
+            try:
+                field_value = sample
+                for key in self.field_key.split('.'):
+                    field_value = field_value[key]
+                
+                if not (isinstance(field_value, list) or isinstance(field_value, tuple)):
+                    field_value_list = [field_value]
+                else:
+                    field_value_list = field_value
+                
+                keep = all(value in self.target_value for value in field_value_list)
+                reason = 'kept' if keep else 'value_not_in_target'
+            except (KeyError, AssertionError) as e:
+                keep = False
+                reason = 'field_not_found'
+                field_value = 'N/A'
+        
+        # Store detailed information for logging
+        sample['__dj__stats__']['specified_field_filter_detail'] = {
+            'field_key': self.field_key,
+            'field_value': str(field_value),
+            'target_value': str(self.target_value),
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):
