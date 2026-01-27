@@ -68,6 +68,12 @@ class ExtractQAMapper(Mapper):
             self.pattern = pattern
 
         self.qa_format = qa_format
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.modified_samples = 0
+        self.unmodified_samples = 0
 
     def _extract_qa(self, output):
         """Extract qestion and answer pair from model output response."""
@@ -83,6 +89,10 @@ class ExtractQAMapper(Mapper):
         return qa_list
 
     def process(self, sample, rank=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples += 1
+        original_text = sample[self.text_key]
+        
         try:
             messages = [
                 {
@@ -124,6 +134,8 @@ class ExtractQAMapper(Mapper):
             if not len(qa_list):
                 logger.warning(
                     'No question and answer data was extracted from this sample!')
+                if getattr(self, 'enable_detailed_logging', False):
+                    self.unmodified_samples += 1
                 return sample
 
             dialogue_data = []
@@ -144,16 +156,25 @@ class ExtractQAMapper(Mapper):
             sample[self.text_key] = json.dumps(dialogue_data, ensure_ascii=False)
 
             logger.debug(f'QA extraction successful, extracted {len(qa_list)} pairs')
+            
+            if getattr(self, 'enable_detailed_logging', False):
+                self.modified_samples += 1
 
         except requests.exceptions.RequestException as e:
             logger.error(f'HTTP request error: {e}')
             logger.warning(f'API call failed, keeping original text')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.unmodified_samples += 1
         except (KeyError, IndexError, json.JSONDecodeError) as e:
             logger.error(f'API response parsing error: {e}')
             logger.warning(f'Response parsing failed, keeping original text')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.unmodified_samples += 1
         except Exception as e:
             logger.error(f'Unexpected error: {e}')
             logger.warning(f'Exception occurred, keeping original text')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.unmodified_samples += 1
 
         return sample
 
@@ -187,3 +208,32 @@ class ExtractQAMapper(Mapper):
             }, "deepseek-chat"),
             Param("auth_token", DataType.STRING, {}, ""),
         ]
+    
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.modified_samples = 0
+            self.unmodified_samples = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        return result
+    
+    def _log_mapper_summary(self):
+        try:
+            from loguru import logger
+            total, modified, unmodified = self.total_samples, self.modified_samples, self.unmodified_samples
+            if total == 0: return
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Extract QA Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total: {total}, Extracted: {modified} ({modified/total*100:.2f}%), Failed: {unmodified} ({unmodified/total*100:.2f}%)")
+            self._log_line("="*60)
+        except: pass
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

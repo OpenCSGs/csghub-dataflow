@@ -47,8 +47,18 @@ class OptimizeInstructionMapper(Mapper):
             raise ValueError("model_url is required")
         if not self.auth_token:
             raise ValueError("auth_token is required")
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.optimized_samples = 0
+        self.failed_samples = 0
 
     def process(self, sample=None, rank=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples += 1
+        original_text = sample[self.text_key]
+        
         try:
             messages = [
                 {
@@ -89,15 +99,27 @@ class OptimizeInstructionMapper(Mapper):
             
             logger.debug(f'Instruction optimization successful')
             
+            if getattr(self, 'enable_detailed_logging', False):
+                if optimized_text != original_text:
+                    self.optimized_samples += 1
+                else:
+                    self.failed_samples += 1
+            
         except requests.exceptions.RequestException as e:
             logger.error(f'HTTP request error: {e}')
             logger.warning(f'API call failed, keeping original text')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples += 1
         except (KeyError, IndexError, json.JSONDecodeError) as e:
             logger.error(f'API response parsing error: {e}')
             logger.warning(f'Response parsing failed, keeping original text')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples += 1
         except Exception as e:
             logger.error(f'Unexpected error: {e}')
             logger.warning(f'Exception occurred, keeping original text')
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples += 1
         
         return sample
 
@@ -136,3 +158,32 @@ class OptimizeInstructionMapper(Mapper):
             }, "deepseek-chat"),
             Param("auth_token", DataType.STRING, {}, ""),
         ]
+    
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.optimized_samples = 0
+            self.failed_samples = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        return result
+    
+    def _log_mapper_summary(self):
+        try:
+            from loguru import logger
+            total, optimized, failed = self.total_samples, self.optimized_samples, self.failed_samples
+            if total == 0: return
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Instruction Optimization Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total: {total}, Optimized: {optimized} ({optimized/total*100:.2f}%), Failed: {failed} ({failed/total*100:.2f}%)")
+            self._log_line("="*60)
+        except: pass
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

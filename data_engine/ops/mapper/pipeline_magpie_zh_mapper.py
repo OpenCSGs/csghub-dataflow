@@ -332,6 +332,12 @@ class PipelineMagpieZh(Mapper):
         self.model_name = model_name
         self.auth_token = auth_token
         self.content = CATEGORIES_SYSTEM_PROMPTS
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_categories = 0
+        self.generated_samples = 0
+        self.failed_categories = 0
 
     def process(self, samples):
         """
@@ -352,6 +358,9 @@ class PipelineMagpieZh(Mapper):
             )
 
         all_generated_samples = []
+        
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_categories = len(self.content)
         
         # Generate conversation samples for each category (ignore input samples)
         for category_name, (system_prompt, weight) in self.content.items():
@@ -385,9 +394,14 @@ class PipelineMagpieZh(Mapper):
                 category_samples = self._parse_conversation(generated_text)
                 all_generated_samples.extend(category_samples)
                 logger.info(f"successfully_generated {category_name} category_based_dialogue")
+                
+                if getattr(self, 'enable_detailed_logging', False):
+                    self.generated_samples += len(category_samples)
 
             except Exception as e:
                 logger.info(f"generated {category_name} an_error_occurred_during_the_category_dialogue: {str(e)}")
+                if getattr(self, 'enable_detailed_logging', False):
+                    self.failed_categories += 1
         
         # Convert to "dict of lists" format
         if all_generated_samples:
@@ -448,3 +462,34 @@ class PipelineMagpieZh(Mapper):
 
 
 
+
+    def run(self, dataset, *, exporter=None, tracer=None):
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_categories = 0
+            self.generated_samples = 0
+            self.failed_categories = 0
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        return result
+    
+    def _log_mapper_summary(self):
+        try:
+            from loguru import logger
+            total_cat, generated, failed_cat = self.total_categories, self.generated_samples, self.failed_categories
+            if total_cat == 0: return
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Magpie Chinese Dialogue Generation Summary")
+            self._log_line("="*60)
+            self._log_line(f"Categories: {total_cat}, Generated Samples: {generated}, Failed Categories: {failed_cat}")
+            if total_cat > 0:
+                self._log_line(f"Success Rate: {(total_cat-failed_cat)/total_cat*100:.2f}%")
+            self._log_line("="*60)
+        except: pass
+    
+    def _log_line(self, message):
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

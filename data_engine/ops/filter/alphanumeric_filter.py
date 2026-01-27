@@ -47,6 +47,9 @@ class AlphanumericFilter(Filter):
         self.min_ratio = min_ratio
         self.max_ratio = max_ratio
         self.model_key = None
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
         if tokenization:
             self.model_key = prepare_model(
@@ -66,17 +69,58 @@ class AlphanumericFilter(Filter):
                 get_words_from_document(
                     sample[self.text_key],
                     token_func=tokenizer.tokenize if tokenizer else None))
-            sample[Fields.stats][StatsKeys.alpha_token_ratio] = (
-                alpha_count / token_count) if token_count != 0 else 0.0
+            ratio = (alpha_count / token_count) if token_count != 0 else 0.0
+            sample[Fields.stats][StatsKeys.alpha_token_ratio] = ratio
+            
+            # Determine filter result and reason for detailed logging
+            if ratio < self.min_ratio:
+                keep = False
+                reason = 'below_min'
+            elif ratio > self.max_ratio:
+                keep = False
+                reason = 'above_max'
+            else:
+                keep = True
+                reason = 'kept'
+            
+            # Store detailed information for logging
+            sample[Fields.stats][f'{StatsKeys.alpha_token_ratio}_detail'] = {
+                'ratio': str(ratio),
+                'keep': keep,
+                'reason': reason,
+                'alpha_count': alpha_count,
+                'token_count': token_count
+            }
         else:
             if StatsKeys.alnum_ratio in sample[Fields.stats]:
                 return sample
+            text = sample[self.text_key]
+            text_len = len(text)
             alnum_count = sum(
                 map(lambda char: 1
-                    if char.isalnum() else 0, sample[self.text_key]))
-            sample[Fields.stats][StatsKeys.alnum_ratio] = (
-                alnum_count / len(sample[self.text_key])) if len(
-                    sample[self.text_key]) != 0 else 0.0
+                    if char.isalnum() else 0, text))
+            ratio = (alnum_count / text_len) if text_len != 0 else 0.0
+            sample[Fields.stats][StatsKeys.alnum_ratio] = ratio
+            
+            # Determine filter result and reason for detailed logging
+            if ratio < self.min_ratio:
+                keep = False
+                reason = 'below_min'
+            elif ratio > self.max_ratio:
+                keep = False
+                reason = 'above_max'
+            else:
+                keep = True
+                reason = 'kept'
+            
+            # Store detailed information for logging
+            sample[Fields.stats][f'{StatsKeys.alnum_ratio}_detail'] = {
+                'ratio': str(ratio),
+                'keep': keep,
+                'reason': reason,
+                'alnum_count': alnum_count,
+                'text_length': text_len
+            }
         return sample
 
     def process(self, sample):

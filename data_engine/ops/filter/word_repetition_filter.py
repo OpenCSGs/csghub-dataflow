@@ -54,6 +54,9 @@ class WordRepetitionFilter(Filter):
         self.max_ratio = max_ratio
         self.model_key = None
         self.lang = lang
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
         if tokenization:
             self.model_key = prepare_model(model_type='sentencepiece',
@@ -97,14 +100,44 @@ class WordRepetitionFilter(Filter):
                 freq_word_ngrams.get(word_ngram, 0) + 1)
 
         if len(freq_word_ngrams) == 0:
-            sample[Fields.stats][StatsKeys.word_rep_ratio] = 0.0
+            ratio = 0.0
+            sample[Fields.stats][StatsKeys.word_rep_ratio] = ratio
+            
+            # Store detailed information for logging
+            sample[Fields.stats][f'{StatsKeys.word_rep_ratio}_detail'] = {
+                'ratio': str(ratio),
+                'keep': True if self.min_ratio <= ratio <= self.max_ratio else False,
+                'reason': 'kept' if self.min_ratio <= ratio <= self.max_ratio else ('below_min' if ratio < self.min_ratio else 'above_max'),
+                'num_words': len(words),
+                'rep_len': self.n
+            }
             return sample
 
         freq_word_ngrams = list(freq_word_ngrams.values())
         rep_more_than_one = [freq for freq in freq_word_ngrams if freq > 1]
-        sample[Fields.stats][StatsKeys.word_rep_ratio] = (
-            sum(rep_more_than_one) /
-            sum(freq_word_ngrams)) if sum(freq_word_ngrams) != 0 else 0.0
+        ratio = (sum(rep_more_than_one) / sum(freq_word_ngrams)) if sum(freq_word_ngrams) != 0 else 0.0
+        sample[Fields.stats][StatsKeys.word_rep_ratio] = ratio
+        
+        # Determine filter result and reason for detailed logging
+        if ratio < self.min_ratio:
+            keep = False
+            reason = 'below_min'
+        elif ratio > self.max_ratio:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.word_rep_ratio}_detail'] = {
+            'ratio': str(ratio),
+            'keep': keep,
+            'reason': reason,
+            'num_words': len(words),
+            'rep_len': self.n
+        }
+        
         return sample
 
     def process(self, sample):

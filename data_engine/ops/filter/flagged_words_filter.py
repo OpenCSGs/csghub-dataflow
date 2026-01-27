@@ -69,6 +69,9 @@ class FlaggedWordFilter(Filter):
         self.words_aug_group_sizes = words_aug_group_sizes
         self.words_aug_join_char = words_aug_join_char
         self.model_key = None
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
         # Log flagged_words_filter initialization
         msg = f"[flagged_words_filter] Initializing with lang='{lang}', tokenization={tokenization}"
@@ -168,6 +171,27 @@ class FlaggedWordFilter(Filter):
 
         sample[Fields.stats][
             StatsKeys.flagged_words_ratio] = flagged_words_ratio
+        
+        # Determine filter result and reason for detailed logging
+        if len(words) == 0:
+            keep = False
+            reason = 'empty_text'
+        elif flagged_words_ratio <= self.max_ratio:
+            keep = True
+            reason = 'kept'
+        else:
+            keep = False
+            reason = 'ratio_too_high'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.flagged_words_ratio}_detail'] = {
+            'ratio': str(flagged_words_ratio),
+            'keep': keep,
+            'reason': reason,
+            'total_words': len(words),
+            'flagged_count': len([word for word in words if word in self.FLAGGED_WORDS[self.lang]])
+        }
+        
         return sample
 
     def process(self, sample):

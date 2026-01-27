@@ -74,6 +74,9 @@ class DocumentSimhashDeduplicator(Deduplicator):
         # about deduplication
         self.num_blocks = num_blocks
         self.hamming_distance = hamming_distance
+        
+        # Enable detailed logging for this deduplicator
+        self.enable_detailed_logging = True
 
     def compute_hash(self, sample):
         """
@@ -130,8 +133,13 @@ class DocumentSimhashDeduplicator(Deduplicator):
             open.
         :return: deduplicated dataset and the sampled duplicate pairs.
         """
+        # Store original dataset size for logging
+        original_size = len(dataset)
+        
         # no need to deduplicate because too few samples
         if len(dataset) <= 1:
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_dedup_summary(original_size, original_size, 0, 0, 0)
             return dataset, {}
 
         # find matches
@@ -223,6 +231,13 @@ class DocumentSimhashDeduplicator(Deduplicator):
                            visited_hashes=hash_record),
             load_from_cache_file=False if show_num > 0 else True)
         logger.info(f'Keep {len(dataset)} samples after SimHash dedup.')
+        
+        # Generate detailed logging if enabled
+        if getattr(self, 'enable_detailed_logging', False):
+            deduplicated_size = len(dataset)
+            self._log_dedup_summary(original_size, deduplicated_size,
+                                   original_size - deduplicated_size,
+                                   cluster_id, len(matches))
 
         return dataset, dup_pairs
 
@@ -253,3 +268,67 @@ class DocumentSimhashDeduplicator(Deduplicator):
             Param("num_blocks", DataType.PositiveFloat, None, 6),
             Param("hamming_distance", DataType.PositiveFloat, None, 4),
         ]
+    
+    def _log_dedup_summary(self, total, kept, removed, num_clusters, num_matches):
+        """
+        Generate and log summary statistics for SimHash deduplication.
+        
+        :param total: Total number of documents before deduplication
+        :param kept: Number of unique documents kept
+        :param removed: Number of duplicate documents removed
+        :param num_clusters: Number of clusters found
+        :param num_matches: Number of hash matches found
+        """
+        try:
+            from loguru import logger
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            
+            # Output logs line by line for better display in UI
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] SimHash Deduplication Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total documents: {total}")
+            self._log_line(f"Unique documents kept: {kept} ({kept/total*100:.2f}%)")
+            self._log_line(f"Duplicate documents removed: {removed} ({removed/total*100:.2f}%)")
+            self._log_line("")
+            self._log_line(f"Similarity clusters found: {num_clusters}")
+            self._log_line(f"Hash matches found: {num_matches}")
+            
+            # Add deduplicator-specific parameters
+            self._log_line("")
+            self._log_line("Deduplicator parameters:")
+            self._log_line(f"  - Tokenization: {self.tokenization}")
+            self._log_line(f"  - Window size: {self.window_size}")
+            self._log_line(f"  - Lowercase: {self.lowercase}")
+            self._log_line(f"  - Num blocks: {self.num_blocks}")
+            self._log_line(f"  - Hamming distance threshold: {self.hamming_distance}")
+            self._log_line(f"  - Hash algorithm: SimHash")
+            
+            self._log_line("="*60)
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Failed to generate SimHash deduplication logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            if hasattr(self, 'job_uid') and self.job_uid:
+                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                insert_pipline_job_run_task_log_error(
+                    self.job_uid,
+                    error_msg,
+                    operator_name=self._name,
+                    operator_index=self.pipline_index
+                )
+    
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        from loguru import logger
+        logger.info(message)
+        # Only write to MongoDB if job_uid exists
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )

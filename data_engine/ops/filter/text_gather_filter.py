@@ -24,6 +24,9 @@ class TextGatherFilter(Filter):
         super().__init__(*args, **kwargs)
         self.is_drop = False
         self.hash_set = set()
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
     def compute_stats(self, sample, context=False):
 
@@ -55,6 +58,23 @@ class TextGatherFilter(Filter):
         # Set drop flag
         sample[Fields.stats]['is_drop'] = is_duplicate or not sample['conversation']
         self.is_drop = sample[Fields.stats]['is_drop']
+        
+        # Determine filter result and reason for detailed logging
+        keep = not self.is_drop
+        if is_duplicate:
+            reason = 'duplicate'
+        elif not sample['conversation']:
+            reason = 'no_conversation'
+        else:
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats]['gather_generated_data_filter_detail'] = {
+            'is_duplicate': is_duplicate,
+            'has_conversation': bool(sample['conversation']),
+            'keep': keep,
+            'reason': reason
+        }
         
         return sample
 

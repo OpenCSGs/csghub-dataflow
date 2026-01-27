@@ -49,6 +49,9 @@ class WordsNumFilter(Filter):
         self.max_num = max_num
         self.model_key = None
         self.lang = lang
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
 
         if tokenization:
             self.model_key = prepare_model(model_type='sentencepiece',
@@ -70,7 +73,27 @@ class WordsNumFilter(Filter):
             if context:
                 sample[Fields.context][words_key] = words
         words = words_refinement(words, strip_chars=SPECIAL_CHARACTERS)
-        sample[Fields.stats][StatsKeys.num_words] = len(words)
+        num_words = len(words)
+        sample[Fields.stats][StatsKeys.num_words] = num_words
+        
+        # Determine filter result and reason for detailed logging
+        if num_words < self.min_num:
+            keep = False
+            reason = 'below_min'
+        elif num_words > self.max_num:
+            keep = False
+            reason = 'above_max'
+        else:
+            keep = True
+            reason = 'kept'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.num_words}_detail'] = {
+            'num_words': num_words,
+            'keep': keep,
+            'reason': reason
+        }
+        
         return sample
 
     def process(self, sample):

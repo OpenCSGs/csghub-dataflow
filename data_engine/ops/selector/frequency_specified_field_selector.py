@@ -44,9 +44,17 @@ class FrequencySpecifiedFieldSelector(Selector):
         self.top_ratio = top_ratio
         self.topk = topk
         self.reverse = reverse
+        
+        # Enable detailed logging for this selector
+        self.enable_detailed_logging = True
 
     def process(self, dataset):
+        # Store original dataset size for logging
+        original_size = len(dataset)
+        
         if len(dataset) <= 1 or not self.field_key:
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_selector_summary(original_size, original_size, 0, {})
             return dataset
 
         field_keys = self.field_key.split('.')
@@ -72,6 +80,8 @@ class FrequencySpecifiedFieldSelector(Selector):
         select_num = 0
         if not self.top_ratio:
             if not self.topk:
+                if getattr(self, 'enable_detailed_logging', False):
+                    self._log_selector_summary(original_size, original_size, 0, field_value_dict)
                 return dataset
             else:
                 select_num = self.topk
@@ -84,7 +94,17 @@ class FrequencySpecifiedFieldSelector(Selector):
             sorted(field_value_dict.values(),
                    key=lambda x: len(x),
                    reverse=self.reverse)[:int(select_num)], [])
-        return dataset.select(select_index)
+        
+        selected_dataset = dataset.select(select_index)
+        
+        # Generate detailed logging if enabled
+        if getattr(self, 'enable_detailed_logging', False):
+            selected_size = len(selected_dataset)
+            self._log_selector_summary(original_size, selected_size,
+                                      original_size - selected_size,
+                                      field_value_dict)
+        
+        return selected_dataset
 
     @classmethod
     @property
@@ -119,3 +139,86 @@ class FrequencySpecifiedFieldSelector(Selector):
             Param("topk", DataType.PositiveFloat, None, None),
             Param("reverse", DataType.BOOLEAN, None, True),
         ]
+    
+    def _log_selector_summary(self, total, selected, filtered, field_value_dict):
+        """
+        Generate and log summary statistics for frequency-based selection.
+        
+        :param total: Total number of samples before selection
+        :param selected: Number of samples selected
+        :param filtered: Number of samples filtered out
+        :param field_value_dict: Dictionary mapping field values to sample indices
+        """
+        try:
+            from loguru import logger
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            
+            # Calculate statistics
+            unique_values = len(field_value_dict)
+            
+            # Find top field values by frequency
+            sorted_values = sorted(field_value_dict.items(),
+                                  key=lambda x: len(x[1]),
+                                  reverse=self.reverse)
+            
+            # Output logs line by line for better display in UI
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Frequency Selection Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total samples: {total}")
+            self._log_line(f"Selected samples: {selected} ({selected/total*100:.2f}%)")
+            self._log_line(f"Filtered samples: {filtered} ({filtered/total*100:.2f}%)")
+            self._log_line("")
+            self._log_line(f"Unique field values: {unique_values}")
+            
+            # Show top field values
+            if sorted_values:
+                self._log_line("")
+                self._log_line("Top field values by frequency:")
+                for i, (value, indices) in enumerate(sorted_values[:5]):
+                    value_str = str(value) if value is not None else "None"
+                    if len(value_str) > 50:
+                        value_str = value_str[:47] + "..."
+                    self._log_line(f"  {i+1}. '{value_str}': {len(indices)} samples ({len(indices)/total*100:.2f}%)")
+                
+                if len(sorted_values) > 5:
+                    self._log_line(f"  ... and {len(sorted_values) - 5} more values")
+            
+            # Add selector-specific parameters
+            self._log_line("")
+            self._log_line("Selector parameters:")
+            self._log_line(f"  - Field key: {self.field_key}")
+            if self.top_ratio is not None:
+                self._log_line(f"  - Top ratio: {self.top_ratio} ({self.top_ratio*100:.1f}%)")
+            if self.topk is not None:
+                self._log_line(f"  - Top K: {self.topk}")
+            self._log_line(f"  - Reverse (descending): {self.reverse}")
+            
+            self._log_line("="*60)
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Failed to generate selector logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            if hasattr(self, 'job_uid') and self.job_uid:
+                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                insert_pipline_job_run_task_log_error(
+                    self.job_uid,
+                    error_msg,
+                    operator_name=self._name,
+                    operator_index=self.pipline_index
+                )
+    
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        from loguru import logger
+        logger.info(message)
+        # Only write to MongoDB if job_uid exists
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )

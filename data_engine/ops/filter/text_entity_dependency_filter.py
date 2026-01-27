@@ -41,6 +41,10 @@ class TextEntityDependencyFilter(Filter):
                 f'Language [{lang}] is not supported in entities detection.'
                 f'Can only be one of ["en", "zh"].')
         self.lang = lang
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
+        
         self.model_key = prepare_model(model_type='spacy', lang=lang)
         self.entity_poss = ['NOUN', 'PROPN', 'PRON']
         self.entity_tags = ['NN', 'NR', 'PN', 'NNS', 'NNP', 'NNPS', 'PRP']
@@ -82,6 +86,34 @@ class TextEntityDependencyFilter(Filter):
         sample[Fields.stats][StatsKeys.num_dependency_edges] = [
             n for _, n in entity_to_dependency_nums.items()
         ]
+        
+        # Determine filter result and reason for detailed logging
+        num_dependency_edges = sample[Fields.stats][StatsKeys.num_dependency_edges]
+        keep_bools = np.array([
+            self.min_dependency_num <= num_edge
+            for num_edge in num_dependency_edges
+        ])
+        
+        # omit the samples without entity
+        if len(keep_bools) <= 0:
+            keep = False
+            reason = 'no_entities'
+        else:
+            # different strategies
+            if self.any:
+                keep = keep_bools.any()
+            else:
+                keep = keep_bools.all()
+            reason = 'kept' if keep else 'dependency_too_low'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.num_dependency_edges}_detail'] = {
+            'num_entities': len(num_dependency_edges),
+            'dependency_edges': str(num_dependency_edges),
+            'keep': keep,
+            'reason': reason,
+            'strategy': 'any' if self.any else 'all'
+        }
 
         return sample
 

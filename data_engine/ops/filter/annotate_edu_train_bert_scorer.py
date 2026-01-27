@@ -36,6 +36,12 @@ class AnnotateEduTrainBertScorer(Mapper):
         self.dimensions = dimensions
         self.query_text = query_text
         self.client = None
+        
+        # Enable detailed logging
+        self.enable_detailed_logging = True
+        self.total_samples = 0
+        self.scored_samples = 0
+        self.failed_samples = 0
 
     def _get_client(self):
         if self.client is None:
@@ -100,7 +106,18 @@ class AnnotateEduTrainBertScorer(Mapper):
             raise RuntimeError(f"failed_to_obtain_the_text_embedding_vector: {str(e)}")
 
     def process(self, sample):
-        return self.compute_stats(sample)
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples += 1
+        
+        try:
+            result = self.compute_stats(sample)
+            if getattr(self, 'enable_detailed_logging', False):
+                self.scored_samples += 1
+            return result
+        except Exception as e:
+            if getattr(self, 'enable_detailed_logging', False):
+                self.failed_samples += 1
+            return sample
 
     @classmethod
     @property

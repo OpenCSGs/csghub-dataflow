@@ -31,6 +31,9 @@ class MultiKeywordFilter(Filter):
         super().__init__(*args, **kwargs)
         self.case_sensitive = case_sensitive
         
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
+        
         # Normalize keywords to a list
         # Priority: list/tuple > string (for backward compatibility)
         if keywords is None:
@@ -58,6 +61,45 @@ class MultiKeywordFilter(Filter):
                     f"case_sensitive={self.case_sensitive}, text_key={self.text_key}")
 
     def compute_stats(self, sample):
+        # multi_keyword_filter doesn't compute stats, but we add detail for logging
+        if not self.keywords:
+            keep = True
+            reason = 'kept'
+            matched_keyword = None
+        else:
+            text = sample[self.text_key]
+            matched_keyword = None
+            
+            # Convert to lowercase if case-insensitive matching
+            if not self.case_sensitive:
+                text_lower = text.lower()
+                keywords_to_check = [kw.lower() for kw in self.keywords]
+                
+                # Check if any keyword is found in the text
+                for i, keyword in enumerate(keywords_to_check):
+                    if keyword in text_lower:
+                        matched_keyword = self.keywords[i]  # Use original case
+                        break
+            else:
+                keywords_to_check = self.keywords
+                
+                # Check if any keyword is found in the text
+                for keyword in keywords_to_check:
+                    if keyword in text:
+                        matched_keyword = keyword
+                        break
+            
+            keep = matched_keyword is None
+            reason = 'kept' if keep else 'keyword_found'
+        
+        # Store detailed information for logging
+        sample['__dj__stats__']['multi_keyword_filter_detail'] = {
+            'matched_keyword': matched_keyword,
+            'keep': keep,
+            'reason': reason,
+            'case_sensitive': self.case_sensitive
+        }
+        
         return sample
 
     def process(self, sample):

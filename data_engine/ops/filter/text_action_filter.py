@@ -34,6 +34,10 @@ class TextActionFilter(Filter):
                 f'Language [{lang}] is not supported in action detection.'
                 f'Can only be one of ["en", "zh"].')
         self.lang = lang
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
+        
         self.model_key = prepare_model(model_type='spacy', lang=lang)
         self.action_poss = ['VERB']
         self.action_tags = ['VV', 'VB', 'VBP', 'VBZ', 'VBD', 'VBG', 'VBN']
@@ -55,6 +59,21 @@ class TextActionFilter(Filter):
              and token.tag_ in self.action_tags:
                 num_action += 1
         sample[Fields.stats][StatsKeys.num_action] = num_action
+        
+        # Determine filter result and reason for detailed logging
+        if num_action >= self.min_action_num:
+            keep = True
+            reason = 'kept'
+        else:
+            keep = False
+            reason = 'below_min'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.num_action}_detail'] = {
+            'num_action': num_action,
+            'keep': keep,
+            'reason': reason
+        }
 
         return sample
 

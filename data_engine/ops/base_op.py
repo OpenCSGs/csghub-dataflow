@@ -354,6 +354,11 @@ class Filter(OP):
             new_dataset = dataset.filter(self.process,
                                          num_proc=self.runtime_np(),
                                          desc=self._name + '_process')
+
+            # Generate detailed logging if enabled
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_filter_details(dataset, new_dataset)
+
             if tracer:
                 tracer.trace_filter(self._name, dataset, new_dataset,job_uid=self.job_uid,pipeline_index=self.pipline_index)
             set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.SUCCESS, self._name, self.pipline_index)
@@ -368,6 +373,262 @@ class Filter(OP):
         finally:
             insert_pipline_job_run_task_log_info(self.job_uid, "ending filter job", operator_name=self._name,
                                                  operator_index=self.pipline_index)
+
+    def _log_filter_details(self, original_dataset, filtered_dataset):
+        """
+        Generate detailed logging for filter operations.
+        Collects statistics from all samples and provides a summary at the end.
+        """
+        try:
+            total_samples = len(original_dataset)
+            kept_samples = len(filtered_dataset)
+            filtered_samples = total_samples - kept_samples
+
+            # Initialize counters
+            stats_counters = {
+                'total': total_samples,
+                'kept': 0,
+                'below_min': 0,
+                'above_max': 0,
+                'invalid_type': 0,
+                'null_value': 0,
+            }
+
+            # Process samples and collect statistics
+            for idx, sample in enumerate(original_dataset):
+                stats = sample.get(Fields.stats, {})
+                detail_key = None
+
+                # Find the detail key (it might vary by filter type)
+                for key in stats.keys():
+                    if key.endswith('_detail'):
+                        detail_key = key
+                        break
+
+                if detail_key and detail_key in stats:
+                    detail = stats[detail_key]
+                    keep = detail.get('keep', False)
+                    reason = detail.get('reason', 'unknown')
+
+                    # Update counters
+                    if keep:
+                        stats_counters['kept'] += 1
+                    else:
+                        stats_counters[reason] = stats_counters.get(reason, 0) + 1
+
+            # Generate and log summary statistics (only once at the end)
+            self._log_summary_statistics(stats_counters)
+
+        except Exception as e:
+            import traceback
+            error_msg = f"Failed to generate detailed logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            insert_pipline_job_run_task_log_error(
+                self.job_uid,
+                error_msg,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )
+
+    def _log_summary_statistics(self, stats_counters):
+        """Generate and log summary statistics with percentages."""
+        total = stats_counters['total']
+        kept = stats_counters['kept']
+        filtered = total - kept
+
+        # Output logs line by line for better display in UI
+        self._log_line("="*60)
+        self._log_line(f"[{self._name}] Filter Summary Statistics")
+        self._log_line("="*60)
+        self._log_line(f"Total samples: {total}")
+        self._log_line(f"Kept samples: {kept} ({kept/total*100:.2f}%)")
+        self._log_line(f"Filtered samples: {filtered} ({filtered/total*100:.2f}%)")
+
+        if filtered > 0:
+            self._log_line("")
+            self._log_line("Filtered breakdown:")
+
+            # Dynamically show all non-zero filter reasons (excluding 'total' and 'kept')
+            for reason, count in sorted(stats_counters.items()):
+                if reason not in ['total', 'kept'] and count > 0:
+                    # Format reason name for display
+                    reason_display = reason.replace('_', ' ').title()
+                    self._log_line(f"  - {reason_display}: {count} ({count/total*100:.2f}%)")
+        else:
+            self._log_line("")
+            self._log_line("No samples filtered. All samples passed the filter.")
+
+        # Log filter-specific parameters
+        self._log_filter_parameters()
+        
+        self._log_line("="*60)
+
+    def _log_filter_parameters(self):
+        """Log filter-specific parameters based on filter type."""
+        self._log_line("")
+        self._log_line("Filter parameters:")
+        
+        # text_high_score_filter
+        if self._name == 'text_high_score_filter':
+            self._log_line(f"  - Score field: {getattr(self, 'score_field', 'N/A')}")
+            self._log_line(f"  - Min score: {getattr(self, 'min_score', 'N/A')}")
+            self._log_line(f"  - Max score: {getattr(self, 'max_score', 'N/A')}")
+        
+        # flagged_words_filter
+        elif self._name == 'flagged_words_filter':
+            self._log_line(f"  - Language: {getattr(self, 'lang', 'N/A')}")
+            self._log_line(f"  - Tokenization: {getattr(self, 'tokenization', False)}")
+            max_ratio = getattr(self, 'max_ratio', 0)
+            self._log_line(f"  - Max ratio: {max_ratio} ({max_ratio*100:.2f}%)")
+            self._log_line(f"  - Use words augmentation: {getattr(self, 'use_words_aug', False)}")
+        
+        # character_repetition_filter
+        elif self._name == 'character_repetition_filter':
+            self._log_line(f"  - Repetition length (n-gram): {getattr(self, 'n', 'N/A')}")
+            min_ratio = getattr(self, 'min_ratio', 0)
+            max_ratio = getattr(self, 'max_ratio', 0)
+            self._log_line(f"  - Min ratio: {min_ratio} ({min_ratio*100:.2f}%)")
+            self._log_line(f"  - Max ratio: {max_ratio} ({max_ratio*100:.2f}%)")
+        
+        # text_length_filter
+        elif self._name == 'text_length_filter':
+            self._log_line(f"  - Min length: {getattr(self, 'min_len', 'N/A')} characters")
+            self._log_line(f"  - Max length: {getattr(self, 'max_len', 'N/A')} characters")
+        
+        # alphanumeric_filter
+        elif self._name == 'alphanumeric_filter':
+            self._log_line(f"  - Tokenization: {getattr(self, 'tokenization', False)}")
+            min_ratio = getattr(self, 'min_ratio', 0)
+            max_ratio = getattr(self, 'max_ratio', 0)
+            self._log_line(f"  - Min ratio: {min_ratio} ({min_ratio*100:.2f}%)")
+            self._log_line(f"  - Max ratio: {max_ratio} ({max_ratio*100:.2f}%)")
+        
+        # word_repetition_filter
+        elif self._name == 'word_repetition_filter':
+            self._log_line(f"  - Language: {getattr(self, 'lang', 'N/A')}")
+            self._log_line(f"  - Tokenization: {getattr(self, 'tokenization', False)}")
+            self._log_line(f"  - Repetition length (n-gram): {getattr(self, 'n', 'N/A')}")
+            min_ratio = getattr(self, 'min_ratio', 0)
+            max_ratio = getattr(self, 'max_ratio', 0)
+            self._log_line(f"  - Min ratio: {min_ratio} ({min_ratio*100:.2f}%)")
+            self._log_line(f"  - Max ratio: {max_ratio} ({max_ratio*100:.2f}%)")
+        
+        # text_action_filter
+        elif self._name == 'text_action_filter':
+            self._log_line(f"  - Language: {getattr(self, 'lang', 'N/A')}")
+            self._log_line(f"  - Min action number: {getattr(self, 'min_action_num', 'N/A')}")
+        
+        # words_num_filter
+        elif self._name == 'words_num_filter':
+            self._log_line(f"  - Language: {getattr(self, 'lang', 'N/A')}")
+            self._log_line(f"  - Tokenization: {getattr(self, 'tokenization', False)}")
+            self._log_line(f"  - Min number: {getattr(self, 'min_num', 'N/A')} words")
+            self._log_line(f"  - Max number: {getattr(self, 'max_num', 'N/A')} words")
+        
+        # average_line_length_filter
+        elif self._name == 'average_line_length_filter':
+            self._log_line(f"  - Min average length: {getattr(self, 'min_len', 'N/A')} chars/line")
+            self._log_line(f"  - Max average length: {getattr(self, 'max_len', 'N/A')} chars/line")
+        
+        # language_id_score_filter
+        elif self._name == 'language_id_score_filter':
+            lang = getattr(self, 'lang', None)
+            self._log_line(f"  - Target language(s): {lang if lang else 'Any'}")
+            min_score = getattr(self, 'min_score', 0)
+            self._log_line(f"  - Min confidence score: {min_score} ({min_score*100:.2f}%)")
+        
+        # maximum_line_length_filter
+        elif self._name == 'maximum_line_length_filter':
+            self._log_line(f"  - Min max length: {getattr(self, 'min_len', 'N/A')} characters")
+            self._log_line(f"  - Max max length: {getattr(self, 'max_len', 'N/A')} characters")
+        
+        # perplexity_filter
+        elif self._name == 'perplexity_filter':
+            self._log_line(f"  - Language: {getattr(self, 'lang', 'N/A')}")
+            self._log_line(f"  - Max perplexity: {getattr(self, 'max_ppl', 'N/A')}")
+        
+        # special_characters_filter
+        elif self._name == 'special_characters_filter':
+            min_ratio = getattr(self, 'min_ratio', 0)
+            max_ratio = getattr(self, 'max_ratio', 0)
+            self._log_line(f"  - Min ratio: {min_ratio} ({min_ratio*100:.2f}%)")
+            self._log_line(f"  - Max ratio: {max_ratio} ({max_ratio*100:.2f}%)")
+        
+        # specified_field_filter
+        elif self._name == 'specified_field_filter':
+            self._log_line(f"  - Field key: {getattr(self, 'field_key', 'N/A')}")
+            target_value = getattr(self, 'target_value', [])
+            if len(target_value) > 5:
+                self._log_line(f"  - Target values: {target_value[:5]}... ({len(target_value)} total)")
+            else:
+                self._log_line(f"  - Target values: {target_value}")
+        
+        # specified_numeric_field_filter
+        elif self._name == 'specified_numeric_field_filter':
+            self._log_line(f"  - Field key: {getattr(self, 'field_key', 'N/A')}")
+            self._log_line(f"  - Min value: {getattr(self, 'min_value', 'N/A')}")
+            self._log_line(f"  - Max value: {getattr(self, 'max_value', 'N/A')}")
+        
+        # stopwords_filter
+        elif self._name == 'stopwords_filter':
+            self._log_line(f"  - Language: {getattr(self, 'lang', 'N/A')}")
+            self._log_line(f"  - Tokenization: {getattr(self, 'tokenization', False)}")
+            min_ratio = getattr(self, 'min_ratio', 0)
+            self._log_line(f"  - Min ratio: {min_ratio} ({min_ratio*100:.2f}%)")
+            self._log_line(f"  - Use words augmentation: {getattr(self, 'use_words_aug', False)}")
+        
+        # suffix_filter
+        elif self._name == 'suffix_filter':
+            suffixes = getattr(self, 'suffixes', [])
+            if len(suffixes) > 10:
+                self._log_line(f"  - Allowed suffixes: {suffixes[:10]}... ({len(suffixes)} total)")
+            else:
+                self._log_line(f"  - Allowed suffixes: {suffixes}")
+        
+        # text_entity_dependency_filter
+        elif self._name == 'text_entity_dependency_filter':
+            self._log_line(f"  - Language: {getattr(self, 'lang', 'N/A')}")
+            self._log_line(f"  - Min dependency edges: {getattr(self, 'min_dependency_num', 'N/A')}")
+            self._log_line(f"  - Keep strategy: {getattr(self, 'any_or_all', 'N/A')}")
+        
+        # token_num_filter
+        elif self._name == 'token_num_filter':
+            self._log_line(f"  - Tokenizer: {getattr(self, 'hf_tokenizer', 'N/A')}")
+            self._log_line(f"  - Min tokens: {getattr(self, 'min_num', 'N/A')}")
+            self._log_line(f"  - Max tokens: {getattr(self, 'max_num', 'N/A')}")
+        
+        # text_bloom_filter
+        elif self._name == 'text_bloom_filter':
+            self._log_line(f"  - Hash function: {getattr(self, 'hash_func', 'N/A')}")
+            error_rate = getattr(self, 'error_rate', 0)
+            self._log_line(f"  - Error rate: {error_rate}")
+            self._log_line(f"  - Initial capacity: {getattr(self, 'initial_capacity', 'N/A')}")
+        
+        # multi_keyword_filter
+        elif self._name == 'multi_keyword_filter':
+            keywords = getattr(self, 'keywords', [])
+            if len(keywords) > 10:
+                self._log_line(f"  - Keywords: {keywords[:10]}... ({len(keywords)} total)")
+            else:
+                self._log_line(f"  - Keywords: {keywords}")
+            self._log_line(f"  - Case sensitive: {getattr(self, 'case_sensitive', False)}")
+        
+        # Default fallback for unknown filters
+        else:
+            self._log_line(f"  - Filter type: {self._name}")
+            self._log_line(f"  - (No specific parameter display configured)")
+
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        logger.info(message)
+        # Only write to MongoDB if job_uid exists
+        if hasattr(self, 'job_uid') and self.job_uid:
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )
 
 
 class Deduplicator(OP):

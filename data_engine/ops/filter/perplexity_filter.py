@@ -43,6 +43,10 @@ class PerplexityFilter(Filter):
         super().__init__(*args, **kwargs)
         self.max_ppl = max_ppl
         self.lang = lang
+        
+        # Enable detailed logging for this filter
+        self.enable_detailed_logging = True
+        
         self.sp_model_key = prepare_model(model_type='sentencepiece',
                                           lang=lang)
         self.kl_model_key = prepare_model(model_type='kenlm', lang=lang)
@@ -72,6 +76,22 @@ class PerplexityFilter(Filter):
             length += (len(line.split()) + 1)
         ppl = (10.0**(-logits / length)) if length != 0 else 0.0
         sample[Fields.stats][StatsKeys.perplexity] = round(ppl, 1)
+        
+        # Determine filter result and reason for detailed logging
+        if ppl <= self.max_ppl:
+            keep = True
+            reason = 'kept'
+        else:
+            keep = False
+            reason = 'above_max'
+        
+        # Store detailed information for logging
+        sample[Fields.stats][f'{StatsKeys.perplexity}_detail'] = {
+            'perplexity': str(ppl),
+            'keep': keep,
+            'reason': reason,
+            'num_words': len(words)
+        }
 
         return sample
 
