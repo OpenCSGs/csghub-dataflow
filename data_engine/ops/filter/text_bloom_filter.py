@@ -70,11 +70,15 @@ class TextBloomFilter(Filter):
         reason = 'duplicate' if is_duplicate else 'kept'
         
         # Store detailed information for logging
+        # Convert hash_value (bytes) to hex string for JSON serialization
+        hash_hex = hash_value.hex() if isinstance(hash_value, bytes) else str(hash_value)
+        hash_display = hash_hex[:32] if len(hash_hex) > 32 else hash_hex  # Truncate for readability
+        
         sample[Fields.stats][f'{StatsKeys.bloom}_detail'] = {
             'is_duplicate': is_duplicate,
             'keep': keep,
             'reason': reason,
-            'hash_value': hash_value[:16] if len(hash_value) > 16 else hash_value  # Truncate for readability
+            'hash_value': hash_display
         }
         
         return sample

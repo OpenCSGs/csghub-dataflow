@@ -139,3 +139,67 @@ class AnnotateEduTrainBertScorer(Mapper):
             Param("dimensions", DataType.INTEGER, {}, 1024),
             Param("query_text", DataType.STRING, {}, "What is Deep Learning?"),
         ]
+    
+    def run(self, dataset, *, exporter=None, tracer=None):
+        """Override run method to add logging summary."""
+        if getattr(self, 'enable_detailed_logging', False):
+            self.total_samples = 0
+            self.scored_samples = 0
+            self.failed_samples = 0
+        
+        result = super().run(dataset, exporter=exporter, tracer=tracer)
+        
+        if getattr(self, 'enable_detailed_logging', False):
+            self._log_mapper_summary()
+        
+        return result
+    
+    def _log_mapper_summary(self):
+        """Generate and log summary statistics."""
+        try:
+            from loguru import logger
+            
+            total = self.total_samples
+            scored = self.scored_samples
+            failed = self.failed_samples
+            
+            if total == 0:
+                return
+            
+            self._log_line("="*60)
+            self._log_line(f"[{self._name}] Educational Content Scoring Summary")
+            self._log_line("="*60)
+            self._log_line(f"Total samples processed: {total}")
+            self._log_line(f"Samples scored successfully: {scored} ({scored/total*100:.2f}%)")
+            self._log_line(f"Failed samples: {failed} ({failed/total*100:.2f}%)")
+            self._log_line(f"Query text: {self.query_text}")
+            self._log_line(f"Model: {self.model_name}")
+            self._log_line(f"Embedding dimensions: {self.dimensions}")
+            self._log_line("="*60)
+            
+        except Exception as e:
+            import traceback
+            from loguru import logger
+            error_msg = f"Failed to generate mapper logging: {e}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            if hasattr(self, 'job_uid') and self.job_uid:
+                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                insert_pipline_job_run_task_log_error(
+                    self.job_uid,
+                    error_msg,
+                    operator_name=self._name,
+                    operator_index=self.pipline_index
+                )
+    
+    def _log_line(self, message):
+        """Log a single line to both logger and MongoDB."""
+        from loguru import logger
+        logger.info(message)
+        if hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                message,
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )
