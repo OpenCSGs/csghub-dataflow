@@ -7,7 +7,7 @@ from sqlalchemy import text
 from data_server.database.session import get_sync_session
 
 # Initialization data version - Update this version when modifying SQL files in Initialization_data directory
-INIT_DATA_VERSION = "1.0.1"
+INIT_DATA_VERSION = "1.0.2"
 
 def get_current_db_version() -> str:
     """

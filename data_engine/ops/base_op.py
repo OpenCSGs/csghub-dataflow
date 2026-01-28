@@ -381,6 +381,11 @@ class Filter(OP):
         """
         try:
             total_samples = len(original_dataset)
+            
+            # Skip logging if dataset is empty
+            if total_samples == 0:
+                return
+            
             kept_samples = len(filtered_dataset)
             filtered_samples = total_samples - kept_samples
 
@@ -433,6 +438,11 @@ class Filter(OP):
     def _log_summary_statistics(self, stats_counters):
         """Generate and log summary statistics with percentages."""
         total = stats_counters['total']
+        
+        # Skip logging if dataset is empty
+        if total == 0:
+            return
+        
         kept = stats_counters['kept']
         filtered = total - kept
 
