@@ -381,6 +381,11 @@ class Filter(OP):
         """
         try:
             total_samples = len(original_dataset)
+            
+            # Skip logging if dataset is empty
+            if total_samples == 0:
+                return
+            
             kept_samples = len(filtered_dataset)
             filtered_samples = total_samples - kept_samples
 
@@ -433,6 +438,11 @@ class Filter(OP):
     def _log_summary_statistics(self, stats_counters):
         """Generate and log summary statistics with percentages."""
         total = stats_counters['total']
+        
+        # Skip logging if dataset is empty
+        if total == 0:
+            return
+        
         kept = stats_counters['kept']
         filtered = total - kept
 
@@ -441,14 +451,8 @@ class Filter(OP):
         self._log_line(f"[{self._name}] Filter Summary Statistics")
         self._log_line("="*60)
         self._log_line(f"Total samples: {total}")
-        
-        # Handle zero total to avoid division by zero
-        if total > 0:
-            self._log_line(f"Kept samples: {kept} ({kept/total*100:.2f}%)")
-            self._log_line(f"Filtered samples: {filtered} ({filtered/total*100:.2f}%)")
-        else:
-            self._log_line(f"Kept samples: {kept} (N/A)")
-            self._log_line(f"Filtered samples: {filtered} (N/A)")
+        self._log_line(f"Kept samples: {kept} ({kept/total*100:.2f}%)")
+        self._log_line(f"Filtered samples: {filtered} ({filtered/total*100:.2f}%)")
 
         if filtered > 0:
             self._log_line("")
@@ -459,16 +463,10 @@ class Filter(OP):
                 if reason not in ['total', 'kept'] and count > 0:
                     # Format reason name for display
                     reason_display = reason.replace('_', ' ').title()
-                    if total > 0:
-                        self._log_line(f"  - {reason_display}: {count} ({count/total*100:.2f}%)")
-                    else:
-                        self._log_line(f"  - {reason_display}: {count} (N/A)")
+                    self._log_line(f"  - {reason_display}: {count} ({count/total*100:.2f}%)")
         else:
             self._log_line("")
-            if total == 0:
-                self._log_line("No samples to process. Dataset is empty.")
-            else:
-                self._log_line("No samples filtered. All samples passed the filter.")
+            self._log_line("No samples filtered. All samples passed the filter.")
 
         # Log filter-specific parameters
         self._log_filter_parameters()
