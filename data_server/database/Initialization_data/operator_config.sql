@@ -12,7 +12,7 @@
  Target Server Version : 150010 (150010)
  File Encoding         : 65001
 
- Date: 03/12/2025 15:44:33
+ Date: 28/01/2026 14:21:24
 */
 
 
@@ -69,7 +69,6 @@ INSERT INTO "public"."operator_config" VALUES (89, 26, 'tokenization', 'select',
 INSERT INTO "public"."operator_config" VALUES (93, 26, 'num_permutations', 'number', NULL, '256', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:04:52.926481', '2025-07-29 17:04:52.926481', 'Number of MinHash Permutations: The larger the number, the higher the accuracy, but the slower the computation');
 INSERT INTO "public"."operator_config" VALUES (96, 26, 'num_rows_per_band', 'number', NULL, NULL, '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:04:52.926481', '2025-07-29 17:04:52.926481', 'Number of Rows per Band (Automatically Calculated)');
 INSERT INTO "public"."operator_config" VALUES (97, 26, 'tokenizer_model', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:04:52.926481', '2025-07-29 17:04:52.926481', 'SentencePiece Model Path (Required when using sentencepiece for word segmentation)');
-INSERT INTO "public"."operator_config" VALUES (58, 44, 'lang', 'select', '[15, 16]', '15', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:46:34.295683', '2025-07-29 16:46:34.295683', 'Language for Perplexity Calculation, Options: ''en'' (English), ''zh'' (Chinese)');
 INSERT INTO "public"."operator_config" VALUES (62, 46, 'field_key', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:46:52.665485', '2025-07-29 16:46:52.665485', 'Field Name to Filter; Multi-level fields are separated by . (e.g., ''meta.suffix'')');
 INSERT INTO "public"."operator_config" VALUES (63, 46, 'target_value', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:46:52.665485', '2025-07-29 16:46:52.665485', 'Target Value List; only samples whose field values are in this list are retained');
 INSERT INTO "public"."operator_config" VALUES (9, 1, 'tokenization', 'checkbox', NULL, 'true', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-25 17:17:10.292128', '2025-07-25 17:17:10.292128', NULL);
@@ -96,17 +95,16 @@ INSERT INTO "public"."operator_config" VALUES (22, 16, 'spelling_error_word', 'c
 INSERT INTO "public"."operator_config" VALUES (29, 17, 'replace_similar_word', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:06:37.159089', '2025-07-28 22:06:37.159089', NULL);
 INSERT INTO "public"."operator_config" VALUES (35, 25, 'inline', 'checkbox', NULL, 'true', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:33:35.455987', '2025-07-28 22:33:35.455987', NULL);
 INSERT INTO "public"."operator_config" VALUES (43, 34, 'min_repeat_sentence_length', 'number', NULL, '2', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 09:27:45.064897', '2025-07-29 09:27:45.064897', NULL);
-INSERT INTO "public"."operator_config" VALUES (72, 20, 'lang', 'select', '[15, 16]', '15', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:49:06.949324', '2025-07-29 16:49:06.949324', NULL);
 INSERT INTO "public"."operator_config" VALUES (45, 36, 'min_col', 'slider', NULL, '2', '2', '20', '1', 'f', 'f', NULL, NULL, '2025-07-29 16:43:07.226271', '2025-07-29 16:43:07.226271', NULL);
 INSERT INTO "public"."operator_config" VALUES (46, 36, 'max_col', 'slider', NULL, '20', '2', '20', '1', 'f', 'f', NULL, NULL, '2025-07-29 16:43:07.226271', '2025-07-29 16:43:07.226271', NULL);
 INSERT INTO "public"."operator_config" VALUES (49, 37, 'substrings', 'select-v2', '[41, 42, 43, 44, 45]', '[''41'', ''42'', ''43'', ''44'', ''45'']', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:43:33.224115', '2025-07-29 16:43:33.224115', NULL);
-INSERT INTO "public"."operator_config" VALUES (74, 50, 'lang', 'select', '[15, 16]', '16', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:50:09.31549', '2025-07-29 16:50:09.31549', NULL);
 INSERT INTO "public"."operator_config" VALUES (53, 41, 'min_len', 'number', NULL, '10', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 16:44:17.555527', '2025-07-29 16:44:17.555527', NULL);
 INSERT INTO "public"."operator_config" VALUES (54, 41, 'max_len', 'number', NULL, '999999', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 16:44:17.555527', '2025-07-29 16:44:17.555527', NULL);
 INSERT INTO "public"."operator_config" VALUES (56, 42, 'min_score', 'slider', NULL, '0.5', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-29 16:45:37.673406', '2025-07-29 16:45:37.673406', NULL);
 INSERT INTO "public"."operator_config" VALUES (57, 43, 'max_len', 'number', NULL, '7328', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 16:46:18.568303', '2025-07-29 16:46:18.568303', NULL);
 INSERT INTO "public"."operator_config" VALUES (1, 43, 'min_len', 'number', NULL, '10', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 16:46:18.568303', '2025-07-29 16:46:18.568303', NULL);
 INSERT INTO "public"."operator_config" VALUES (65, 47, 'min_value', 'number', NULL, '-999999', NULL, NULL, NULL, 'f', 'f', '0.01', NULL, '2025-07-29 16:46:59.774123', '2025-07-29 16:46:59.774123', NULL);
+INSERT INTO "public"."operator_config" VALUES (74, 50, 'base_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:50:09.31549', '2025-07-29 16:50:09.31549', NULL);
 INSERT INTO "public"."operator_config" VALUES (66, 47, 'max_value', 'number', NULL, '999999', NULL, NULL, NULL, 'f', 'f', '0.01', NULL, '2025-07-29 16:46:59.774123', '2025-07-29 16:46:59.774123', NULL);
 INSERT INTO "public"."operator_config" VALUES (50, 38, 'pattern', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:43:42.188461', '2025-07-29 16:43:42.188461', NULL);
 INSERT INTO "public"."operator_config" VALUES (69, 48, 'min_ratio', 'slider', NULL, '0.3', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-29 16:47:06.922281', '2025-07-29 16:47:06.922281', NULL);
@@ -138,7 +136,6 @@ INSERT INTO "public"."operator_config" VALUES (91, 26, 'lowercase', 'checkbox', 
 INSERT INTO "public"."operator_config" VALUES (95, 26, 'num_bands', 'number', NULL, NULL, '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:04:52.926481', '2025-07-29 17:04:52.926481', 'Number of Bands in LSH (Automatically Calculated)');
 INSERT INTO "public"."operator_config" VALUES (108, 28, 'select_ratio', 'slider', NULL, '0', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-29 17:05:48.123415', '2025-07-29 17:05:48.123415', 'Selection Proportion (0-1); for example, 0.1 means selecting 10% of the samples');
 INSERT INTO "public"."operator_config" VALUES (109, 28, 'select_num', 'number', NULL, '1', '0', NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:05:48.123415', '2025-07-29 17:05:48.123415', 'Number of Selected Samples');
-INSERT INTO "public"."operator_config" VALUES (59, 44, 'max_ppl', 'number', NULL, '8000', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 16:46:34.295683', '2025-07-29 16:46:34.295683', 'Maximum Perplexity Threshold; Samples exceeding this threshold will be filtered out');
 INSERT INTO "public"."operator_config" VALUES (52, 39, 'lang', 'select', '[15, 16]', '15', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:43:50.685717', '2025-07-29 16:43:50.685717', 'Language of the Text, Options: ''en'' (English), ''zh'' (Chinese)');
 INSERT INTO "public"."operator_config" VALUES (16, 11, 'model_name', 'input', NULL, 'deepseek-chat', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 18:10:15.204689', '2025-07-28 18:10:15.204689', 'The Name of the Model');
 INSERT INTO "public"."operator_config" VALUES (26, 16, 'delete_random_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576', NULL);
@@ -170,6 +167,15 @@ INSERT INTO "public"."operator_config" VALUES (40, 33, 'keep_punc', 'checkbox', 
 INSERT INTO "public"."operator_config" VALUES (41, 34, 'lowercase', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 09:27:45.064897', '2025-07-29 09:27:45.064897', NULL);
 INSERT INTO "public"."operator_config" VALUES (21, 16, 'swap_random_word', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576', NULL);
 INSERT INTO "public"."operator_config" VALUES (20, 16, 'delete_random_word', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576', NULL);
+INSERT INTO "public"."operator_config" VALUES (72, 20, 'base_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:49:06.949324', '2025-07-29 16:49:06.949324', NULL);
+INSERT INTO "public"."operator_config" VALUES (163, 20, 'model', 'input', NULL, 'qwen-max', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:10', NULL);
+INSERT INTO "public"."operator_config" VALUES (58, 44, 'base_url', 'input', NULL, 'https://dashscope.aliyuncs.com/compatible-mode/v1', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:46:34.295683', '2025-07-29 16:46:34.295683', 'Language for Perplexity Calculation, Options: ''en'' (English), ''zh'' (Chinese)');
+INSERT INTO "public"."operator_config" VALUES (164, 20, 'api_key', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:10', NULL);
+INSERT INTO "public"."operator_config" VALUES (59, 44, 'max_ppl', 'number', NULL, '1500', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 16:46:34.295683', '2025-07-29 16:46:34.295683', 'Maximum Perplexity Threshold; Samples exceeding this threshold will be filtered out');
+INSERT INTO "public"."operator_config" VALUES (165, 44, 'model', 'input', NULL, 'qwen-max', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:10', NULL);
+INSERT INTO "public"."operator_config" VALUES (166, 44, 'api_key', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:10', NULL);
+INSERT INTO "public"."operator_config" VALUES (167, 50, 'model', 'input', NULL, 'qwen-max', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:10', NULL);
+INSERT INTO "public"."operator_config" VALUES (168, 50, 'api_key', 'input', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:10', NULL);
 INSERT INTO "public"."operator_config" VALUES (23, 16, 'split_random_word', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576', NULL);
 INSERT INTO "public"."operator_config" VALUES (24, 16, 'keyboard_error_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576', NULL);
 INSERT INTO "public"."operator_config" VALUES (25, 16, 'ocr_error_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:02:58.91576', '2025-07-28 22:02:58.91576', NULL);
