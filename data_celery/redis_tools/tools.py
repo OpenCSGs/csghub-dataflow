@@ -46,7 +46,7 @@ def set_celery_server_status(worker_name,status_json,expire_sec=None):
         redis_celery = get_celery_worker_redis_db()
         celery_info_details_key = get_celery_info_details_key(worker_name)
         redis_celery.set(celery_info_details_key, status_json, expire_sec)
-        
+        logger.info(f"set_celery_server_status 设置了worker:{celery_info_details_key},状态: {status_json}")
         # Simultaneously save the last heartbeat time to the backup key (no expiration time is set, permanently saved)
         try:
             dict_result = json.loads(status_json)

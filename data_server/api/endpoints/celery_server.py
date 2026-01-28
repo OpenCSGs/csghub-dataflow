@@ -45,6 +45,7 @@ async def get_celery_server_list_api(
                 dict_result = worker_name_dict[server_key]
                 if "current_time" in dict_result:
                     current_time = dict_result["current_time"]
+                    logger.info(f"容器过期时间差: {get_timestamp() - current_time}")
                     if get_timestamp() - current_time > 12:
                         # offline-state-displaying-the-last-heartbeat-time
                         ret_list.append(
