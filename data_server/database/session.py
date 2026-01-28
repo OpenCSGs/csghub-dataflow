@@ -94,6 +94,10 @@ def get_celery_info_details_key(work_name):
 
     return f'celery-worker-time:{work_name}'
 
+def get_celery_last_heartbeat_key(work_name):
+
+    return f'celery-worker-last-heartbeat:{work_name}'
+
 
 # def new_async_engine(uri: URL) -> AsyncEngine:
 #     return create_async_engine(

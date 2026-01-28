@@ -2,6 +2,7 @@ from data_celery.main import celery_app
 from data_celery.db.JobsManager import get_pipline_job_by_uid
 from data_server.job.JobModels import Job
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from data_server.schemas.responses import JOB_STATUS
 from data_server.database.session import get_sync_session
 from data_celery.utils import (ensure_directory_exists,
@@ -56,7 +57,21 @@ def run_pipline_job(job_uuid,user_id, user_name, user_token):
             return False
         current_process_id = os.getpid()
         add_process_to_redis(job_uuid,current_process_id, current_ip,work_name)
-
+        # 检查数据库连接有效性，如果失效则重新连接
+        try:
+            # 尝试执行一个简单查询以检查连接有效性
+            db_session.execute(text("SELECT 1"))
+        except Exception as conn_error:
+            logger.warning(f"Database connection lost before update, reconnecting: {conn_error}")
+            try:
+                db_session.close()
+            except:
+                pass
+            db_session = get_sync_session()
+            job_obj = get_pipline_job_by_uid(db_session, job_uuid)
+            if job_obj is None:
+                insert_pipline_job_run_task_log_error(job_uuid, f"not found job uuid after reconnect: {job_uuid}")
+                return False
         job_obj.task_run_host = current_ip
         job_obj.job_celery_work_name = work_name
         db_session.commit()
