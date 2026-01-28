@@ -441,8 +441,14 @@ class Filter(OP):
         self._log_line(f"[{self._name}] Filter Summary Statistics")
         self._log_line("="*60)
         self._log_line(f"Total samples: {total}")
-        self._log_line(f"Kept samples: {kept} ({kept/total*100:.2f}%)")
-        self._log_line(f"Filtered samples: {filtered} ({filtered/total*100:.2f}%)")
+        
+        # Handle zero total to avoid division by zero
+        if total > 0:
+            self._log_line(f"Kept samples: {kept} ({kept/total*100:.2f}%)")
+            self._log_line(f"Filtered samples: {filtered} ({filtered/total*100:.2f}%)")
+        else:
+            self._log_line(f"Kept samples: {kept} (N/A)")
+            self._log_line(f"Filtered samples: {filtered} (N/A)")
 
         if filtered > 0:
             self._log_line("")
@@ -453,10 +459,16 @@ class Filter(OP):
                 if reason not in ['total', 'kept'] and count > 0:
                     # Format reason name for display
                     reason_display = reason.replace('_', ' ').title()
-                    self._log_line(f"  - {reason_display}: {count} ({count/total*100:.2f}%)")
+                    if total > 0:
+                        self._log_line(f"  - {reason_display}: {count} ({count/total*100:.2f}%)")
+                    else:
+                        self._log_line(f"  - {reason_display}: {count} (N/A)")
         else:
             self._log_line("")
-            self._log_line("No samples filtered. All samples passed the filter.")
+            if total == 0:
+                self._log_line("No samples to process. Dataset is empty.")
+            else:
+                self._log_line("No samples filtered. All samples passed the filter.")
 
         # Log filter-specific parameters
         self._log_filter_parameters()
