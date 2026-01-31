@@ -65,10 +65,10 @@ class MultiKeywordFilter(Filter):
         if not self.keywords:
             keep = True
             reason = 'kept'
-            matched_keyword = None
+            matched_keyword = ""
         else:
             text = sample[self.text_key]
-            matched_keyword = None
+            matched_keyword = ""
             
             # Convert to lowercase if case-insensitive matching
             if not self.case_sensitive:
@@ -89,7 +89,7 @@ class MultiKeywordFilter(Filter):
                         matched_keyword = keyword
                         break
             
-            keep = matched_keyword is None
+            keep = matched_keyword == ""
             reason = 'kept' if keep else 'keyword_found'
         
         # Store detailed information for logging
