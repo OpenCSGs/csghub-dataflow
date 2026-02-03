@@ -1,4 +1,15 @@
 数据 Bloom 过滤去重（`text_bloom_filter`）与生成数据聚合（`gather_generated_data_filter`）
+
+**使用场景**
+- 快速去重: 使用布隆过滤器快速检测重复
+- 大规模去重: 处理海量数据的去重任务
+- 增量去重: 与历史数据进行去重
+
+**示例**
+- 输入文本: `"This is a new document."`
+- 配置: `bloom_filter_file='filter.bloom', hash_func='md5'`
+- 如果文本哈希不在过滤器中，样本被保留
+
 - 输入：可能包含重复内容的大规模文本流，或由生成算子输出的 `instruction/response` 对话数据。
 - 输出：
   - 经 `text_bloom_filter` 过滤后，仅保留首见文本；
