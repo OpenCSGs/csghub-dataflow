@@ -59,12 +59,12 @@ class CleanCopyrightMapper(Mapper):
 
         # Greedy replace any file that begins with comment block, most
         # are copyright headers
-        for k in range(len(lines)):
-            if (lines[k].startswith('//') or lines[k].startswith('#')
-                    or lines[k].startswith('--') or not lines[k]):
-                skip = skip + 1
-            else:
-                break
+        # for k in range(len(lines)):
+        #     if (lines[k].startswith('//') or lines[k].startswith('#')
+        #             or lines[k].startswith('--') or not lines[k]):
+        #         skip = skip + 1
+        #     else:
+        #         break
 
         if skip:
             # we skipped, consume it
