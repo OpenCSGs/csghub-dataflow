@@ -1,4 +1,11 @@
-前部样本选择器（`topk_specified_field_selector`）
-- 输入：同样包含可排序字段的样本集合。
-- 输出：按字段值排序后的前 k 条样本。
-- 核心：典型用法是选取最高得分/最长文本/最大点击量等 Top-K 样本，用于展示或精标。
+TopK字段选择（`topk_specified_field_selector`）
+
+**使用场景**
+- 数据精选: 选择质量最高的样本
+- 排行筛选: 选择得分最高的样本
+- 数据缩减: 只保留最重要的样本
+
+**示例**
+- 输入数据: 包含quality_score字段的数据集
+- 配置: `field_key='quality_score', top_k=1000, reverse=True`
+- 输出: 质量分数最高的1000个样本

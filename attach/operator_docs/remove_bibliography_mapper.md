@@ -1,4 +1,24 @@
-移除参考书目信息（`remove_bibliography_mapper`）
-- 输入：包含 `\\bibliography{...}` 或参考文献环境的 LaTeX 文档。
-- 输出：去除末尾参考文献信息后的正文文本。
-- 核心：按照 LaTeX 结构识别并删除参考书目段落，减少引用列表对语料统计的影响。
+参考文献移除（`remove_bibliography_mapper`）
+
+**使用场景**
+- 学术论文处理: 去除论文的参考文献部分
+- 正文提取: 只保留论文的正文内容
+- 数据清洗: 为NLP任务准备纯文本数据
+
+**示例**
+- 输入文本:
+  ```latex
+  \section{Conclusion}
+  This is the conclusion.
+  \clearpage
+  \bibliographystyle{ACM-Reference-Format}
+  \bibliography{sample-base}
+  \end{document}
+  ```
+- 输出文本:
+  ```latex
+  \section{Conclusion}
+  This is the conclusion.
+  \clearpage
+  \bibliographystyle{ACM-Reference-Format}
+  ```

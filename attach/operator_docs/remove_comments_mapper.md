@@ -1,4 +1,22 @@
-移除评论信息（`remove_comments_mapper`）
-- 输入：带有大量注释的代码/TeX 文本。
-- 输出：注释被移除后的源码 / 正文。
-- 核心：依语言注释规则（如 `%`、`//`、`/* */` 等）检测并移除注释行或块，目前主要支持 LaTeX/部分代码场景。
+注释移除（`remove_comments_mapper`）
+
+**使用场景**
+- LaTeX文档清洗: 去除注释内容
+- 代码提取: 只保留实际的LaTeX代码
+- 文档标准化: 统一文档格式
+
+**示例**
+- 输入文本:
+  ```latex
+  %% This is a comment
+  \documentclass{article}
+  \title{My Paper} % inline comment
+  %% Another comment
+  \begin{document}
+  ```
+- 输出文本:
+  ```latex
+  \documentclass{article}
+  \title{My Paper}
+  \begin{document}
+  ```

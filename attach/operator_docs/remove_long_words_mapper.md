@@ -1,4 +1,11 @@
-移除长字符串（`remove_long_words_mapper`）
-- 输入：含有超长 token 的文本，如一大串无空格字符。
-- 输出：超出长度阈值的单词被移除或替换后的文本。
-- 核心：按设定最小/最大长度过滤单词，去掉异常长的字符串（如垃圾 URL、编码片段）。
+长词移除（`remove_long_words_mapper`）
+
+**使用场景**
+- 数据清洗: 去除异常长的词(可能是乱码)
+- 文本标准化: 过滤不合理的词
+- 噪声去除: 删除URL、长串数字等
+
+**示例**
+- 输入文本: `"This paper a novel eqeqweqwewqeqwe121e1 method on LLM pretrain."`
+- 配置: `min_len=1, max_len=10`
+- 输出文本: `"This paper novel method LLM pretrain."`

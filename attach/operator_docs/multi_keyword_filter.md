@@ -8,8 +8,4 @@
 **示例**
 - 输入文本: `"Machine learning and deep learning are important."`
 - 配置: `keywords=['machine learning', 'AI'], match_mode='any'`
-- 包含"machine learning"，样本被保留
-
-- 输入：包含文本内容的样本集合。
-- 输出：删除匹配到任何指定关键词的样本。
-- 核心：根据预设的关键词列表，当样本中包含任意一个关键词时，将该样本过滤掉，用于删除包含特定关键词的不需要的数据记录。
+- 输出: 包含"machine learning"，样本被保留
