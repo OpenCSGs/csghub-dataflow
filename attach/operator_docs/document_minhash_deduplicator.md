@@ -1,4 +1,11 @@
-文档去重（MinHashLSH）（`document_minhash_deduplicator`）
-- 输入：大规模文本语料库。
-- 输出：近似相同文档被合并/去重后的数据集。
-- 核心：通过 MinHash + LSH 近似检测高 Jaccard 相似度的文档并去重，原始中间结构以字节存储，最终数据集不保留这些结构。
+MinHash去重（`document_minhash_deduplicator`）
+
+**使用场景**
+- 近似去重: 删除高度相似的文档
+- 大规模去重: 使用LSH加速查找
+- 内容去重: 基于n-gram相似度去重
+
+**示例**
+- 输入: 包含相似文档的数据集
+- 配置: `num_perm=256, jaccard_threshold=0.7, ngram_size=5`
+- 输出: 去除相似文档后的数据集

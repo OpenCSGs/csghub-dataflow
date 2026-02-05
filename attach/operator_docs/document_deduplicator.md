@@ -1,4 +1,4 @@
-文档去重（MD5）（`document_deduplicator`）
+文档去重（`document_deduplicator`）
 
 **使用场景**
 - 精确去重: 删除完全相同的文档
@@ -9,7 +9,3 @@
 - 输入: 包含重复文档的数据集
 - 配置: `hash_method='md5', lowercase=False, ignore_non_character=False`
 - 输出: 去除重复后的数据集，只保留每组重复文档中的第一个
-
-- 输入：带有完整文本字段的样本集合。
-- 输出：按文档级进行 MD5 精确去重后的数据集。
-- 核心：对文档内容计算 MD5 哈希，移除哈希值相同的重复样本。
