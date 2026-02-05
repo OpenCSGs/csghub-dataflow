@@ -1,4 +1,10 @@
-空白规范化（`whitespace_normalization_mapper`）
-- 输入："Hello\u2003World!\n这\t是  测试。"
-- 输出："Hello World!\n这 是 测试。"
-- 核心：将各种 Unicode 空白字符（制表符、不换行空格等）统一为普通空格 U+0020。
+空白字符标准化（`whitespace_normalization_mapper`）
+
+**使用场景**
+- 空白标准化: 统一不同类型的空白字符
+- 数据清洗: 去除异常的空白字符
+- 格式规范化: 确保文本使用标准空格
+
+**示例**
+- 输入文本: `"hello　world"` (包含全角空格)
+- 输出文本: `"hello world"` (转换为普通空格)
