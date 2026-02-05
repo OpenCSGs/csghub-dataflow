@@ -1,4 +1,11 @@
-Unicode 错误修正（`fix_unicode_mapper`）
-- 输入："This text has bad characters: cafÃ© and broken quotes â€œ."
-- 输出："This text has bad characters: café and broken quotes \"."
-- 核心：通过 `ftfy` 等库修正常见的 Unicode 编码错误，修复乱码与错误字符。
+Unicode修复（`fix_unicode_mapper`）
+
+**使用场景**
+- 编码修复: 修复因编码错误导致的乱码
+- 数据清洗: 统一文本的Unicode表示
+- 文本标准化: 确保文本使用标准的Unicode编码
+
+**示例**
+- 输入文本: `"The Mona Lisa doesnÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢t have eyebrows."`
+- 配置: `normalization='NFC'`
+- 输出文本: `"The Mona Lisa doesn't have eyebrows."`

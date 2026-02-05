@@ -1,4 +1,11 @@
-文档去重（SimHash）（`document_simhash_deduplicator`）
-- 输入：文本语料库。
-- 输出：根据 SimHash 相似度去重后的数据集。
-- 核心：对文本计算 SimHash 向量，通过汉明距离阈值判断"近似重复"，删除冗余样本。
+SimHash去重（`document_simhash_deduplicator`）
+
+**使用场景**
+- 近似去重: 删除相似但不完全相同的文档
+- 大规模去重: 高效处理海量数据
+- 内容去重: 识别内容相似的文档
+
+**示例**
+- 输入: 包含相似文档的数据集
+- 配置: `window_size=6, hamming_distance=4`
+- 输出: 去除相似文档后的数据集

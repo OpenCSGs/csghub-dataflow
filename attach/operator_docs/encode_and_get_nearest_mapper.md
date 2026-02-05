@@ -1,7 +1,16 @@
-数据样本向量编码搜索（`encode_and_get_nearest_mapper`）
-- 输入：包含 `first_prompt` 字段的样本集合（通常由前序算子整理得到）。
-- 输出：为每条样本增加 `embedding`、`nn_indices`、`nn_scores` 字段，记录其向量表示及最近邻信息。
-- 核心：
-  - 通过 OpenAI 兼容的 embedding 接口（默认 `text-embedding-v4`）对 `first_prompt` 列表编码为向量。
-  - 使用 `datasets` + `faiss` 构建索引，以内积（余弦）相似度检索每条样本的 Top‑K 最近邻。
-  - 结果用于后续基于图连通性的去重算子 `dedup_and_save_deduplicator`。
+文本编码与最近邻查找（`encode_and_get_nearest_mapper`）
+
+**使用场景**
+- 相似度搜索: 查找相似的文本
+- 数据去重: 识别重复或相似的样本
+- 聚类分析: 为文本聚类提供基础
+
+**示例**
+- 输入数据集:
+  ```json
+  [
+    {"first_prompt": "What is artificial intelligence?"},
+    {"first_prompt": "How does machine learning work?"}
+  ]
+  ```
+- 输出数据集: 增加 `embedding`、`nn_indices` 和 `nn_scores` 字段
