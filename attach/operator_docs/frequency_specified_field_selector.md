@@ -1,4 +1,11 @@
-排序频率选择器（`frequency_specified_field_selector`）
-- 输入：样本中包含某分类字段（如 `source`、`domain`）。
-- 输出：按字段值出现频率排序后，选出前 k 个最常见值对应的样本。
-- 核心：统计指定字段的频率，选择高频类别对应的样本子集。
+频率字段选择（`frequency_specified_field_selector`）
+
+**使用场景**
+- 数据采样: 选择最常见的类别
+- 长尾过滤: 去除低频样本
+- 数据平衡: 基于频率选择样本
+
+**示例**
+- 输入数据: 包含category字段的数据集
+- 配置: `field_key='category', top_k=5`
+- 输出: 只保留频率最高的5个类别的样本

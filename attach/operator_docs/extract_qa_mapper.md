@@ -1,7 +1,26 @@
-问答对提取（`extract_qa_mapper`）
-- 输入：说明性文档文本，如："物联网是物物相连的互联网，核心是互联网..."。
-- 输出：`[{"Human":"物联网的核心是什么？","Assistant":"互联网"}, ...]` 对应的 ChatML JSON 字符串。
-- 核心：
-  - 调用远程 API（支持 OpenAI 兼容格式，如 Qwen、DeepSeek、GPT 等）生成包含多轮 `Human: ...\nAssistant: ...` 的问答文本。
-  - 用正则模式 `Human: (.*?)\nAssistant: (.*?)(?=\nHuman|$)` 抽取问答对。
-  - 转成 ChatML 格式的 `messages` 列表，序列化后写回样本，实现从文档到多轮问答对的自动构造。
+问答提取（`extract_qa_mapper`）
+
+**使用场景**
+- 对话数据生成: 从文档中自动生成对话训练数据
+- 知识提取: 将文档转换为问答形式
+- 数据增强: 为对话模型创建训练数据
+
+**示例**
+- 输入文本: `"蒙古国的首都是乌兰巴托(Ulaanbaatar)。它是蒙古国最大的城市,也是该国的政治、经济和文化中心。"`
+- 输出:
+  ```json
+  [
+    {
+      "messages": [
+        {"role": "user", "content": "蒙古国的首都是哪里?"},
+        {"role": "assistant", "content": "蒙古国的首都是乌兰巴托(Ulaanbaatar)。"}
+      ]
+    },
+    {
+      "messages": [
+        {"role": "user", "content": "乌兰巴托在蒙古国是什么样的城市?"},
+        {"role": "assistant", "content": "乌兰巴托是蒙古国最大的城市,也是该国的政治、经济和文化中心。"}
+      ]
+    }
+  ]
+  ```

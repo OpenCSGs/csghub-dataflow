@@ -1,4 +1,11 @@
-英文语义增强（`nlpaug_en_mapper`）
-- 输入："The movie is great and very interesting."
-- 输出："The film is excellent and really engaging."（或同义改写版本）
-- 核心：使用 `nlpaug` 对英文样本进行同义词替换、插入、删除等轻量增强，扩充训练语料。
+英文数据增强（`nlpaug_en_mapper`）
+
+**使用场景**
+- 数据增强: 扩充训练数据集
+- 鲁棒性训练: 提高模型对噪声的容忍度
+- 模拟真实场景: 模拟用户输入错误
+
+**示例**
+- 输入文本: `"I am going to the park."`
+- 配置: `delete_random_word=True, aug_num=1`
+- 输出文本: `"I am to the park."` (删除了"going")

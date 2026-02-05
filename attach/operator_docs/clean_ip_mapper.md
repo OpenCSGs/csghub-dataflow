@@ -9,7 +9,3 @@ IP 地址清理（`clean_ip_mapper`）
 - 输入文本: `"ftp://example.com/188.46.244.216my-page.html"`
 - 配置: `pattern=默认, repl=''`
 - 输出文本: `"ftp://example.com/my-page.html"`
-
-- 输入："服务器地址为 192.168.0.1，备份地址为 fe80::1。"
-- 输出："服务器地址为 ，备份地址为 。"
-- 核心：删除文本中的 IPv4 / IPv6 地址信息，减少隐私与安全风险。

@@ -217,6 +217,16 @@ class ExtractQAMapper(Mapper):
         result = super().run(dataset, exporter=exporter, tracer=tracer)
         if getattr(self, 'enable_detailed_logging', False):
             self._log_mapper_summary()
+            # Check if all samples failed - if so, raise exception to mark task as failed
+            # This covers all types of failures: HTTP errors (401, 403, 500, etc.), network errors, 
+            # response parsing errors, and any other exceptions
+            if self.total_samples > 0 and self.modified_samples == 0:
+                error_msg = f"All {self.total_samples} sample(s) failed to extract QA pairs. Possible causes: invalid API credentials, network issues, API server errors, or response parsing failures. Please check your API configuration and logs for details."
+                logger.error(error_msg)
+                if hasattr(self, 'job_uid') and self.job_uid:
+                    from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                    insert_pipline_job_run_task_log_error(self.job_uid, error_msg, operator_name=self._name, operator_index=self.pipline_index)
+                raise RuntimeError(error_msg)
         return result
     
     def _log_mapper_summary(self):

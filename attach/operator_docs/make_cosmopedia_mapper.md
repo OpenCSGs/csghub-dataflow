@@ -1,4 +1,10 @@
-风格数据合成（`make_cosmopedia_mapper`）
-- 输入：包含 `title` 和正文 `text` 的网页摘录样本。
-- 输出：`sample['data']` 中写入一篇 WikiHow/教程风格的合成文章。
-- 核心：使用远程 OpenAI 兼容 API（默认 Qwen 系列），将网页摘录作为 topic，按模板生成长篇、多步骤、可操作性强的教学文本。
+Cosmopedia教程生成（`make_cosmopedia_mapper`）
+
+**使用场景**
+- 教程生成: 从网页摘录生成详细教程
+- 数据增强: 扩充教学数据集
+- 知识转换: 将简短内容转换为详细指南
+
+**示例**
+- 输入文本: `"How to Train Your Dog to Sit"`
+- 输出: 生成一篇详细的WikiHow风格教程,包含多个步骤和详细说明
