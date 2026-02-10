@@ -5,13 +5,15 @@ assets/
 temp/
 demo/
 tests/
+dataflow_data/
 # setup
 data_juicer.egg-info/
 py_data_juicer.egg-info/
 py_data_flow.egg-info/
 build/
 dist
-.venv/
+.venv
+.env
 .codesouler
 
 # others

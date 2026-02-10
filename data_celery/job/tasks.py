@@ -173,6 +173,49 @@ def remove_process_from_redis(job_uuid,process_id, current_ip,work_name):
     celery_task_process_real_key = get_celery_task_process_real_key(job_uuid)
     redis_celery.delete(celery_task_process_real_key)
 
+
+def cleanup_pipeline_data_files(job_uuid: str, dataset_path: str, export_path: str) -> None:
+    """
+    Remove only pipeline downloaded and exported data (including all subdirs and contents),
+    keeping log, trace, config, etc. Called when the task finishes (success or failure) to free disk space.
+    """
+    # Remove downloaded data under input dir (including all folders and subdir contents)
+    if dataset_path:
+        try:
+            if os.path.isfile(dataset_path):
+                os.remove(dataset_path)
+                logger.info(f"Removed dataset file: {dataset_path}")
+                insert_pipline_job_run_task_log_info(job_uuid, f"Removed dataset file: {dataset_path}")
+            elif os.path.isdir(dataset_path):
+                shutil.rmtree(dataset_path)
+                os.makedirs(dataset_path, exist_ok=True)
+                logger.info(f"Cleaned dataset directory (including all subdirs): {dataset_path}")
+                insert_pipline_job_run_task_log_info(job_uuid, f"Cleaned dataset directory (including all subdirs): {dataset_path}")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup dataset path [{dataset_path}]: {e}")
+            insert_pipline_job_run_task_log_error(job_uuid, f"Failed to cleanup dataset path [{dataset_path}]: {e}")
+    # Remove exported data under output (including dataset-name subdirs), keep only log, trace, config.yaml
+    output_dir = os.path.dirname(export_path) if export_path else ""
+    if output_dir and os.path.isdir(output_dir):
+        KEEP_IN_OUTPUT = {"log", "trace", "config.yaml"}
+        try:
+            for name in os.listdir(output_dir):
+                if name in KEEP_IN_OUTPUT:
+                    continue
+                path = os.path.join(output_dir, name)
+                if os.path.isfile(path):
+                    os.remove(path)
+                    logger.info(f"Removed export file: {path}")
+                    insert_pipline_job_run_task_log_info(job_uuid, f"Removed export file: {path}")
+                elif os.path.isdir(path):
+                    shutil.rmtree(path)
+                    logger.info(f"Removed export directory (including all subdirs): {path}")
+                    insert_pipline_job_run_task_log_info(job_uuid, f"Removed export directory (including all subdirs): {path}")
+        except Exception as e:
+            logger.warning(f"Failed to cleanup output dir [{output_dir}]: {e}")
+            insert_pipline_job_run_task_log_error(job_uuid, f"Failed to cleanup output dir [{output_dir}]: {e}")
+
+
 def run_pipline_job_task(config,job,session,user_id, user_name, user_token):
     """
     pipline task。
@@ -256,3 +299,6 @@ def run_pipline_job_task(config,job,session,user_id, user_name, user_token):
                 logger.error(f"Failed to update job status even after rollback: {e2}")
         insert_pipline_job_run_task_log_error(job.uuid, f"{job.uuid} Error occurred during pipeline execution: {str(e)}")
         raise
+    finally:
+        # After task ends (success or failure), remove only downloaded and exported data; keep log, trace, config
+        cleanup_pipeline_data_files(job.uuid, config.dataset_path, config.export_path)
