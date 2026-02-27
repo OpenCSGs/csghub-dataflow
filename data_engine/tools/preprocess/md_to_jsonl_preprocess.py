@@ -351,8 +351,9 @@ class MdToJsonlPreprocess(TOOL):
             num_chunks = len(dataset)
             
             # Save to default x.jsonl
+            # Use num_proc=1 on Windows to avoid multiprocessing deadlock in Dataset.to_json()
             output_file = os.path.join(self.tool_def.export_path, 'x.jsonl')
-            dataset.to_json(output_file, force_ascii=False, num_proc=self.tool_def.np)
+            dataset.to_json(output_file, force_ascii=False, num_proc=1 if os.name == 'nt' else self.tool_def.np)
             logger.info(f'Dataset saved to {output_file} ({num_chunks} chunks)')
             
             # Generate meta.log for fallback case (only if generate_meta_log is True)
@@ -570,8 +571,9 @@ class MdToJsonlPreprocess(TOOL):
                     logger.info(f'Duplicate filename detected: "{base_name}" -> "{output_base_name}" (added suffix {suffix})')
                 
                 # Save dataset to JSONL file with UTF-8 encoding (cross-platform compatible)
+                # Use num_proc=1 on Windows to avoid multiprocessing deadlock in Dataset.to_json()
                 try:
-                    dataset.to_json(output_file, force_ascii=False, num_proc=self.tool_def.np)
+                    dataset.to_json(output_file, force_ascii=False, num_proc=1 if os.name == 'nt' else self.tool_def.np)
                 except Exception as e:
                     raise RuntimeError(f'Failed to save JSONL file: {output_file}. Error: {str(e)}') from e
                 

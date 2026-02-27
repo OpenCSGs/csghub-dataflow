@@ -306,6 +306,11 @@ class Executor:
                                                  'Exporting dataset to disk...')
 
             output_branch_name = self.exporter.export(dataset)
+            if getattr(self.exporter, 'repo_id', None) and output_branch_name:
+                insert_pipline_job_run_task_log_info(
+                    self.job_uid,
+                    f'Done push to repo: {self.exporter.repo_id} with branch: {output_branch_name}'
+                )
             # compress the last dataset after exporting
             if self.cfg.use_cache and self.cfg.cache_compress:
                 from data_engine.utils.compress import compress
