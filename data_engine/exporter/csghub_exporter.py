@@ -152,19 +152,20 @@ class ExporterCSGHUB(Exporter):
                 os.makedirs(self.repo_work_dir, exist_ok=True)
             logger.info(
                 f'Start to push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name},user_name: {self.user_name}, token: {self.user_token}')
-            r = Repository(
+            upload_large_folder_internal(
                 repo_id=self.repo_id,
-                upload_path=self.upload_path,
-                branch_name=self.output_branch_name,
-                user_name=self.user_name,
-                token=self.user_token,
-                repo_type=REPO_TYPE_DATASET,
+                local_path=self.upload_path,
+                repo_type=RepoType.DATASET,
+                revision=self.output_branch_name,
                 endpoint=get_endpoint(endpoint=GetHubEndpoint()),
-                work_dir=self.work_dir
+                token=self.user_token,
+                num_workers=1,
+                print_report=False,
+                print_report_every=1,
+                allow_patterns=None,
+                ignore_patterns=None
             )
-            r.upload()
             logger.info(f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
-            #insert_pipline_job_run_task_log_info(job_uid, f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
             if os.path.exists(self.repo_work_dir):
                 logger.info(f'Remove {self.repo_work_dir}')
                 shutil.rmtree(self.repo_work_dir)
