@@ -1,11 +1,46 @@
-文本实体依赖过滤（`text_entity_dependency_filter`）
+# 实体文本过滤 (text_entity_dependency_filter)
 
-**使用场景**
-- 复杂度过滤: 保留句法结构复杂的文本
-- 质量控制: 确保文本包含实体关系
-- 任务特定: 为需要实体关系的任务筛选数据
+## 算子功能
 
-**示例**
-- 输入文本: `"Apple Inc. was founded by Steve Jobs in California."`
-- 配置: `lang='en', min_dependency_num=1`
-- 输出: 包含实体"Apple Inc."、"Steve Jobs"、"California"及其依存关系，样本被保留
+这是一个文本实体依存过滤器,它会调用AI大模型来分析文本中的"实体"(名词、人名、地名等)是否和其他词有语法关联,过滤掉那些实体孤立、缺乏关联的低质量文本。
+
+## 处理逻辑
+
+算子的工作流程:
+
+1. **准备文本** - 清理特殊标记
+2. **调用AI** - 把文本发给大语言模型
+3. **AI分析** - AI识别所有实体,统计每个实体的依存边数
+4. **判断每个实体** - 看每个实体的依存边数是否达标
+5. **应用策略** - 根据策略(any/all)决定保留或过滤
+6. **返回结果** - 保留或过滤样本
+
+
+### 示例
+
+**配置:**
+```yaml
+base_url: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+最小依赖数量: 1
+任意或全部: "全部"
+model: 'qwen-max'
+api_key: 'your-api-key'
+```
+
+**输入数据:**
+```json
+{
+  {"text": "小明在北京的公司工作。",}
+  {"text": "苹果。香蕉。橙子。"}
+}
+```
+
+**输出数据:**
+```json
+{
+  "text": "小明在北京的公司工作。",
+  "stats": {
+    "num_dependency_edges": [2, 2, 1]
+  }
+}
+```

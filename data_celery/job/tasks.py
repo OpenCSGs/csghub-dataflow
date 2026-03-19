@@ -8,7 +8,7 @@ from data_server.database.session import get_sync_session
 from data_celery.utils import (ensure_directory_exists,
                                get_current_ip, get_current_time, get_pipline_temp_job_dir,
                                ensure_directory_exists_remove, get_datasource_csg_hub_server_dir)
-from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error, insert_pipline_job_run_task_log_info
+from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error, insert_pipline_job_run_task_log_info
 from data_server.database.session import (get_celery_worker_redis_db,get_celery_task_process_real_key,
                                           get_celery_process_list_key)
 from data_engine.utils.env import GetDataTopPath

@@ -1,18 +1,56 @@
-宏展开（`expand_macro_mapper`）
+# 宏定义扩展 (expand_macro_mapper)
 
-**使用场景**
-- LaTeX文档处理: 展开自定义宏,便于后续处理
-- 文档标准化: 将宏定义内联到文档中
-- 数据预处理: 为机器学习模型准备LaTeX数据
+## 算子功能
 
-**示例**
-- 输入文本:
-  ```latex
-  \newcommand{\mycommand}{Hello World}
-  This is \mycommand test.
-  ```
-- 输出文本:
-  ```latex
-  \newcommand{\mycommand}{Hello World}
-  This is Hello World test.
-  ```
+这是一个专门处理LaTeX文档的工具，它会找到LaTeX文档中自定义的宏（类似编程中的变量或函数），然后将文档中所有使用这些宏的地方替换成宏的实际内容，让文档更易读。
+
+## 处理逻辑
+
+### 第一步：扫描文档
+
+扫描整个LaTeX文档，查找宏定义。
+
+### 第二步：提取宏定义
+
+使用正则表达式提取两种类型的宏：
+- `\newcommand{\宏名}{宏内容}`
+- `\def\宏名{宏内容}`
+
+### 第三步：构建宏字典
+
+将所有找到的宏存储为字典：
+```python
+{
+    "\\myname": "张三",
+    "\\myschool": "清华大学"
+}
+```
+
+### 第四步：展开宏
+
+遍历文档，将所有宏的使用替换为宏的实际内容。
+
+### 第五步：返回结果
+
+返回展开后的文档。
+
+
+### 示例
+
+**输入数据：**
+```json
+[
+  {
+    "text": "\\newcommand{\\school}{清华大学}\n\\newcommand{\\dept}{计算机系}\n\n我在\\school的\\dept学习。"
+  }
+]
+```
+
+**输出数据：**
+```json
+[
+  {
+    "text": "\\newcommand{\\school}{清华大学}\n\\newcommand{\\dept}{计算机系}\n\n我在清华大学的计算机系学习。"
+  }
+]
+```

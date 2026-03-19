@@ -440,13 +440,26 @@ def prepare_huggingface_model(pretrained_model_name_or_path,
         # Transformers library can load models from local paths without downloading from HuggingFace Hub
         if os.path.exists(pretrained_model_name_or_path) and os.path.isdir(pretrained_model_name_or_path):
             # Local path exists (downloaded from OpenCSG), load with local_files_only=True to ensure no HuggingFace downloads
+            # Prefer use_fast=True for offset_mapping support (needed to avoid UTF-8 char boundary issues in chunking)
             try:
                 tokenizer = AutoTokenizer.from_pretrained(
                     pretrained_model_name_or_path,
                     trust_remote_code=trust_remote_code,
-                    local_files_only=True
+                    local_files_only=True,
+                    use_fast=True,
                 )
                 return tokenizer
+            except (ValueError, OSError, Exception):
+                # Fallback when fast tokenizer not available (e.g. no tokenizer.json)
+                try:
+                    tokenizer = AutoTokenizer.from_pretrained(
+                        pretrained_model_name_or_path,
+                        trust_remote_code=trust_remote_code,
+                        local_files_only=True,
+                    )
+                    return tokenizer
+                except Exception:
+                    raise
             except Exception as e:
                 # If loading fails, it might be missing some files in the git clone
                 # Check if essential files exist, if not, raise error instead of falling back to HuggingFace
@@ -722,6 +735,84 @@ def prepare_opencsg_inference(pretrained_model_name_or_path,
     return (model, None) if return_model else None
 
 
+def _pull_tokenizer_lfs_and_validate(model_cache_path: str, model_name: str) -> None:
+    """
+    Pull tokenizer-related LFS files and validate they are not LFS pointers.
+    When tokenizer files (e.g. tokenizer.json) are in Git LFS, clone with GIT_LFS_SKIP_SMUDGE=1
+    skips pulling them, leaving pointer files. This function explicitly pulls tokenizer LFS
+    files and validates. Returns clear error messages for distinguishable failure reasons.
+    """
+    LFS_POINTER_PREFIX = b'version https://git-lfs'
+    TOKENIZER_FILES_TO_CHECK = ['tokenizer.json', 'tokenizer_config.json']
+
+    lfs_not_installed = False  # Git LFS is not installed
+    lfs_pull_failed = False    # git lfs pull executed but returned non-zero
+    lfs_pull_stderr = ''
+
+    try:
+        result = subprocess.run(
+            [
+                'git', 'lfs', 'pull',
+                '--include=tokenizer.json',
+                '--include=tokenizer_config.json',
+                '--include=merges.txt'
+            ],
+            cwd=model_cache_path,
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+        if result.returncode != 0:
+            lfs_pull_failed = True
+            lfs_pull_stderr = (result.stderr or result.stdout or '').strip()[:300]
+            logger.warning(f'git lfs pull returned {result.returncode}: {result.stderr}')
+    except FileNotFoundError:
+        lfs_not_installed = True
+        logger.warning(
+            'git lfs not found. If tokenizer is in LFS, install https://git-lfs.github.com/ and run: git lfs install'
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(
+            f'git lfs pull timeout for model {model_name}. Please check network or try again.'
+        )
+
+    # Validate: if tokenizer files are still LFS pointers, raise with reason-specific error
+    for check_file in TOKENIZER_FILES_TO_CHECK:
+        file_path = os.path.join(model_cache_path, check_file)
+        if os.path.isfile(file_path):
+            try:
+                with open(file_path, 'rb') as f:
+                    first_bytes = f.read(50)
+                if first_bytes.startswith(LFS_POINTER_PREFIX):
+                    if lfs_not_installed:
+                        raise RuntimeError(
+                            f'{check_file} is still a Git LFS pointer.\n'
+                            f'Reason: Git LFS is not installed or not configured correctly.\n'
+                            f'Please install https://git-lfs.github.com/ and run: git lfs install, '
+                            f'then delete model cache and retry: {model_cache_path}'
+                        )
+                    elif lfs_pull_failed:
+                        err_detail = f'\nPull output: {lfs_pull_stderr}' if lfs_pull_stderr else ''
+                        raise RuntimeError(
+                            f'{check_file} is still a Git LFS pointer.\n'
+                            f'Reason: Remote repository does not host LFS objects or LFS pull failed.{err_detail}\n'
+                            f'Please try another model, or contact OpenCSG/repo maintainer to verify LFS support. '
+                            f'Delete model cache and retry: {model_cache_path}'
+                        )
+                    else:
+                        raise RuntimeError(
+                            f'{check_file} is still a Git LFS pointer.\n'
+                            f'Reason: Remote repository may not host LFS objects '
+                            f'(git lfs pull reported success but file was not updated).\n'
+                            f'Please try another model or contact OpenCSG/repo maintainer. '
+                            f'Delete model cache and retry: {model_cache_path}'
+                        )
+            except RuntimeError:
+                raise
+            except Exception as e:
+                logger.debug(f'Could not validate {check_file}: {e}')
+
+
 def get_opencsg_model_path(model_name: str, cache_dir: Optional[str] = None) -> str:
     """
     Get model's http_clone_url from OpenCSG Hub API and download the model to local.
@@ -744,6 +835,7 @@ def get_opencsg_model_path(model_name: str, cache_dir: Optional[str] = None) -> 
         git_dir = os.path.join(model_cache_path, '.git')
         if os.path.exists(git_dir):
             logger.info(f'Model {model_name} already exists in cache: {model_cache_path}')
+            _pull_tokenizer_lfs_and_validate(model_cache_path, model_name)
             return model_cache_path
     
     # Get model information from OpenCSG API
@@ -793,6 +885,7 @@ def get_opencsg_model_path(model_name: str, cache_dir: Optional[str] = None) -> 
                                          check=True, capture_output=True, text=True, timeout=300)
                     logger.info(f'Model {model_name} updated')
                     logger.debug(f'Git pull output: {result.stdout}')
+                    _pull_tokenizer_lfs_and_validate(model_cache_path, model_name)
                     return model_cache_path
                 except subprocess.CalledProcessError as e:
                     logger.warning(f'Failed to update model: {e.stderr or e.stdout}, will re-clone')
@@ -981,9 +1074,8 @@ def get_opencsg_model_path(model_name: str, cache_dir: Optional[str] = None) -> 
                 except Exception as e:
                     logger.warning(f'Checkout failed: {str(e)}')
             
-            # Skip Git LFS download - we only need tokenizer files, not model weights
-            # This saves time and space. Tokenizer files are usually small and not in LFS
-            logger.info('Skipping Git LFS download - only tokenizer files are needed, not model weights')
+            # Pull tokenizer LFS files (if tracked by LFS) and validate they are not pointers
+            _pull_tokenizer_lfs_and_validate(model_cache_path, model_name)
             
             # Verify that we have at least some tokenizer files
             files_in_dir = [f for f in os.listdir(model_cache_path) if f != '.git' and not f.startswith('.')]

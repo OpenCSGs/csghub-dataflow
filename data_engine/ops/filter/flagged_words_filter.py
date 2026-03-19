@@ -15,7 +15,7 @@ from ..common import (SPECIAL_CHARACTERS, get_words_from_document,
 from ..op_fusion import INTER_WORDS
 from loguru import logger
 import os
-from data_celery.mongo_tools.tools import (
+from data_celery.pg_log_tools.tools import (
     insert_pipline_job_run_task_log_info,
     insert_pipline_job_run_task_log_warning,
     insert_pipline_job_run_task_log_error

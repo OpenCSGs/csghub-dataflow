@@ -222,6 +222,7 @@ from data_server.formatify.FormatifyModels import DataFormatTask
 from data_server.algo_templates.model.algo_template import AlgoTemplate
 from data_server.operator.models.operator import OperatorInfo,OperatorConfig,OperatorConfigSelectOptions
 from data_server.operator.models.operator_permission import OperatorPermission
+from data_server.database.bean.task_log import TaskLog, OperatorStatus
 
 
 def create_tables():
@@ -240,6 +241,8 @@ def create_tables():
     OperatorConfig.metadata.create_all(_SYNC_ENGINE)
     OperatorConfigSelectOptions.metadata.create_all(_SYNC_ENGINE)
     OperatorPermission.metadata.create_all(_SYNC_ENGINE)
+    TaskLog.metadata.create_all(_SYNC_ENGINE)
+    OperatorStatus.metadata.create_all(_SYNC_ENGINE)
     logger.info("Database tables created successfully")
 
     _initialized = True

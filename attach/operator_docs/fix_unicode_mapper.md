@@ -1,11 +1,68 @@
-Unicode修复（`fix_unicode_mapper`）
+# Unicode错误修正 (fix_unicode_mapper)
 
-**使用场景**
-- 编码修复: 修复因编码错误导致的乱码
-- 数据清洗: 统一文本的Unicode表示
-- 文本标准化: 确保文本使用标准的Unicode编码
+## 算子功能
 
-**示例**
-- 输入文本: `"The Mona Lisa doesnÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢t have eyebrows."`
-- 配置: `normalization='NFC'`
-- 输出文本: `"The Mona Lisa doesn't have eyebrows."`
+这是一个文本编码修复工具,它能自动识别和修复文本中的各种编码错误,把乱码恢复成正常的文字。
+
+
+## 处理逻辑
+
+### 第一步:参数验证
+
+检查标准化模式参数:
+- 转换为大写(nfc → NFC)
+- 验证是否为有效值
+- 无效值抛出错误
+
+### 第二步:调用ftfy库
+
+使用ftfy(fixes text for you)库修复文本:
+- 自动检测编码问题类型
+- 应用修复算法
+- 使用指定的标准化模式
+
+### 第三步:文本修复
+
+ftfy库会修复多种问题:
+- 多重编码错误
+- HTML实体未解码
+- 控制字符清理
+- Windows编码问题
+- 组合字符标准化
+
+### 第四步:统计记录
+
+比较修复前后的文本:
+- 文本改变 → 修复成功
+- 文本不变 → 无需修复
+- 记录统计信息
+
+
+### 示例
+
+**配置:**
+```yaml
+标准化: "组合规范化形式"
+```
+
+**输入数据:**
+```json
+[
+  {"text": "CafÃ©"},
+  {"text": "Hello World"},
+  {"text": "â€œquoteâ€"},
+  {"text": "ä¸­æ–‡"},
+  {"text": "Normal text"}
+]
+```
+
+**输出数据:**
+```json
+[
+  {"text": "Café"},
+  {"text": "Hello World"},
+  {"text": "\"quote\""},
+  {"text": "中文"},
+  {"text": "Normal text"}
+]
+```

@@ -10,7 +10,7 @@ from data_celery.db.DatasourceManager import get_collection_task_by_uid
 from data_celery.utils import (ensure_directory_exists,
                                get_current_ip, get_current_time, get_datasource_temp_parquet_dir,
                                ensure_directory_exists_remove, get_datasource_csg_hub_server_dir)
-from data_celery.mongo_tools.tools import insert_datasource_run_task_log_info,insert_datasource_run_task_log_error
+from data_celery.pg_log_tools.tools import insert_datasource_run_task_log_info,insert_datasource_run_task_log_error
 from data_server.datasource.services.datasource import get_datasource_connector
 from data_server.datasource.schemas import DataSourceCreate
 from data_engine.exporter.load import load_exporter

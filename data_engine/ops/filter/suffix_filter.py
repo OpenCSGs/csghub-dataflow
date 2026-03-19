@@ -2,6 +2,13 @@ from typing import List, Tuple, Union
 
 from data_engine.utils.constant import Fields
 
+from data_celery.pg_log_tools.tools import (
+    insert_pipline_job_run_task_log_error,
+    insert_pipline_job_run_task_log_info,
+    set_pipline_job_operator_status,
+    OperatorStatusEnum,
+)
+
 from ..base_op import OPERATORS, Filter, Sample, Param, DataType
 
 
@@ -86,48 +93,78 @@ class SuffixFilter(Filter):
         """Override run method to add detailed logging."""
         from data_engine.utils.constant import Fields
         from data_engine.core.data import add_same_content_to_new_column
-        
-        # Add stats column if not exists
-        if Fields.stats not in dataset.features:
-            dataset = dataset.map(add_same_content_to_new_column,
-                                  fn_kwargs={
-                                      'new_column_name': Fields.stats,
-                                      'initial_value': {}
-                                  },
-                                  num_proc=self.runtime_np(),
-                                  desc='Adding new column for stats')
-        
-        # Compute stats for all samples
-        dataset_with_stats = dataset.map(self.compute_stats,
-                                        num_proc=self.runtime_np(),
-                                        with_rank=self.use_cuda(),
-                                        desc=self._name + '_compute_stats')
-        
-        # Export stats if needed
-        if self.stats_export_path is not None:
-            exporter.export_compute_stats(dataset_with_stats, self.stats_export_path)
-        
-        # Filter dataset
-        filtered_dataset = dataset_with_stats.filter(self.process,
-                                                    num_proc=self.runtime_np(),
-                                                    desc=self._name + '_process')
-        
-        # Trace if needed
-        if tracer:
-            tracer.trace_filter(self._name, dataset_with_stats, filtered_dataset,
-                               job_uid=self.job_uid, pipeline_index=self.pipline_index)
-        
-        # Log detailed statistics
-        if getattr(self, 'enable_detailed_logging', False):
-            self._log_filter_details(dataset_with_stats, filtered_dataset)
-        
-        return filtered_dataset
+
+        insert_pipline_job_run_task_log_info(
+            self.job_uid, "starting filter job",
+            operator_name=self._name, operator_index=self.pipline_index
+        )
+        set_pipline_job_operator_status(
+            self.job_uid, OperatorStatusEnum.Processing,
+            self._name, self.pipline_index
+        )
+        try:
+            # Add stats column if not exists
+            if Fields.stats not in dataset.features:
+                dataset = dataset.map(add_same_content_to_new_column,
+                                      fn_kwargs={
+                                          'new_column_name': Fields.stats,
+                                          'initial_value': {}
+                                      },
+                                      num_proc=self.runtime_np(),
+                                      desc='Adding new column for stats')
+
+            # Compute stats for all samples
+            dataset_with_stats = dataset.map(self.compute_stats,
+                                             num_proc=self.runtime_np(),
+                                             with_rank=self.use_cuda(),
+                                             desc=self._name + '_compute_stats')
+
+            # Export stats if needed
+            if self.stats_export_path is not None:
+                exporter.export_compute_stats(dataset_with_stats, self.stats_export_path)
+
+            # Filter dataset
+            filtered_dataset = dataset_with_stats.filter(self.process,
+                                                        num_proc=self.runtime_np(),
+                                                        desc=self._name + '_process')
+
+            # Trace if needed
+            if tracer:
+                tracer.trace_filter(self._name, dataset_with_stats, filtered_dataset,
+                                   job_uid=self.job_uid, pipeline_index=self.pipline_index)
+
+            # Log detailed statistics
+            if getattr(self, 'enable_detailed_logging', False):
+                self._log_filter_details(dataset_with_stats, filtered_dataset)
+
+            set_pipline_job_operator_status(
+                self.job_uid, OperatorStatusEnum.SUCCESS,
+                self._name, self.pipline_index
+            )
+            return filtered_dataset
+        except Exception as e:
+            set_pipline_job_operator_status(
+                self.job_uid, OperatorStatusEnum.ERROR,
+                self._name, self.pipline_index
+            )
+            insert_pipline_job_run_task_log_error(
+                self.job_uid, f"An error occurred during data filter: {e}",
+                operator_name=self._name, operator_index=self.pipline_index
+            )
+            raise
+        finally:
+            insert_pipline_job_run_task_log_info(
+                self.job_uid, "ending filter job",
+                operator_name=self._name, operator_index=self.pipline_index
+            )
     
     def _log_filter_details(self, original_dataset, filtered_dataset):
         try:
             from loguru import logger
             from data_engine.utils.constant import Fields
             total_samples = len(original_dataset)
+            if total_samples == 0:
+                return
             stats_counters = {'total': total_samples, 'kept': 0, 'suffix_not_match': 0}
             for sample in original_dataset:
                 stats = sample.get(Fields.stats, {})
@@ -164,5 +201,5 @@ class SuffixFilter(Filter):
         from loguru import logger
         logger.info(message)
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

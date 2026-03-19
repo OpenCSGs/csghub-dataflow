@@ -173,11 +173,20 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
         return f"{param_name}: {list_content}"
     
     # regular_expressions_match_lists_in_string_format
-    # Match string array wrapped in single quotes: '[...]'
+    # Special case: clean_copyright_mapper.matching_rules may contain regex with [ ] (e.g. 1[3-9]\d{9}).
+    # Use greedy match by operator name; apply before general patterns.
+    def convert_clean_copyright_matching_rules(match):
+        prefix = match.group(1)
+        list_content = match.group(2).replace("''", "'")
+        return f"{prefix}matching_rules: {list_content}"
+
+    pattern_clean_copyright_single = r"(clean_copyright_mapper:\s*\n\s*)matching_rules:\s*'(\[.*\])'"
+    pattern_clean_copyright_double = r'(clean_copyright_mapper:\s*\n\s*)matching_rules:\s*"(\[.*\])"'
+    yaml_str = re.sub(pattern_clean_copyright_single, convert_clean_copyright_matching_rules, yaml_str)
+    yaml_str = re.sub(pattern_clean_copyright_double, convert_clean_copyright_matching_rules, yaml_str)
+    # General patterns (non-greedy) for other list params
     pattern1 = r"(\s+\w+):\s*'(\[.*?\])'"
     yaml_str = re.sub(pattern1, convert_string_list_to_yaml, yaml_str)
-    
-    # Match string array wrapped in double quotes: "[...]"
     pattern2 = r'(\s+\w+):\s*"(\[.*?\])"'
     yaml_str = re.sub(pattern2, convert_string_list_to_yaml, yaml_str)
 

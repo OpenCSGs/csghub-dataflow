@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from data_celery.mongo_tools.tools import get_log_List
+from data_celery.pg_log_tools.tools import get_log_List
 from data_server.schemas.responses import response_success
 
 router = APIRouter()

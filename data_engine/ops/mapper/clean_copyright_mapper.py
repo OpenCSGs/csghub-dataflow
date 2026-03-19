@@ -1,157 +1,190 @@
-# Some code here has been modified from:
-# https://github.com/togethercomputer/RedPajama-Data/tree/rp_v1/
+# --------------------------------------------------------
+# Clean copyright notices from documents (PDF->MD->JSONL pipeline).
+# For everyday documents, not source code.
 # --------------------------------------------------------
 
+from typing import List, Tuple, Union
+
 import regex as re
+from loguru import logger
 
 from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 
 
 @OPERATORS.register_module('clean_copyright_mapper')
 class CleanCopyrightMapper(Mapper):
-    """Mapper to clean copyright comments at the beginning of the text
-    samples."""
+    """Remove copyright notices from documents (PDF->MD->JSONL)."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self,
+                 matching_rules: Union[str, List[str], Tuple[str]] = [],
+                 *args,
+                 **kwargs):
         """
-        Initialization method.
-
-        :param args: extra args
-        :param kwargs: extra args
+        :param matching_rules: User-defined regex patterns for copyright removal (required).
+            All matching content is replaced with space. No built-in patterns.
+            - List/tuple: ["pattern1", "pattern2"] (recommended)
+            - String: single pattern or comma-separated patterns "pattern1,pattern2"
         """
         super().__init__(*args, **kwargs)
-        self.pat = re.compile('/\\*[^*]*\\*+(?:[^/*][^*]*\\*+)*/')
-        self.cpat = re.compile('copyright', re.IGNORECASE)
-        
-        # Enable detailed logging
         self.enable_detailed_logging = True
         self.total_samples = 0
         self.modified_samples = 0
         self.unmodified_samples = 0
 
+        # Normalize matching_rules to list (same as multi_keyword_filter)
+        if matching_rules is None:
+            raw_patterns = []
+        elif isinstance(matching_rules, (list, tuple)):
+            raw_patterns = list(matching_rules)
+        elif isinstance(matching_rules, str):
+            if ',' in matching_rules or '，' in matching_rules:
+                normalized = matching_rules.replace('，', ',')
+                raw_patterns = [p.strip() for p in normalized.split(',') if p.strip()]
+            else:
+                raw_patterns = [matching_rules] if matching_rules else []
+        else:
+            raw_patterns = []
+        raw_patterns = [p for p in raw_patterns if p]
+
+        # Fix over-escaped regex from JSON/frontend (e.g. \\d -> \d for digit match)
+        # Only fix \\X -> \X for chars where \X is a standard regex escape; never touch correct \X
+        _OVER_ESCAPE_PAIRS = (
+            ('d', 'd'), ('s', 's'), ('w', 'w'), ('D', 'D'), ('S', 'S'), ('W', 'W'),  # \d \s \w etc
+            ('n', 'n'), ('r', 'r'), ('t', 't'), ('f', 'f'), ('b', 'b'),  # \n \r \t \f \b
+            ('.', '.'), ('+', '+'), ('*', '*'), ('?', '?'), ('-', '-'),  # \. \+ \* \? \-
+            ('$', '$'),  # \$ for literal $ (e.g. $99.99)
+            ('[', '['), (']', ']'), ('(', '('), (')', ')'),  # \[ \] \( \) literal brackets/parens
+            ('{', '{'), ('}', '}'), ('|', '|'), ('^', '^'),  # \{ \} \| \^ literal in patterns
+        )
+
+        def _fix_over_escape(s):
+            changed = True
+            while changed:
+                changed = False
+                for _before, _after in _OVER_ESCAPE_PAIRS:
+                    old, new = '\\\\' + _before, '\\' + _after
+                    if old in s:
+                        s = s.replace(old, new)
+                        changed = True
+            return s
+
+        # Compile custom regex patterns; skip invalid ones with warning
+        self.matching_rules = []
+        self._invalid_regex_warnings = []  # stored for MongoDB logging in run()
+        fixed_patterns = []
+        for p in raw_patterns:
+            p_fixed = _fix_over_escape(p)
+            fixed_patterns.append(p_fixed)
+            try:
+                self.matching_rules.append(re.compile(p_fixed))
+            except re.error as e:
+                msg = f"[clean_copyright_mapper] Invalid matching_rules regex, skipped: {p_fixed!r} - {e}"
+                logger.warning(msg)
+                self._invalid_regex_warnings.append(msg)
+
+        # Debug: log matching_rules for troubleshooting
+        if raw_patterns:
+            logger.info(
+                f"[clean_copyright_mapper] matching_rules: raw_input={raw_patterns!r}, "
+                f"after_fix={fixed_patterns!r}, compiled={len(self.matching_rules)} pattern(s)"
+            )
+
     def process(self, sample):
-        # Track statistics
         if getattr(self, 'enable_detailed_logging', False):
             self.total_samples += 1
-        
-        original_text = sample[self.text_key]
 
-        r = self.pat.search(sample[self.text_key])
-        if r:
-            # found one, now see if it contains "copyright", if so strip it
-            span = r.span()
-            sub = sample[self.text_key][span[0]:span[1]]
-            if self.cpat.search(sub):
-                # cut it
-                sample[self.text_key] = sample[
-                    self.text_key][:span[0]] + sample[self.text_key][span[1]:]
+        original = sample[self.text_key]
+        text = original
 
-            # Track if modified
-            if getattr(self, 'enable_detailed_logging', False):
-                if sample[self.text_key] != original_text:
-                    self.modified_samples += 1
-                else:
-                    self.unmodified_samples += 1
-            return sample
+        # 1. Apply user-defined matching_rules (replace matched content with space)
+        for pat in self.matching_rules:
+            text = pat.sub(' ', text)
 
-        lines = sample[self.text_key].split('\n')
-        skip = 0
+        # 2. Collapse excessive blank lines
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = text.strip()
 
-        # Greedy replace any file that begins with comment block, most
-        # are copyright headers
-        # for k in range(len(lines)):
-        #     if (lines[k].startswith('//') or lines[k].startswith('#')
-        #             or lines[k].startswith('--') or not lines[k]):
-        #         skip = skip + 1
-        #     else:
-        #         break
+        sample[self.text_key] = text
 
-        if skip:
-            # we skipped, consume it
-            sample[self.text_key] = '\n'.join(lines[skip:])
-        
-        # Track if modified
         if getattr(self, 'enable_detailed_logging', False):
-            if sample[self.text_key] != original_text:
+            if sample[self.text_key] != original:
                 self.modified_samples += 1
             else:
                 self.unmodified_samples += 1
-        
+
         return sample
+
     @classmethod
     @property
     def description(cls):
-        return """Mapper to clean copyright comments at the beginning of the text
-    samples."""
+        return "Remove copyright notices from documents (PDF->MD->JSONL)."
 
     @classmethod
     @property
     def sample(cls):
-        return Sample("这是一段 /* 多行注释\n注释内容copyright\n*/ 的文本。另外还有一些 // 单行注释。", 
-                      "这是一段  的文本。另外还有一些 // 单行注释。")
+        return Sample(
+            "Copyright (c) 2024 Example Corp. All rights reserved.\n\nDocument body here.",
+            "Document body here."
+        )
 
     @classmethod
     @property
     def init_params(cls):
-        return None
-    
+        return [
+            Param("matching_rules", DataType.LIST, None, []),
+        ]
+
     def run(self, dataset, *, exporter=None, tracer=None):
-        """Override run method to add logging summary."""
+        # Log invalid regex warnings to MongoDB when job_uid is available
+        invalid_warnings = getattr(self, '_invalid_regex_warnings', [])
+        if invalid_warnings and hasattr(self, 'job_uid') and self.job_uid:
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
+            for msg in invalid_warnings:
+                insert_pipline_job_run_task_log_info(
+                    self.job_uid, msg,
+                    operator_name=self._name, operator_index=self.pipline_index
+                )
         if getattr(self, 'enable_detailed_logging', False):
             self.total_samples = 0
             self.modified_samples = 0
             self.unmodified_samples = 0
-        
         result = super().run(dataset, exporter=exporter, tracer=tracer)
-        
         if getattr(self, 'enable_detailed_logging', False):
             self._log_mapper_summary()
-        
         return result
-    
+
     def _log_mapper_summary(self):
-        """Generate and log summary statistics."""
         try:
-            from loguru import logger
-            
             total = self.total_samples
             modified = self.modified_samples
             unmodified = self.unmodified_samples
-            
             if total == 0:
                 return
-            
-            self._log_line("="*60)
-            self._log_line(f"[{self._name}] Copyright Cleaning Summary")
-            self._log_line("="*60)
+            self._log_line("=" * 60)
+            self._log_line(f"[{self._name}] Copyright cleanup summary")
+            self._log_line("=" * 60)
             self._log_line(f"Total samples processed: {total}")
-            self._log_line(f"Samples with copyright removed: {modified} ({modified/total*100:.2f}%)")
-            self._log_line(f"Samples unchanged: {unmodified} ({unmodified/total*100:.2f}%)")
-            self._log_line("="*60)
-            
+            self._log_line(f"Samples with copyright removed: {modified} ({modified / total * 100:.2f}%)")
+            self._log_line(f"Unchanged: {unmodified} ({unmodified / total * 100:.2f}%)")
+            self._log_line("=" * 60)
         except Exception as e:
             import traceback
             from loguru import logger
             error_msg = f"Failed to generate mapper logging: {e}\n{traceback.format_exc()}"
             logger.error(error_msg)
             if hasattr(self, 'job_uid') and self.job_uid:
-                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error
                 insert_pipline_job_run_task_log_error(
-                    self.job_uid,
-                    error_msg,
-                    operator_name=self._name,
-                    operator_index=self.pipline_index
+                    self.job_uid, error_msg,
+                    operator_name=self._name, operator_index=self.pipline_index
                 )
-    
+
     def _log_line(self, message):
-        """Log a single line to both logger and MongoDB."""
         from loguru import logger
         logger.info(message)
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(
-                self.job_uid,
-                message,
-                operator_name=self._name,
-                operator_index=self.pipline_index
+                self.job_uid, message,
+                operator_name=self._name, operator_index=self.pipline_index
             )

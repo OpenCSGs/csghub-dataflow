@@ -122,7 +122,7 @@ class CleanLinksMapper(Mapper):
             error_msg = f"Failed to generate mapper logging: {e}\n{traceback.format_exc()}"
             logger.error(error_msg)
             if hasattr(self, 'job_uid') and self.job_uid:
-                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error
                 insert_pipline_job_run_task_log_error(
                     self.job_uid,
                     error_msg,
@@ -135,7 +135,7 @@ class CleanLinksMapper(Mapper):
         from loguru import logger
         logger.info(message)
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(
                 self.job_uid,
                 message,

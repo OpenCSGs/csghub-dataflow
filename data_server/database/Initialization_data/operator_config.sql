@@ -1,7 +1,7 @@
 /*
  Navicat Premium Dump SQL
 
- Source Server         : postgresql-docker
+ Source Server         : docker-pgsql
  Source Server Type    : PostgreSQL
  Source Server Version : 150010 (150010)
  Source Host           : localhost:5433
@@ -12,7 +12,7 @@
  Target Server Version : 150010 (150010)
  File Encoding         : 65001
 
- Date: 28/01/2026 14:21:24
+ Date: 19/03/2026 15:26:44
 */
 
 
@@ -46,6 +46,17 @@ CREATE TABLE "public"."operator_config" (
 -- ----------------------------
 -- Records of operator_config
 -- ----------------------------
+INSERT INTO "public"."operator_config" VALUES (169, 4, 'matching_rules', 'textarea-array-data', NULL, '版权所有[^。\\n]*[。]?\\s*
+保留所有权利[^。\\n]*[。]?\\s*
+未经授权[^。\\n]*[。]?\\s*
+未经许可[^。\\n]*[。]?\\s*
+禁止转载[^。\\n]*[。]?\\s*
+严禁转载[^。\\n]*[。]?\\s*
+不得转载[^。\\n]*[。]?\\s*
+禁止复制[^。\\n]*[。]?\\s*
+禁止传播[^。\\n]*[。]?\\s*
+侵权必究[^。\\n]*[。]?\\s*
+著作权[^。\\n]*[。]?\\s*', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-12-03 14:55:10', '2025-12-03 14:55:10', NULL);
 INSERT INTO "public"."operator_config" VALUES (160, 62, 'keywords', 'input-tag', NULL, NULL, NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:26:54.728185', '2025-07-28 22:26:54.728185', NULL);
 INSERT INTO "public"."operator_config" VALUES (143, 61, 'auth_token', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-08-26 18:26:29.905881', '2025-08-26 18:26:29.905881', NULL);
 INSERT INTO "public"."operator_config" VALUES (156, 21, 'model_url', 'input', NULL, 'https://api.deepseek.com/chat/completions', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:26:54.728185', '2025-07-28 22:26:54.728185', NULL);
@@ -78,6 +89,7 @@ INSERT INTO "public"."operator_config" VALUES (61, 45, 'max_ratio', 'slider', NU
 INSERT INTO "public"."operator_config" VALUES (51, 38, 'repl', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:43:42.188461', '2025-07-29 16:43:42.188461', NULL);
 INSERT INTO "public"."operator_config" VALUES (64, 47, 'field_key', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:46:59.774123', '2025-07-29 16:46:59.774123', NULL);
 INSERT INTO "public"."operator_config" VALUES (10, 1, 'max_ratio', 'slider', NULL, '0.01', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-25 17:17:10.292128', '2025-07-25 17:17:10.292128', NULL);
+INSERT INTO "public"."operator_config" VALUES (113, 29, 'lower_rank', 'number', NULL, '1', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067', NULL);
 INSERT INTO "public"."operator_config" VALUES (44, 35, 'chars_to_remove', 'input', NULL, '◆●■►▼▲▴∆▻▷❖♡□', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 09:34:21.516557', '2025-07-29 09:34:21.516557', NULL);
 INSERT INTO "public"."operator_config" VALUES (5, 2, 'rep_len', 'number', NULL, '10', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-25 17:12:04.424873', '2025-07-25 17:12:04.424873', NULL);
 INSERT INTO "public"."operator_config" VALUES (6, 2, 'min_ratio', 'slider', NULL, '0', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-25 17:12:04.424873', '2025-07-25 17:12:04.424873', NULL);
@@ -151,7 +163,6 @@ INSERT INTO "public"."operator_config" VALUES (82, 18, 'rep_len', 'number', NULL
 INSERT INTO "public"."operator_config" VALUES (110, 29, 'field_key', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067', NULL);
 INSERT INTO "public"."operator_config" VALUES (115, 30, 'field_key', 'input', NULL, '', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 17:06:02.760052', '2025-07-29 17:06:02.760052', NULL);
 INSERT INTO "public"."operator_config" VALUES (112, 29, 'upper_percentile', 'slider', NULL, '0', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067', NULL);
-INSERT INTO "public"."operator_config" VALUES (113, 29, 'lower_rank', 'number', NULL, '1', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067', NULL);
 INSERT INTO "public"."operator_config" VALUES (114, 29, 'upper_rank', 'number', NULL, '1', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067', NULL);
 INSERT INTO "public"."operator_config" VALUES (117, 30, 'topk', 'number', NULL, '1', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:06:02.760052', '2025-07-29 17:06:02.760052', NULL);
 INSERT INTO "public"."operator_config" VALUES (30, 17, 'swap_random_word', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:06:37.159089', '2025-07-28 22:06:37.159089', NULL);

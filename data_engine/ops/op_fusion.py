@@ -4,7 +4,7 @@ from loguru import logger
 
 from data_engine.utils.constant import Fields, InterVars
 from data_engine.utils.registry import Registry
-from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
 from .base_op import Filter
 
 # Type of intermediate vars

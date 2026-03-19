@@ -7,7 +7,7 @@ import psutil
 from loguru import logger
 
 from data_engine import cuda_device_count
-from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_warning
+from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_warning
 
 def setup_mp(method=None):
     if mp.current_process().name != 'MainProcess':

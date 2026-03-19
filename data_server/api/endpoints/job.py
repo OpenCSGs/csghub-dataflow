@@ -23,7 +23,7 @@ from data_server.job.JobsManager import (
 )
 from data_server.utils.jwt_utils import parse_jwt_token
 from data_server.job.JobModels import Job
-from data_celery.mongo_tools.tools import get_pipline_job_log_List,get_pipline_job_operators_status,get_pipline_job_total_operators_status
+from data_celery.pg_log_tools.tools import get_pipline_job_log_List,get_pipline_job_operators_status,get_pipline_job_total_operators_status
 from loguru import logger
 router = APIRouter()
 

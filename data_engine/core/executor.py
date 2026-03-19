@@ -18,7 +18,7 @@ from ..ops.selector.topk_specified_field_selector import \
 from ..exporter.load import load_exporter
 from .tracer import Tracer
 from .._telemetry import TRACE_HELPER, get_telemetry_envelope_metadata
-from data_celery.mongo_tools.tools import (insert_pipline_job_run_task_log_error,
+from data_celery.pg_log_tools.tools import (insert_pipline_job_run_task_log_error,
                                            insert_pipline_job_run_task_log_info,
                                            insert_pipline_job_run_task_log_debug,
                                            insert_pipline_job_run_task_log_warning)
