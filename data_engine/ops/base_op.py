@@ -11,7 +11,7 @@ from data_engine.utils.mm_utils import size_to_bytes
 from data_engine.utils.process_utils import calculate_np
 from data_engine.utils.registry import Registry
 
-from data_server.log_tools.tools import (insert_pipline_job_run_task_log_error,
+from data_celery.pg_log_tools.tools import (insert_pipline_job_run_task_log_error,
                                            insert_pipline_job_run_task_log_info,
                                            insert_pipline_job_run_task_log_debug,
                                            set_pipline_job_operator_status,OperatorStatusEnum)
@@ -631,9 +631,9 @@ class Filter(OP):
             self._log_line(f"  - (No specific parameter display configured)")
 
     def _log_line(self, message):
-        """Log a single line to both logger and task logs."""
+        """Log a single line to both logger and MongoDB."""
         logger.info(message)
-        # Only write to task logs if job_uid exists
+        # Only write to MongoDB if job_uid exists
         if hasattr(self, 'job_uid') and self.job_uid:
             insert_pipline_job_run_task_log_info(
                 self.job_uid,
