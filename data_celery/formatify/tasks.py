@@ -24,7 +24,7 @@ import pandas as pd
 import mammoth
 from markdownify import markdownify as md
 from pptx import Presentation
-from data_celery.mongo_tools.tools import insert_formatity_task_log_info, insert_formatity_task_log_error
+from data_celery.pg_log_tools.tools import insert_formatity_task_log_info, insert_formatity_task_log_error
 from pycsghub.upload_large_folder.main import upload_large_folder_internal
 from pycsghub.cmd.repo_types import RepoType
 from pycsghub.utils import (build_csg_headers,

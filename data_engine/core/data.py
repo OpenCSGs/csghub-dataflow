@@ -205,7 +205,7 @@ class NestedDataset(Dataset, DJDataset):
             logger.error(f'An error occurred during Op [{op._name}].')
             # 同时写入 MongoDB，让任务日志界面可以看到
             if hasattr(op, 'job_uid') and op.job_uid:
-                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error
                 insert_pipline_job_run_task_log_error(
                     op.job_uid,
                     f'An error occurred during Op [{op._name}]: {e}',

@@ -11,9 +11,8 @@ from data_server.formatify.FormatifyManager import (create_formatify_task, searc
                                                     update_formatify_task, delete_formatify_task,
                                                     get_formatify_task, stop_formatify_task)
 from pycsghub.snapshot_download import snapshot_download
-from data_celery.mongo_tools.tools import get_formatity_collection, get_client
+from data_celery.pg_log_tools.tools import get_progress_from_formatify_logs
 import os
-import re
 from sqlalchemy import func
 router = APIRouter()
 
@@ -205,103 +204,19 @@ async def delete_formatify(formatify_id: int, db: Session = Depends(get_sync_ses
         return response_fail(msg=f"Deletion failed: {str(e)}")
 
 
-def get_progress_from_mongodb_logs(task_uid: str) -> Optional[dict]:
+def get_progress_from_formatify_logs_wrapper(task_uid: str) -> Optional[dict]:
     """
-    从 MongoDB 日志中解析进度信息
+    从 PostgreSQL 日志中解析 formatify 任务进度信息
     Args:
         task_uid: 任务唯一标识
     Returns:
         dict: 包含进度信息的字典，如果解析失败返回 None
     """
     try:
-        if not task_uid:
-            return None
-        
-        client = get_client()
-        try:
-            collection = get_formatity_collection(client, task_uid)
-            
-            # Find logs containing progress information (sorted by time descending)
-            # Match format: Updated and uploaded meta.log (total: X, success: Y, failure: Z)
-            # Or: All files processed. Total: X, Success: Y, Failure: Z
-            progress_patterns = [
-                r'\(total:\s*(\d+),\s*success:\s*(\d+),\s*failure:\s*(\d+)\)',  # (total: X, success: Y, failure: Z)
-                r'Total:\s*(\d+),\s*Success:\s*(\d+),\s*Failure:\s*(\d+)',  # Total: X, Success: Y, Failure: Z
-            ]
-            
-            # Start searching from latest logs
-            logs = collection.find({"level": "info"}).sort("create_at", -1).limit(100)
-            
-            for log in logs:
-                content = log.get("content", "")
-                if not content:
-                    continue
-                
-                # Try to match various progress formats
-                for pattern in progress_patterns:
-                    match = re.search(pattern, content, re.IGNORECASE)
-                    if match:
-                        total = int(match.group(1))
-                        success = int(match.group(2))
-                        failure = int(match.group(3))
-                        processed = success + failure
-                        progress = round(processed / max(total, 1) * 100, 2) if total > 0 else 0
-                        
-                        return {
-                            "total": total,
-                            "success": success,
-                            "failure": failure,
-                            "progress": progress
-                        }
-            
-            # If progress information not found, try to find "Found X files to convert" to get total
-            logs_for_total = collection.find({"level": "info"}).sort("create_at", 1).limit(50)
-            total_count = None
-            for log in logs_for_total:
-                content = log.get("content", "")
-                # Match: Found X files to convert
-                match = re.search(r'Found\s+(\d+)\s+files\s+to\s+convert', content, re.IGNORECASE)
-                if match:
-                    total_count = int(match.group(1))
-                    break
-            
-            # If total found, try to count success and failure numbers
-            if total_count is not None:
-                success_count = 0
-                failure_count = 0
-                
-                # Count successful conversion logs
-                success_logs = collection.find({
-                    "level": "info",
-                    "content": {"$regex": r"convert file.*succeed", "$options": "i"}
-                })
-                success_count = success_logs.count()
-                
-                # Count failure logs
-                failure_logs = collection.find({
-                    "level": "error",
-                    "content": {"$regex": r"convert file.*error", "$options": "i"}
-                })
-                failure_count = failure_logs.count()
-                
-                processed = success_count + failure_count
-                progress = round(processed / max(total_count, 1) * 100, 2) if total_count > 0 else 0
-                
-                return {
-                    "total": total_count,
-                    "success": success_count,
-                    "failure": failure_count,
-                    "progress": progress
-                }
-                
-        finally:
-            client.close()
-            
+        return get_progress_from_formatify_logs(task_uid)
     except Exception as e:
-        logger.warning(f"Failed to get progress from MongoDB logs: {str(e)}")
+        logger.warning(f"Failed to get progress from formatify logs: {str(e)}")
         return None
-    
-    return None
 
 
 @router.get("/formatify/get/{formatify_id}", response_model=dict)
@@ -325,7 +240,7 @@ async def get_formatify(formatify_id: int, db: Session = Depends(get_sync_sessio
         # Even if task failed, logs may contain progress information, should display to user
         if result.task_status in [DataFormatTaskStatusEnum.EXECUTING.value, DataFormatTaskStatusEnum.COMPLETED.value, DataFormatTaskStatusEnum.ERROR.value]:
             if result.task_uid:
-                progress_info = get_progress_from_mongodb_logs(task_uid=result.task_uid)
+                progress_info = get_progress_from_formatify_logs_wrapper(task_uid=result.task_uid)
                 if progress_info:
                     task_dict["progress"] = progress_info
         

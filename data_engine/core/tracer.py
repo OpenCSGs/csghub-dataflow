@@ -6,7 +6,7 @@ from loguru import logger
 
 from data_engine.utils.availability_utils import AvailabilityChecking
 from typing import Dict, List, Tuple, Union, Any
-from data_celery.mongo_tools.tools import (insert_pipline_job_run_task_log_error,
+from data_celery.pg_log_tools.tools import (insert_pipline_job_run_task_log_error,
                                            insert_pipline_job_run_task_log_info,
                                            insert_pipline_job_run_task_log_debug,
                                            insert_pipline_job_run_task_log_warning)

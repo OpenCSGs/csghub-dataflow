@@ -235,5 +235,5 @@ class NlpaugEnMapper(Mapper):
         from loguru import logger
         logger.info(message)
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

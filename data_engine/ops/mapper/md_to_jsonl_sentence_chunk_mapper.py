@@ -26,11 +26,83 @@ def split_sentence_mixed(text):
     return [s.strip() for s in sentences if s.strip()]
 
 
+def split_sentence_with_positions(text):
+    """
+    Split text into sentences and return their (start, end) positions in the original text.
+    This preserves original newlines and separators when generating chunks.
+    
+    Supports both Chinese (。！？) and English (.!?) punctuation.
+    
+    :param text: input text to split
+    :return: list of (start, end) tuples representing sentence ranges in original text
+    
+    Edge cases handled:
+    - Empty text / whitespace only: returns []
+    - No punctuation in text: returns [(0, len(text))] as single sentence
+    - Text ending without punctuation: includes final segment
+    - Consecutive punctuation: filters out empty ranges
+    - Leading punctuation: filters out empty ranges
+    """
+    if not text or not text.strip():
+        return []
+    
+    # Pattern to match sentence-ending punctuation (language-agnostic)
+    # - Single punctuation: .。！!？?
+    # - Ellipsis: ...... or ……
+    # - Punctuation followed by quotes
+    # - Do NOT split on . when part of ordinal/number (generic rule for any document format):
+    #   - Arabic numerals: 1. 2. 3.2 1.0, decimals, versions
+    #   - Roman numerals: I. II. III. IV.
+    #   - Common abbrev. (Mr. Dr. etc. often end with these letters)
+    # Quote characters: ' " ' " (ASCII and Chinese quotes)
+    quote_chars = "'\"\u2018\u2019\u201c\u201d"
+    # . only when NOT preceded by digit or Roman numeral letter (covers ordinals, versions, abbrev.)
+    # Exclude . when part of file extension (e.g. .jpg in ![](/xxx.jpg)) to avoid splitting markdown images
+    _sent_end_dot = r'(?<![0-9IVXLCDMivxlcdm])\.(?!\s*(?:jpe?g|png|gif|webp|svg|bmp|pdf)\b)'
+    # Exclude ASCII ! when part of markdown image syntax ![](
+    _sent_end_bang = r'!(?!\[)'
+    sent_end = rf'(?:[。！？?]|{_sent_end_bang}|{_sent_end_dot})'
+    # Build pattern
+    pattern = re.compile(
+        f'({sent_end}(?![{quote_chars}])|'  # Punctuation not followed by quote
+        r'\.{6}|'  # Six dots (English ellipsis)
+        r'\…{2}|'  # Two … (Chinese ellipsis)
+        f'{sent_end}[{quote_chars}])'  # Punctuation followed by quote
+    )
+    
+    # Collect split points (positions after sentence-ending punctuation)
+    split_points = [0]
+    for m in pattern.finditer(text):
+        split_points.append(m.end())
+    
+    # Handle text ending without punctuation: add len(text) as final split point
+    if split_points[-1] < len(text):
+        split_points.append(len(text))
+    
+    # Remove duplicates and sort
+    split_points = sorted(set(split_points))
+    
+    # Generate ranges, filtering out empty/whitespace-only segments
+    ranges = []
+    for i in range(len(split_points) - 1):
+        start, end = split_points[i], split_points[i + 1]
+        if text[start:end].strip():  # Skip whitespace-only segments
+            ranges.append((start, end))
+    
+    # If no valid ranges but text has content, return entire text as one sentence
+    if not ranges and text.strip():
+        ranges = [(0, len(text))]
+    
+    return ranges
+
+
 @OPERATORS.register_module(OP_NAME)
 class MdToJsonlSentenceChunkMapper(Mapper):
     """Mapper to split text samples into chunks at sentence boundaries."""
 
     _batched_op = True
+    # When model/tokenizer loading fails, propagate exception to fail the task
+    _raise_on_exception = True
 
     def __init__(self,
                  hf_tokenizer: str = 'EleutherAI/pythia-6.9b-deduped',
@@ -91,11 +163,11 @@ class MdToJsonlSentenceChunkMapper(Mapper):
     def _split_text_by_sentences(self, text, tokenizer):
         """
         Split text into chunks at sentence boundaries, respecting token limits.
-        Uses mixed Chinese-English sentence segmentation by default.
+        Uses position-based slicing to preserve original newlines and separators.
 
         :param text: input text to split
         :param tokenizer: tokenizer instance for counting tokens
-        :return: list of text chunks
+        :return: list of text chunks (preserving original formatting)
         """
         if not text or not text.strip():
             return []
@@ -104,111 +176,96 @@ class MdToJsonlSentenceChunkMapper(Mapper):
         if isinstance(text, bytes):
             text = text.decode('utf-8', errors='replace')
         
-        # First, split text into sentences using mixed Chinese-English segmentation
-        sentences = split_sentence_mixed(text)
+        # Get sentence ranges (start, end) instead of sentence strings
+        # This preserves original newlines and separators
+        sentence_ranges = split_sentence_with_positions(text)
         
-        if not sentences:
+        if not sentence_ranges:
             return [text] if text.strip() else []
 
-        # Calculate token count for each sentence with error handling
-        sentence_tokens = []
-        for sentence in sentences:
+        # Calculate token count for each sentence range
+        sentence_info_list = []
+        for start, end in sentence_ranges:
+            sentence_text = text[start:end]
             try:
-                # Ensure sentence is UTF-8 string before tokenization
-                if isinstance(sentence, bytes):
-                    sentence = sentence.decode('utf-8', errors='replace')
-                tokens = tokenizer.encode(sentence, add_special_tokens=False)
+                tokens = tokenizer.encode(sentence_text, add_special_tokens=False)
+                token_count = len(tokens)
             except Exception:
-                # If tokenization fails, use length as approximation
-                tokens = list(range(len(sentence)))
+                token_count = len(sentence_text)
             
-            sentence_tokens.append({
-                'text': sentence,
-                'tokens': tokens,
-                'token_count': len(tokens)
+            sentence_info_list.append({
+                'start': start,
+                'end': end,
+                'token_count': token_count
             })
 
         chunks = []
-        current_chunk_sentences = []
-        current_chunk_tokens = []
+        # Store (start, end) tuples for current chunk
+        current_chunk_ranges = []
         current_chunk_token_count = 0
         
         def create_chunk():
-            """Helper function to create a chunk from current sentences"""
-            if len(current_chunk_sentences) >= self.min_sentences_per_chunk:
-                # Use empty string join for better Chinese support
-                chunk_text = ''.join(current_chunk_sentences)
+            """Helper function to create a chunk from current ranges by slicing original text"""
+            nonlocal current_chunk_token_count
+            if len(current_chunk_ranges) >= self.min_sentences_per_chunk:
+                # Slice from original text to preserve newlines/separators
+                first_start = current_chunk_ranges[0][0]
+                last_end = current_chunk_ranges[-1][1]
+                chunk_text = text[first_start:last_end]
+                
                 if chunk_text.strip():
-                    # Log if chunk exceeds chunk_size
                     if current_chunk_token_count > self.chunk_size:
                         overflow_amount = current_chunk_token_count - self.chunk_size
                         logger.warning(
                             f"Chunk overflow detected: Created chunk has {current_chunk_token_count} tokens, "
                             f"exceeds chunk_size ({self.chunk_size}) by {overflow_amount} tokens. "
-                            f"Contains {len(current_chunk_sentences)} sentence(s). "
+                            f"Contains {len(current_chunk_ranges)} sentence(s). "
                             f"Operation: Preserving full chunk without truncation."
                         )
-                    chunks.append(chunk_text.strip())
+                    chunks.append(chunk_text)
                 return True
             return False
         
         def reset_chunk_with_overlap():
-            """Reset chunk while handling overlap"""
+            """Reset chunk while handling overlap, keeping ranges from the end"""
+            nonlocal current_chunk_ranges, current_chunk_token_count
             if self.chunk_overlap > 0:
-                # Calculate how many sentences to keep for overlap (from the end)
                 overlap_tokens = 0
-                overlap_sentences = []
-                # Start from the last sentence and work backwards
-                for j in range(len(current_chunk_sentences) - 1, -1, -1):
-                    # Find the corresponding sentence token count
-                    sent_text = current_chunk_sentences[j]
-                    # Find matching sentence in sentence_tokens to get token count
-                    sent_tokens = 0
-                    for st in sentence_tokens:
-                        if st['text'] == sent_text:
-                            sent_tokens = st['token_count']
+                overlap_ranges = []
+                # Work backwards from the end of current chunk
+                for j in range(len(current_chunk_ranges) - 1, -1, -1):
+                    rng = current_chunk_ranges[j]
+                    # Find token count for this range
+                    rng_token_count = 0
+                    for info in sentence_info_list:
+                        if info['start'] == rng[0] and info['end'] == rng[1]:
+                            rng_token_count = info['token_count']
                             break
                     
-                    if overlap_tokens + sent_tokens <= self.chunk_overlap:
-                        overlap_sentences.insert(0, sent_text)
-                        overlap_tokens += sent_tokens
+                    if overlap_tokens + rng_token_count <= self.chunk_overlap:
+                        overlap_ranges.insert(0, rng)
+                        overlap_tokens += rng_token_count
                     else:
                         break
                 
-                current_chunk_sentences[:] = overlap_sentences
-                if overlap_sentences:
-                    overlap_text = ''.join(overlap_sentences)
-                    # Ensure UTF-8 encoding before tokenization
-                    if isinstance(overlap_text, bytes):
-                        overlap_text = overlap_text.decode('utf-8', errors='replace')
-                    try:
-                        current_chunk_tokens = tokenizer.encode(overlap_text, add_special_tokens=False)
-                        current_chunk_token_count = len(current_chunk_tokens)
-                    except Exception:
-                        current_chunk_tokens = []
-                        current_chunk_token_count = 0
-                else:
-                    current_chunk_tokens = []
-                    current_chunk_token_count = 0
+                current_chunk_ranges = overlap_ranges
+                current_chunk_token_count = overlap_tokens
             else:
-                current_chunk_sentences.clear()
-                current_chunk_tokens = []
+                current_chunk_ranges = []
                 current_chunk_token_count = 0
         
         i = 0
-        while i < len(sentence_tokens):
-            sent_info = sentence_tokens[i]
+        while i < len(sentence_info_list):
+            sent_info = sentence_info_list[i]
+            sent_range = (sent_info['start'], sent_info['end'])
             
             # Check if adding this sentence would exceed chunk_size
             if current_chunk_token_count + sent_info['token_count'] > self.chunk_size:
-                # If we have at least min_sentences_per_chunk, create a chunk
-                if len(current_chunk_sentences) >= self.min_sentences_per_chunk:
+                if len(current_chunk_ranges) >= self.min_sentences_per_chunk:
                     if create_chunk():
                         reset_chunk_with_overlap()
-                        # After reset, check if overlap is too large to fit current sentence
-                        # If overlap + current sentence still exceeds chunk_size, clear overlap to avoid infinite loop
+                        # Check if overlap + current sentence still exceeds
                         if current_chunk_token_count + sent_info['token_count'] > self.chunk_size:
-                            # Log the situation and clear overlap
                             actual_total = current_chunk_token_count + sent_info['token_count']
                             logger.warning(
                                 f"Chunk overflow detected: Current sentence ({sent_info['token_count']} tokens) + "
@@ -217,71 +274,62 @@ class MdToJsonlSentenceChunkMapper(Mapper):
                                 f"Operation: Clearing overlap and preserving full sentence as new chunk. "
                                 f"Suggestion: Reduce chunk_overlap or increase chunk_size."
                             )
-                            # Clear overlap and force add current sentence to break the loop
-                            current_chunk_sentences.clear()
-                            current_chunk_tokens = []
+                            current_chunk_ranges = []
                             current_chunk_token_count = 0
                         else:
-                            # Overlap is small enough, retry with current sentence
                             continue
                 else:
-                    # If we don't have enough sentences yet, force add this sentence
-                    # (even if it exceeds chunk_size) to meet min_sentences_per_chunk requirement
+                    # Force add this sentence to meet min_sentences_per_chunk
                     if sent_info['token_count'] > self.chunk_size:
                         overflow_amount = sent_info['token_count'] - self.chunk_size
+                        sentence_preview = text[sent_info['start']:sent_info['end']][:100]
                         logger.warning(
                             f"Chunk overflow detected: Single sentence has {sent_info['token_count']} tokens, "
                             f"exceeds chunk_size ({self.chunk_size}) by {overflow_amount} tokens. "
                             f"Operation: Preserving full sentence as oversized chunk (will not truncate). "
-                            f"Sentence preview: '{sent_info['text'][:100]}...' "
+                            f"Sentence preview: '{sentence_preview}...' "
                             f"Suggestion: Increase chunk_size parameter to accommodate long sentences."
                         )
-                    current_chunk_sentences.append(sent_info['text'])
-                    current_chunk_tokens.extend(sent_info['tokens'])
+                    current_chunk_ranges.append(sent_range)
                     current_chunk_token_count += sent_info['token_count']
                     i += 1
                     continue
             
             # Add sentence to current chunk
-            current_chunk_sentences.append(sent_info['text'])
-            current_chunk_tokens.extend(sent_info['tokens'])
+            current_chunk_ranges.append(sent_range)
             current_chunk_token_count += sent_info['token_count']
             
-            # Check if we should create a chunk now (if we have enough sentences and are close to chunk_size)
-            # This ensures min_sentences_per_chunk is respected even when not exceeding chunk_size
-            if len(current_chunk_sentences) >= self.min_sentences_per_chunk:
-                # If adding next sentence would exceed chunk_size, create chunk now
-                if i + 1 < len(sentence_tokens):
-                    next_sent_info = sentence_tokens[i + 1]
+            # Check if we should create a chunk now
+            if len(current_chunk_ranges) >= self.min_sentences_per_chunk:
+                if i + 1 < len(sentence_info_list):
+                    next_sent_info = sentence_info_list[i + 1]
                     if current_chunk_token_count + next_sent_info['token_count'] > self.chunk_size:
                         if create_chunk():
                             reset_chunk_with_overlap()
-                            # Continue to process next sentence
                             i += 1
                             continue
             
             i += 1
 
-        # Add remaining sentences as final chunk only if it meets min_sentences_per_chunk requirement
-        if current_chunk_sentences:
-            if len(current_chunk_sentences) >= self.min_sentences_per_chunk:
-                chunk_text = ''.join(current_chunk_sentences)
-                if chunk_text.strip():
-                    # Check if final chunk exceeds chunk_size and log it
-                    if current_chunk_token_count > self.chunk_size:
-                        overflow_amount = current_chunk_token_count - self.chunk_size
-                        logger.warning(
-                            f"Final chunk overflow detected: Final chunk has {current_chunk_token_count} tokens, "
-                            f"exceeds chunk_size ({self.chunk_size}) by {overflow_amount} tokens. "
-                            f"Contains {len(current_chunk_sentences)} sentence(s). "
-                            f"Operation: Preserving full chunk without truncation. "
-                            f"Suggestion: Increase chunk_size or reduce chunk_overlap."
-                        )
-                    chunks.append(chunk_text.strip())
-            # If remaining sentences don't meet min requirement, they are discarded
-            # (or could be merged with previous chunk if needed, but current logic discards them)
+        # Add remaining sentences as final chunk (always preserve, even if < min_sentences_per_chunk)
+        if current_chunk_ranges:
+            first_start = current_chunk_ranges[0][0]
+            last_end = current_chunk_ranges[-1][1]
+            chunk_text = text[first_start:last_end]
+            
+            if chunk_text.strip():
+                if current_chunk_token_count > self.chunk_size:
+                    overflow_amount = current_chunk_token_count - self.chunk_size
+                    logger.warning(
+                        f"Final chunk overflow detected: Final chunk has {current_chunk_token_count} tokens, "
+                        f"exceeds chunk_size ({self.chunk_size}) by {overflow_amount} tokens. "
+                        f"Contains {len(current_chunk_ranges)} sentence(s). "
+                        f"Operation: Preserving full chunk without truncation. "
+                        f"Suggestion: Increase chunk_size or reduce chunk_overlap."
+                    )
+                chunks.append(chunk_text)
 
-        return chunks if chunks else [text]  # Return original text if no chunks created
+        return chunks if chunks else [text]
 
     def process(self, samples):
         """

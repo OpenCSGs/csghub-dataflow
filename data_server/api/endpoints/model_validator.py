@@ -7,6 +7,7 @@ import shutil
 from loguru import logger
 from ...schemas.responses import response_success, response_fail
 from data_engine.utils.cache_utils import DATA_JUICER_MODELS_CACHE
+from data_engine.utils.model_utils import _pull_tokenizer_lfs_and_validate
 from typing import Optional
 
 router = APIRouter()
@@ -74,6 +75,15 @@ def check_model_for_md_to_jsonl(
             # Check if it's a valid git repository
             git_dir = os.path.join(model_cache_path, '.git')
             if os.path.exists(git_dir):
+                # Try to pull tokenizer LFS files (if tracked by LFS) and validate they are not pointers
+                try:
+                    _pull_tokenizer_lfs_and_validate(model_cache_path, model_name)
+                except RuntimeError as e:
+                    logger.warning(f'Model {model_name} tokenizer LFS validation failed: {e}')
+                    return response_success(
+                        data=None,
+                        msg=str(e)
+                    )
                 # Check if tokenizer files exist
                 # md_to_jsonl_preprocess tool only needs tokenizer files, not model weights
                 files_in_dir = [f for f in os.listdir(model_cache_path) 
@@ -147,6 +157,15 @@ def check_model_for_md_to_jsonl(
             
             # Check if tokenizer files exist in temporary directory
             if os.path.exists(temp_dir):
+                # Try to pull tokenizer LFS files (if tracked by LFS) and validate they are not pointers
+                try:
+                    _pull_tokenizer_lfs_and_validate(temp_dir, model_name)
+                except RuntimeError as e:
+                    logger.warning(f'Model {model_name} tokenizer LFS validation failed: {e}')
+                    return response_success(
+                        data=None,
+                        msg=str(e)
+                    )
                 files_in_dir = [f for f in os.listdir(temp_dir) 
                               if f != '.git' and not f.startswith('.')]
                 tokenizer_files = [f for f in files_in_dir 

@@ -1,4 +1,6 @@
+import json
 import os
+import tempfile
 from multiprocessing import Pool
 
 from loguru import logger
@@ -134,22 +136,34 @@ class Exporter:
                 num_proc=self.num_proc if self.export_in_parallel else 1)
 
         if self.export_ds:
-            # fetch the corresponding export method according to the suffix
+            # Collect all internal fields to remove before export.
+            # intersection() ensures only existing columns are removed, no error if absent.
+            fields_to_remove = set()
             if not self.keep_stats_in_res_ds:
-                extra_fields = {Fields.stats}
-                feature_fields = set(dataset.features.keys())
-                removed_fields = extra_fields.intersection(feature_fields)
-                dataset = dataset.remove_columns(removed_fields)
+                fields_to_remove.add(Fields.stats)
             if not self.keep_hashes_in_res_ds:
-                extra_fields = {
+                fields_to_remove.update({
                     HashKeys.hash,
                     HashKeys.minhash,
                     HashKeys.simhash,
                     HashKeys.imagehash,
                     HashKeys.videohash,
-                }
-                feature_fields = set(dataset.features.keys())
-                removed_fields = extra_fields.intersection(feature_fields)
+                })
+            # Other internal __dj__ fields that should not appear in export
+            fields_to_remove.update({
+                Fields.suffix,
+                Fields.context,
+                Fields.meta,
+                Fields.source_file,
+                Fields.video_frame_tags,
+                Fields.video_audio_tags,
+                Fields.multimodal_data_output_dir,
+                HashKeys.is_duplicate,
+                HashKeys.similarity_hash,
+            })
+            feature_fields = set(dataset.features.keys())
+            removed_fields = fields_to_remove.intersection(feature_fields)
+            if removed_fields:
                 dataset = dataset.remove_columns(removed_fields)
             export_method = Exporter._router()[suffix]
 
@@ -240,6 +254,7 @@ class Exporter:
     def to_jsonl(dataset, export_path, num_proc=1, **kwargs):
         """
         Export method for jsonl target files.
+        Use standard json re-serialization to avoid HuggingFace/ujson escaping / as \\/.
 
         :param dataset: the dataset to export.
         :param export_path: the path to store the exported dataset.
@@ -247,12 +262,25 @@ class Exporter:
         :param kwargs: extra arguments.
         :return:
         """
-        dataset.to_json(export_path, force_ascii=False, num_proc=num_proc)
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.jsonl')
+        os.close(tmp_fd)
+        try:
+            dataset.to_json(tmp_path, force_ascii=False, num_proc=num_proc)
+            with open(tmp_path, 'r', encoding='utf-8') as f_in, \
+                 open(export_path, 'w', encoding='utf-8') as f_out:
+                for line in f_in:
+                    if line.strip():
+                        data = json.loads(line.strip())
+                        f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     @staticmethod
     def to_json(dataset, export_path, num_proc=1, **kwargs):
         """
         Export method for json target files.
+        Use standard json re-serialization to avoid HuggingFace/ujson escaping / as \\/.
 
         :param dataset: the dataset to export.
         :param export_path: the path to store the exported dataset.
@@ -260,10 +288,20 @@ class Exporter:
         :param kwargs: extra arguments.
         :return:
         """
-        dataset.to_json(export_path,
-                        force_ascii=False,
-                        num_proc=num_proc,
-                        lines=False)
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.json')
+        os.close(tmp_fd)
+        try:
+            dataset.to_json(tmp_path,
+                            force_ascii=False,
+                            num_proc=num_proc,
+                            lines=False)
+            with open(tmp_path, 'r', encoding='utf-8') as f_in:
+                data = json.load(f_in)
+            with open(export_path, 'w', encoding='utf-8') as f_out:
+                json.dump(data, f_out, ensure_ascii=False)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     @staticmethod
     def to_parquet(dataset, export_path, **kwargs):

@@ -11,7 +11,7 @@ from data_engine.utils.mm_utils import size_to_bytes
 from data_engine.utils.process_utils import calculate_np
 from data_engine.utils.registry import Registry
 
-from data_celery.mongo_tools.tools import (insert_pipline_job_run_task_log_error,
+from data_celery.pg_log_tools.tools import (insert_pipline_job_run_task_log_error,
                                            insert_pipline_job_run_task_log_info,
                                            insert_pipline_job_run_task_log_debug,
                                            set_pipline_job_operator_status,OperatorStatusEnum)
@@ -243,11 +243,13 @@ class Mapper(OP):
         """
         super(Mapper, self).__init__(*args, **kwargs)
 
-        # runtime wrappers
-        if self.is_batched_op():
-            self.process = catch_map_batches_exception(self.process)
-        else:
-            self.process = catch_map_single_exception(self.process)
+        # runtime wrappers - skip fault tolerance when _raise_on_exception is True
+        # (e.g. md_to_jsonl_chunk_mapper: model load failure should fail the task)
+        if not getattr(self, '_raise_on_exception', False):
+            if self.is_batched_op():
+                self.process = catch_map_batches_exception(self.process)
+            else:
+                self.process = catch_map_single_exception(self.process)
 
     def process(self, sample):
         """

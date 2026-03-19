@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import json
+import tempfile
 import hashlib
 import re
 from loguru import logger
@@ -24,6 +25,25 @@ import traceback
 TOOL_NAME = 'md_to_jsonl_preprocess_internal'
 
 
+def _save_dataset_to_jsonl_without_slash_escape(dataset, output_file: str, num_proc: int = 1) -> None:
+    """
+    Export Dataset to JSONL using standard json re-serialization to avoid HuggingFace/ujson escaping / as \\/.
+    """
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix='.jsonl')
+    os.close(tmp_fd)
+    try:
+        dataset.to_json(tmp_path, force_ascii=False, num_proc=num_proc)
+        with open(tmp_path, 'r', encoding='utf-8') as f_in, \
+             open(output_file, 'w', encoding='utf-8') as f_out:
+            for line in f_in:
+                if line.strip():
+                    data = json.loads(line.strip())
+                    f_out.write(json.dumps(data, ensure_ascii=False) + '\n')
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
 def sanitize_filename(filename: str, max_length: int = 40) -> str:
     """
     Convert filename to safe ASCII-only format for cross-platform compatibility.
@@ -36,10 +56,10 @@ def sanitize_filename(filename: str, max_length: int = 40) -> str:
     5. If no ASCII chars remain, use 'file_' prefix with 16-char hash
     
     Examples:
-        '传神csghub.md' -> 'csghub_a1b2c3d4'
-        '测试文件123.md' -> '123_5e6f7g8h'
+        'chuan_shen_csghub.md' -> 'csghub_a1b2c3d4'
+        'test_file123.md' -> '123_5e6f7g8h'
         'example.md' -> 'example'
-        '我的文档.md' -> 'file_9a8b7c6d5e4f3a2b'
+        'my_doc.md' -> 'file_9a8b7c6d5e4f3a2b'
     
     :param filename: Original filename (with or without extension)
     :param max_length: Maximum length for ASCII part (default 40)
@@ -204,7 +224,7 @@ class MdToJsonlPreprocess(TOOL):
                     for i, filename in enumerate(files_to_upload, 1):
                         file_path = os.path.join(upload_path, filename)
                         file_size = os.path.getsize(file_path) if os.path.isfile(file_path) else 0
-                        # 显示文件名的不同编码形式
+                        # Show different encoding forms of filename
                         logger.info(f'[EXPORT DEBUG]   File {i}: {filename}')
                         logger.info(f'[EXPORT DEBUG]     - repr(): {repr(filename)}')
                         logger.info(f'[EXPORT DEBUG]     - bytes: {filename.encode("utf-8")}')
@@ -350,10 +370,10 @@ class MdToJsonlPreprocess(TOOL):
             dataset = mapper_op.run(dataset=dataset, exporter=None, tracer=None)
             num_chunks = len(dataset)
             
-            # Save to default x.jsonl
-            # Use num_proc=1 on Windows to avoid multiprocessing deadlock in Dataset.to_json()
+            # Save to default x.jsonl (use standard json re-serialization to avoid / being escaped as \/)
             output_file = os.path.join(self.tool_def.export_path, 'x.jsonl')
-            dataset.to_json(output_file, force_ascii=False, num_proc=1 if os.name == 'nt' else self.tool_def.np)
+            _save_dataset_to_jsonl_without_slash_escape(
+                dataset, output_file, num_proc=1 if os.name == 'nt' else self.tool_def.np)
             logger.info(f'Dataset saved to {output_file} ({num_chunks} chunks)')
             
             # Generate meta.log for fallback case (only if generate_meta_log is True)
@@ -570,10 +590,10 @@ class MdToJsonlPreprocess(TOOL):
                 if suffix > 0:
                     logger.info(f'Duplicate filename detected: "{base_name}" -> "{output_base_name}" (added suffix {suffix})')
                 
-                # Save dataset to JSONL file with UTF-8 encoding (cross-platform compatible)
-                # Use num_proc=1 on Windows to avoid multiprocessing deadlock in Dataset.to_json()
+                # Save dataset to JSONL file (use standard json re-serialization to avoid / being escaped as \/)
                 try:
-                    dataset.to_json(output_file, force_ascii=False, num_proc=1 if os.name == 'nt' else self.tool_def.np)
+                    _save_dataset_to_jsonl_without_slash_escape(
+                        dataset, output_file, num_proc=1 if os.name == 'nt' else self.tool_def.np)
                 except Exception as e:
                     raise RuntimeError(f'Failed to save JSONL file: {output_file}. Error: {str(e)}') from e
                 

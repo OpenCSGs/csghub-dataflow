@@ -151,7 +151,7 @@ class FrequencySpecifiedFieldSelector(Selector):
         """
         try:
             from loguru import logger
-            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
             
             # Calculate statistics
             unique_values = len(field_value_dict)
@@ -201,7 +201,7 @@ class FrequencySpecifiedFieldSelector(Selector):
             error_msg = f"Failed to generate selector logging: {e}\n{traceback.format_exc()}"
             logger.error(error_msg)
             if hasattr(self, 'job_uid') and self.job_uid:
-                from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error
                 insert_pipline_job_run_task_log_error(
                     self.job_uid,
                     error_msg,
@@ -215,7 +215,7 @@ class FrequencySpecifiedFieldSelector(Selector):
         logger.info(message)
         # Only write to MongoDB if job_uid exists
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(
                 self.job_uid,
                 message,

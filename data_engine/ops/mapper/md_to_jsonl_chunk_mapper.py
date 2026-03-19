@@ -17,6 +17,8 @@ class MdToJsonlChunkMapper(Mapper):
     """Mapper to split text samples into chunks by token count."""
 
     _batched_op = True
+    # When model/tokenizer loading fails, propagate exception to fail the task
+    _raise_on_exception = True
 
     def __init__(self,
                  hf_tokenizer: str = 'EleutherAI/pythia-6.9b-deduped',
@@ -66,6 +68,8 @@ class MdToJsonlChunkMapper(Mapper):
     def _split_text_by_tokens(self, text, tokenizer):
         """
         Split text into chunks by token count with optional overlap.
+        Uses offset_mapping to slice at character boundaries, avoiding corruption
+        when token boundaries cut through multi-byte Unicode characters (any lang).
 
         :param text: input text to split
         :param tokenizer: tokenizer instance
@@ -78,50 +82,132 @@ class MdToJsonlChunkMapper(Mapper):
         if isinstance(text, bytes):
             text = text.decode('utf-8', errors='replace')
         
-        # Tokenize the entire text
+        # Tokenize with offset_mapping for character-aligned boundaries (fixes UTF-8 split bug)
+        try:
+            enc = tokenizer(
+                text,
+                add_special_tokens=False,
+                return_offsets_mapping=True,
+                return_attention_mask=False,
+            )
+        except TypeError:
+            # Fallback for tokenizers that don't support return_offsets_mapping
+            enc = None
+
+        offset_mapping = enc.get('offset_mapping') if enc else None
+        if enc is not None and offset_mapping is not None:
+            # Handle batched format: [[(0,1),(1,2),...]] for batch of 1
+            if offset_mapping and isinstance(offset_mapping[0], (list, tuple)) and len(offset_mapping[0]) == 2 and isinstance(offset_mapping[0][0], (int, float)):
+                pass  # offset_mapping[0] is (0,1) tuple, so it's flat - OK
+            elif offset_mapping and isinstance(offset_mapping[0], list):
+                offset_mapping = offset_mapping[0]  # Unwrap batch
+            # Use character-boundary slicing: slice original text by token-aligned char positions
+            token_ids = enc['input_ids'] if isinstance(enc['input_ids'][0], int) else enc['input_ids'][0]
+            chunks = []
+            step_size = self.chunk_size - self.overlap if self.overlap > 0 else self.chunk_size
+            # When overlap=0: enforce strict boundary adjacency to prevent any character duplication
+            # between chunks (works for any language/script: CJK, Latin, etc.)
+            prev_end_char = 0 if self.overlap == 0 else None
+
+            for i in range(0, len(token_ids), step_size):
+                end_idx = min(i + self.chunk_size, len(offset_mapping))
+                if end_idx <= 0:
+                    continue
+                start_char = max(offset_mapping[i][0], prev_end_char) if prev_end_char is not None else offset_mapping[i][0]
+                end_char = offset_mapping[end_idx - 1][1]
+                if start_char >= end_char:
+                    continue
+                chunk_text = text[start_char:end_char]
+                if chunk_text.strip():
+                    chunks.append(chunk_text.strip())
+                if self.overlap == 0:
+                    prev_end_char = end_char
+            if chunks:
+                return chunks
+            logger.debug('offset_mapping produced no chunks, falling back to character-based split')
+
+        # Fallback: character-boundary split when offset_mapping unavailable
+        # Find char positions for each token boundary, then slice original text
+        try:
+            full_tokens = tokenizer.encode(text, add_special_tokens=False)
+        except Exception:
+            return [text]
+        if not full_tokens:
+            return [text]
+        chunks = []
+        step_size = self.chunk_size - self.overlap if self.overlap > 0 else self.chunk_size
+        n_tokens = len(full_tokens)
+
+        def _find_char_pos_for_token_count(target: int) -> int:
+            """Binary search: smallest char pos where encode(text[:pos]) has >= target tokens."""
+            if target <= 0:
+                return 0
+            if target >= n_tokens:
+                return len(text)
+            low, high = 0, len(text)
+            for _ in range(25):
+                mid = (low + high) // 2
+                try:
+                    cnt = len(tokenizer.encode(text[:mid], add_special_tokens=False))
+                except Exception:
+                    cnt = 0
+                if cnt >= target:
+                    high = mid
+                else:
+                    low = mid
+                if high - low <= 1:
+                    break
+            return min(high, len(text))
+
+        # When overlap=0: enforce strict boundary adjacency (prevents duplication for any text)
+        prev_end_char = 0 if self.overlap == 0 else None
+        for i in range(0, n_tokens, step_size):
+            end_token = min(i + self.chunk_size, n_tokens)
+            start_char = max(_find_char_pos_for_token_count(i), prev_end_char) if prev_end_char is not None else _find_char_pos_for_token_count(i)
+            end_char = _find_char_pos_for_token_count(end_token)
+            if start_char >= end_char:
+                continue
+            chunk_text = text[start_char:end_char]
+            if chunk_text.strip():
+                chunks.append(chunk_text.strip())
+            if self.overlap == 0:
+                prev_end_char = end_char
+        return chunks if chunks else [text]
+
+    def _split_text_by_tokens_decode_fallback(self, text, tokenizer):
+        """Legacy decode-based fallback (may split mid-char; use only when char-based fails)."""
         try:
             tokens = tokenizer.encode(text, add_special_tokens=False)
-        except Exception as e:
-            # If tokenization fails, return original text
+        except Exception:
+            return [text]
+        try:
+            tokens = tokenizer.encode(text, add_special_tokens=False)
+        except Exception:
             return [text]
         
         chunks = []
-        # Calculate step size: if overlap > 0, each chunk moves forward by (chunk_size - overlap)
-        # This creates overlapping regions between adjacent chunks
         step_size = self.chunk_size - self.overlap if self.overlap > 0 else self.chunk_size
         
         for i in range(0, len(tokens), step_size):
             chunk_tokens = tokens[i:i + self.chunk_size]
-            # Decode tokens back to text with robust error handling for cross-platform compatibility
             try:
                 chunk_text = tokenizer.decode(
-                    chunk_tokens, 
+                    chunk_tokens,
                     skip_special_tokens=True,
-                    clean_up_tokenization_spaces=True  # Change it to True to clear the extra Spaces generated by tokenization in languages such as Chinese
+                    clean_up_tokenization_spaces=True,
                 )
-                # Ensure valid UTF-8 encoding (replace broken characters instead of ignoring)
-                # This is critical for cross-platform compatibility (Windows/Linux)
-                if isinstance(chunk_text, bytes):
-                    chunk_text = chunk_text.decode('utf-8', errors='replace')
-                else:
-                    # Re-encode and decode to fix any encoding issues
-                    chunk_text = chunk_text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
             except Exception:
-                # Fallback: if decode fails, try standard decode
-                try:
-                    chunk_text = tokenizer.decode(chunk_tokens, skip_special_tokens=True, clean_up_tokenization_spaces=True)
-                    if isinstance(chunk_text, bytes):
-                        chunk_text = chunk_text.decode('utf-8', errors='replace')
-                    else:
-                        chunk_text = chunk_text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-                except Exception:
-                    # If still fails, skip this chunk
-                    continue
-            
-            if chunk_text.strip():  # Only add non-empty chunks
+                continue
+            if isinstance(chunk_text, bytes):
+                chunk_text = chunk_text.decode('utf-8', errors='replace')
+            else:
+                chunk_text = chunk_text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
+            # Trim trailing replacement chars from split multi-byte sequences
+            while chunk_text and chunk_text[-1] == '\ufffd':
+                chunk_text = chunk_text[:-1].rstrip()
+            if chunk_text.strip():
                 chunks.append(chunk_text.strip())
-        
-        return chunks if chunks else [text]  # Return original text if no chunks created
+        return chunks if chunks else [text]
 
     def process(self, samples):
         """

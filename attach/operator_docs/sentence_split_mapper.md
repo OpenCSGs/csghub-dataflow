@@ -1,15 +1,38 @@
-句子分割（`sentence_split_mapper`）
+# 句子分割 (sentence_split_mapper) 
 
-**使用场景**
-- 句子分割: 将段落分割成独立的句子
-- 数据预处理: 为句子级任务准备数据
-- 文本结构化: 将连续文本转换为句子列表
+## 算子功能
 
-**示例**
-- 输入文本: `"Smithfield employs 3,700 people at its plant in Sioux Falls, South Dakota. The plant slaughters 19,500 pigs a day — 5 percent of U.S. pork."`
-- 配置: `lang='en'`
-- 输出文本:
-  ```
-  Smithfield employs 3,700 people at its plant in Sioux Falls, South Dakota.
-  The plant slaughters 19,500 pigs a day — 5 percent of U.S. pork.
-  ```
+这是一个句子分割器,就像一个智能的断句助手。它能够把一大段文字自动分割成一个个独立的句子,每个句子占一行。
+
+
+## 处理逻辑
+
+算子的工作流程:
+
+1. **加载智能模型** - 根据语言类型加载NLTK的句子分词模型
+2. **分析文本** - 用模型分析文本,找出句子的边界
+3. **智能断句** - 识别真正的句子结束(不会在缩写、数字等地方错误断句)
+4. **分割句子** - 把文本分成一个个独立的句子
+5. **用换行连接** - 用换行符把句子连接起来,每句一行
+
+
+### 示例
+
+**配置:**
+```yaml
+语言: '中文'
+```
+
+**输入数据:**
+```json
+{
+  "text": "这是第一个句子。这是第二个句子！这是第三个句子？还有第四个句子。"
+}
+```
+
+**输出数据:**
+```json
+{
+  "text": "这是第一个句子。\n这是第二个句子！\n这是第三个句子？\n还有第四个句子。"
+}
+```

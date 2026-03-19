@@ -6,7 +6,7 @@ from data_engine.utils.availability_utils import UNAVAILABLE_OPERATORS
 
 from .base_op import OPERATORS
 from .op_fusion import fuse_operators
-from data_celery.mongo_tools.tools import (insert_pipline_job_run_task_log_error,
+from data_celery.pg_log_tools.tools import (insert_pipline_job_run_task_log_error,
                                            set_pipline_job_operator_status,
                                            OperatorStatusEnum)
 

@@ -224,7 +224,7 @@ class ExtractQAMapper(Mapper):
                 error_msg = f"All {self.total_samples} sample(s) failed to extract QA pairs. Possible causes: invalid API credentials, network issues, API server errors, or response parsing failures. Please check your API configuration and logs for details."
                 logger.error(error_msg)
                 if hasattr(self, 'job_uid') and self.job_uid:
-                    from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_error
+                    from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error
                     insert_pipline_job_run_task_log_error(self.job_uid, error_msg, operator_name=self._name, operator_index=self.pipline_index)
                 raise RuntimeError(error_msg)
         return result
@@ -245,5 +245,5 @@ class ExtractQAMapper(Mapper):
         from loguru import logger
         logger.info(message)
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.mongo_tools.tools import insert_pipline_job_run_task_log_info
+            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)
