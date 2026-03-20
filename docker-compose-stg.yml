@@ -15,16 +15,18 @@ services:
     networks:
       - csg-network
 
-  dataflow_mongo_db:
+  dataflow_log_postgres_db:
     restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/postgres:15.10
     volumes:
-      - /dataflow_data/mongodata:/data/db
+      - /dataflow_data/log_postgres_db_data:/var/lib/postgresql/data
+    command: -p 5432
     environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=example
+      - POSTGRES_DB=data_flow_log
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
     ports:
-      - "27017:27017"
+      - "5434:5432"
     networks:
       - csg-network
 
@@ -64,15 +66,19 @@ services:
       - DATABASE_PASSWORD=postgres
       - DATABASE_HOSTNAME=dataflow_postgres_db
       - DATABASE_PORT=5432
+      - LOG_DATABASE_DB=data_flow_log
+      - LOG_DATABASE_USERNAME=postgres
+      - LOG_DATABASE_PASSWORD=postgres
+      - LOG_DATABASE_HOSTNAME=dataflow_log_postgres_db
+      - LOG_DATABASE_PORT=5432
       - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
-      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
       - MINERU_API_URL=http://111.4.242.20:30000
     ports:
       - "8001:8001"
     depends_on:
       - dataflow_celery_redis
-      - dataflow_mongo_db
       - dataflow_postgres_db
+      - dataflow_log_postgres_db
     networks:
       - csg-network
 
@@ -129,16 +135,20 @@ services:
       - DATABASE_PASSWORD=postgres
       - DATABASE_HOSTNAME=dataflow_postgres_db
       - DATABASE_PORT=5432
+      - LOG_DATABASE_DB=data_flow_log
+      - LOG_DATABASE_USERNAME=postgres
+      - LOG_DATABASE_PASSWORD=postgres
+      - LOG_DATABASE_HOSTNAME=dataflow_log_postgres_db
+      - LOG_DATABASE_PORT=5432
       - STUDIO_JUMP_URL=http://39.102.214.107:8002
       - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
-      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
       - MINERU_API_URL=http://111.4.242.20:30000
     ports:
       - "8000:8000"
     depends_on:
       - dataflow_celery_redis
-      - dataflow_mongo_db
       - dataflow_postgres_db
+      - dataflow_log_postgres_db
       - dataflow_celery_worker
     networks:
       - csg-network
