@@ -7,7 +7,7 @@ from enum import Enum
 from typing import List, Optional
 
 
-from data_server.database.session import get_sync_session
+from data_server.database.session import get_log_sync_session
 from data_server.database.bean.task_log import TaskLog, OperatorStatus
 from data_celery.utils import get_timestamp
 from data_server.logic.models import OperatorIdentifierItem
@@ -39,7 +39,7 @@ def _safe_insert_log(
         return
     session = None
     try:
-        session = get_sync_session()
+        session = get_log_sync_session()
         log = TaskLog(
             task_uid=task_uid,
             task_type=task_type,
@@ -158,7 +158,7 @@ def get_log_List(
     # Compatible with historical spelling: formatity -> formatify
     task_type = "formatify" if type == "formatity" else type
 
-    session = get_sync_session()
+    session = get_log_sync_session()
     try:
         query = session.query(TaskLog).filter(
             TaskLog.task_uid == task_uid,
@@ -202,7 +202,7 @@ def get_pipline_job_log_List(
     if task_uid is None:
         raise ValueError("param task_uid is not exist")
 
-    session = get_sync_session()
+    session = get_log_sync_session()
     try:
         query = session.query(TaskLog).filter(
             TaskLog.task_uid == task_uid,
@@ -256,7 +256,7 @@ def set_pipline_job_operator_status(
         return
     session = None
     try:
-        session = get_sync_session()
+        session = get_log_sync_session()
         existing = (
             session.query(OperatorStatus)
             .filter(
@@ -297,7 +297,7 @@ def get_pipline_job_operators_status(
     if not job_uid or len(job_uid) == 0 or not operators:
         return []
 
-    session = get_sync_session()
+    session = get_log_sync_session()
     try:
         operator_names = [op.name for op in operators]
         operator_indices = [op.index for op in operators]
@@ -336,7 +336,7 @@ def get_pipline_job_total_operators_status(job_uid: str) -> List[dict]:
     if not job_uid or len(job_uid) == 0:
         return []
 
-    session = get_sync_session()
+    session = get_log_sync_session()
     try:
         results = (
             session.query(OperatorStatus)
@@ -372,7 +372,7 @@ Replace the MongoDB query logic in the original get_progress_from_mongodb_logs
     if not task_uid:
         return None
 
-    session = get_sync_session()
+    session = get_log_sync_session()
     try:
         # Search for logs containing progress information (in reverse chronological order, taking the most recent 100 entries)
         logs = (

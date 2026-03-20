@@ -25,6 +25,7 @@ load_dotenv()
 
 
 def sqlalchemy_database_uri() -> URL:
+    """business_database"""
     db_user_name = ""
     db_user_pwd = ""
     db_host_name = ""
@@ -52,6 +53,16 @@ def sqlalchemy_database_uri() -> URL:
         database=db_name
     )
 
+def log_database_uri() -> URL:
+    """log_database"""
+    return URL.create(
+        drivername="postgresql",
+        username=os.getenv('LOG_DATABASE_USERNAME', "postgres"),
+        password=os.getenv('LOG_DATABASE_PASSWORD', "postgres"),
+        host=os.getenv('LOG_DATABASE_HOSTNAME', "127.0.0.1"),
+        port=os.getenv('LOG_DATABASE_PORT', 5434),
+        database=os.getenv('LOG_DATABASE_DB', "data_flow_log")
+    )
 
 def get_radis_database_uri() -> str:
     return os.getenv("REDIS_HOST_URL", "redis://192.168.2.10:6379")
@@ -135,11 +146,18 @@ def create_sync_engine(uri: URL) -> Engine:
 _SYNC_ENGINE = create_sync_engine(sqlalchemy_database_uri())
 _SYNC_SESSIONMAKER = sessionmaker(_SYNC_ENGINE, expire_on_commit=False)
 
+_LOG_SYNC_ENGINE = create_sync_engine(log_database_uri())
+_LOG_SYNC_SESSIONMAKER = sessionmaker(_LOG_SYNC_ENGINE, expire_on_commit=False)
+
 
 def get_sync_session() -> Session:  # pragma: no cover
+    """obtain_the_business_database_session"""
     return _SYNC_SESSIONMAKER()
 
 
+def get_log_sync_session() -> Session:  # pragma: no cover
+    """obtain_the_log_database_session"""
+    return _LOG_SYNC_SESSIONMAKER()
 
 MONGO_URI = os.getenv('MONG_HOST_URL', 'mongodb://root:example@net-power.9free.com.cn:10002')
 
@@ -215,6 +233,7 @@ def add_skip_meta_column():
 
 
 _initialized = False
+from data_server.database.bean.base import Base
 from data_server.database.bean.work import Worker
 from data_server.job.JobModels import Job
 from data_server.datasource.DatasourceModels import DataSource, CollectionTask
@@ -231,19 +250,30 @@ def create_tables():
         return
     
     logger.info("Starting database table creation...")
-    Worker.metadata.create_all(_SYNC_ENGINE)
-    Job.metadata.create_all(_SYNC_ENGINE)
-    DataSource.metadata.create_all(_SYNC_ENGINE)
-    CollectionTask.metadata.create_all(_SYNC_ENGINE)
-    DataFormatTask.metadata.create_all(_SYNC_ENGINE)
-    AlgoTemplate.metadata.create_all(_SYNC_ENGINE)
-    OperatorInfo.metadata.create_all(_SYNC_ENGINE)
-    OperatorConfig.metadata.create_all(_SYNC_ENGINE)
-    OperatorConfigSelectOptions.metadata.create_all(_SYNC_ENGINE)
-    OperatorPermission.metadata.create_all(_SYNC_ENGINE)
-    TaskLog.metadata.create_all(_SYNC_ENGINE)
-    OperatorStatus.metadata.create_all(_SYNC_ENGINE)
-    logger.info("Database tables created successfully")
+
+    logger.info("Creating business tables in main database...")
+    business_tables = [
+        Worker.__table__,
+        Job.__table__,
+        DataSource.__table__,
+        CollectionTask.__table__,
+        DataFormatTask.__table__,
+        AlgoTemplate.__table__,
+        OperatorInfo.__table__,
+        OperatorConfig.__table__,
+        OperatorConfigSelectOptions.__table__,
+        OperatorPermission.__table__,
+    ]
+    Base.metadata.create_all(_SYNC_ENGINE, tables=business_tables)
+    logger.info("Business tables created successfully in main database")
+
+    logger.info("Creating log tables in log database...")
+    log_tables = [
+        TaskLog.__table__,
+        OperatorStatus.__table__,
+    ]
+    Base.metadata.create_all(_LOG_SYNC_ENGINE, tables=log_tables)
+    logger.info("Log tables created successfully in log database")
 
     _initialized = True
 
