@@ -76,6 +76,8 @@ async def get_format_type_list():
                 {"value": DataFormatTypeEnum.Word.value, "label": DataFormatTypeEnum.Word.name},
                 {"value": DataFormatTypeEnum.PPT.value, "label": DataFormatTypeEnum.PPT.name},
                 {"value": DataFormatTypeEnum.PDF.value, "label": DataFormatTypeEnum.PDF.name},
+                {"value": DataFormatTypeEnum.Txt.value, "label": DataFormatTypeEnum.Txt.name},
+                {"value": DataFormatTypeEnum.Html.value, "label": DataFormatTypeEnum.Html.name},
             ],
             "to_format_types": [
                 {"value": DataFormatTypeEnum.Markdown.value, "label": DataFormatTypeEnum.Markdown.name},

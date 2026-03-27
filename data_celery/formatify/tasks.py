@@ -185,7 +185,9 @@ def format_task(task_id: int, user_name: str, user_token: str):
             0: ['.ppt', '.pptx'],  # PPT
             1: ['.doc', '.docx'],  # Word
             3: ['.xls', '.xlsx'],  # Excel
-            7: ['.pdf']  # PDF
+            7: ['.pdf'],  # PDF
+            8: ['.txt'],  # Txt
+            9: ['.html', '.htm'],  # Html
         }
         target_extensions = set()
         if format_task.from_data_type in type_map:
@@ -324,6 +326,14 @@ def format_task(task_id: int, user_name: str, user_token: str):
                 match format_task.to_data_type:
                     case DataFormatTypeEnum.Markdown.value:
                         convert_func = convert_pdf_to_markdown
+            case DataFormatTypeEnum.Txt.value:
+                match format_task.to_data_type:
+                    case DataFormatTypeEnum.Markdown.value:
+                        convert_func = convert_txt_to_markdown
+            case DataFormatTypeEnum.Html.value:
+                match format_task.to_data_type:
+                    case DataFormatTypeEnum.Markdown.value:
+                        convert_func = convert_html_to_markdown
         
         if convert_func is None:
             insert_formatity_task_log_error(task_uid, f"Unsupported conversion: {getFormatTypeName(format_task.from_data_type)} -> {getFormatTypeName(format_task.to_data_type)}")
@@ -606,6 +616,14 @@ def format_task_func(
                 case DataFormatTypeEnum.Markdown.value:
                     # For PDF to MD conversion, need to pass mineru_api_url
                     conversion_results = traverse_files(tmp_path, convert_pdf_to_markdown, task_uid, mineru_api_url)
+        case DataFormatTypeEnum.Txt.value:
+            match to_type:
+                case DataFormatTypeEnum.Markdown.value:
+                    conversion_results = traverse_files(tmp_path, convert_txt_to_markdown, task_uid)
+        case DataFormatTypeEnum.Html.value:
+            match to_type:
+                case DataFormatTypeEnum.Markdown.value:
+                    conversion_results = traverse_files(tmp_path, convert_html_to_markdown, task_uid)
     return conversion_results
 
 
@@ -868,6 +886,74 @@ def convert_word_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str
         return None  # Not a target file, return None
 
 
+def _read_text_file_bytes(raw: bytes) -> str:
+    """Decode file bytes with common encodings (UTF-8, GBK, etc.)."""
+    for enc in ('utf-8-sig', 'utf-8', 'gbk', 'gb18030', 'latin-1'):
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode('utf-8', errors='replace')
+
+
+def convert_txt_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]]:
+    if not file_path.lower().endswith('.txt'):
+        return None
+    insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
+    try:
+        with open(file_path, 'rb') as f:
+            raw = f.read()
+        text_content = _read_text_file_bytes(raw)
+        markdown_file_path = os.path.splitext(file_path)[0] + '.md'
+        with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
+            md_file.write(text_content)
+        insert_formatity_task_log_info(task_uid, f'convert file {markdown_file_path} succeed')
+        os.remove(file_path)
+        return {
+            "from": file_path,
+            "to": markdown_file_path,
+            "status": "success"
+        }
+    except Exception as e:
+        print(f"convert file {file_path} error: {e}")
+        insert_formatity_task_log_error(task_uid, f"convert file {file_path} error: {e}")
+        return {
+            "from": file_path,
+            "to": None,
+            "status": "failure"
+        }
+
+
+def convert_html_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]]:
+    if not file_path.lower().endswith(('.html', '.htm')):
+        return None
+    insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
+    try:
+        with open(file_path, 'rb') as f:
+            raw = f.read()
+        html_content = _read_text_file_bytes(raw)
+        html_content = fix_email_links_in_html(html_content)
+        markdown_content = md(html_content)
+        markdown_file_path = os.path.splitext(file_path)[0] + '.md'
+        with open(markdown_file_path, 'w', encoding='utf-8') as md_file:
+            md_file.write(markdown_content)
+        insert_formatity_task_log_info(task_uid, f'convert file {markdown_file_path} succeed')
+        os.remove(file_path)
+        return {
+            "from": file_path,
+            "to": markdown_file_path,
+            "status": "success"
+        }
+    except Exception as e:
+        print(f"convert file {file_path} error: {e}")
+        insert_formatity_task_log_error(task_uid, f"convert file {file_path} error: {e}")
+        return {
+            "from": file_path,
+            "to": None,
+            "status": "failure"
+        }
+
+
 def convert_ppt_to_markdown(file_path: str, task_uid) -> Optional[Dict[str, str]]:
     if file_path.lower().endswith(('.pptx', '.ppt')):
         insert_formatity_task_log_info(task_uid, f'Source file address：{file_path}')
@@ -1034,7 +1120,9 @@ def search_files(folder_path: str, types: List[int]) -> Tuple[bool, List[str]]:
         0: ['.ppt', '.pptx'],  # PPT
         1: ['.doc', '.docx'],  # Word
         3: ['.xls', '.xlsx'],  # Excel
-        7: ['.pdf']  # PDF
+        7: ['.pdf'],  # PDF
+        8: ['.txt'],  # Txt
+        9: ['.html', '.htm'],  # Html
     }
 
 
