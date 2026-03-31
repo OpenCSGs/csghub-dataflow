@@ -16,6 +16,8 @@ class DataFormatTypeEnum(Enum):
     Csv = 5  # csv
     Parquet = 6  # parquet
     PDF = 7  # pdf
+    Txt = 8  # plain text
+    Html = 9  # html
 
 
 def getFormatTypeName(type):
