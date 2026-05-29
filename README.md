@@ -28,15 +28,76 @@ This project inherits the [Apache License 2.0](LICENSE) from Data Juicer.
 
 # 🚀 Quick Start
 
-## Building data-flow from Source
+## Building Docker Images
 
-```
+DataFlow uses two images with different roles:
+
+| Image | Dockerfile | Purpose |
+|-------|------------|---------|
+| API Server | `Dockerfile` | Runs `data_server` API; submits jobs to CSGHub/Argo |
+| Argo Execution | `Dockerfile-argo` | Runs inside Argo Workflow pods; executes datasource / formatify / pipeline / tool tasks via `run_dataflow_task.py` |
+
+### API Server Image
+
+```bash
 docker build -t dataflow . -f Dockerfile
 
 docker buildx build --provenance false --platform linux/amd64 -t dataflow . -f Dockerfile
 
 docker buildx build --provenance false --platform linux/arm64 -t dataflow . -f Dockerfile
 ```
+
+### Argo Execution Image
+
+The Argo image bundles full operator dependencies (`docker/dataflow_requirements.txt`) and runtime code (`data_server`, `data_engine`, `run_dataflow_task.py`). CSGHub creates Argo Workflow pods from this image.
+
+**Build locally (no push):**
+
+```bash
+docker build -f Dockerfile-argo \
+  --build-arg BUILD_CN=true \
+  --build-arg PRELOAD_ASSETS=true \
+  -t opencsg_public/dataflow:argo-latest .
+```
+
+**Build and push (recommended):**
+
+```bash
+# ./scripts/build-push-argo.sh [registry] [tag]
+./scripts/build-push-argo.sh 192.168.2.98:8140 argo-latest
+./scripts/build-push-argo.sh opencsg-registry.cn-beijing.cr.aliyuncs.com argo-20260529
+```
+
+**Multi-platform build:**
+
+```bash
+docker buildx build --provenance false --platform linux/amd64 \
+  -f Dockerfile-argo \
+  --build-arg BUILD_CN=true \
+  --build-arg PRELOAD_ASSETS=true \
+  -t opencsg_public/dataflow:argo-latest .
+```
+
+Build args:
+
+- `BUILD_CN=true` — use Aliyun apt/pip mirrors (recommended in China)
+- `PRELOAD_ASSETS=true` — preload Data Juicer assets/models into the image (recommended for production)
+
+**Configure the API server to use the image:**
+
+Set `CSGHUB_DATAFLOW_TEMPLATE_IMAGE` on the DataFlow API service (also in `.env` / `docker run`). CSGHub prepends the registry prefix automatically — pass only the repository path, for example:
+
+```bash
+CSGHUB_DATAFLOW_TEMPLATE_IMAGE=opencsg_public/dataflow:argo-latest
+```
+
+When a job is submitted, each Argo pod runs:
+
+```bash
+python run_dataflow_task.py --task-type <datasource|formatify|pipeline|tool> --task-params '<json>'
+```
+
+Ensure `DATA_DIR` on the API server matches the `workflow-data` volume `mountPath` configured in CSGHub (default `/data/dataflow_data`).
 
 ## Prerequisites
 
@@ -50,26 +111,6 @@ docker run -d --name dataflow-pg \
    -e POSTGRES_USER=postgres \
    -e POSTGRES_PASSWORD=postgres \
    opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/csghub/postgres:15.10
-```
-
-Launch mongoDB container
-
-```bash
-docker run -d --name dataflow-mongo \
-   -p 27017:27017 \
-   -v /tmp/data_flow/mongodata:/data/db \
-   -e MONGO_INITDB_ROOT_USERNAME=root \
-   -e MONGO_INITDB_ROOT_PASSWORD=example \
-   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
-```
-
-Launch redis container
-
-```bash
-docker run -d --name dataflow-redis \
-   -p 16379:6379 \
-   -v /tmp/data_flow/redisdata:/data \
-   opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
 ```
 
 ## Installation data-flow
@@ -94,38 +135,16 @@ docker run -d --name dataflow-api -p 8000:8000 \
    -e DATABASE_HOSTNAME=127.0.0.1 \
    -e DATABASE_PORT=5433 \
    -e STUDIO_JUMP_URL=https://data-label.opencsg.com \
-   -e REDIS_HOST_URL=redis://127.0.0.1:16379 \
-   -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
+   -e CSGHUB_DATAFLOW_TEMPLATE_IMAGE=opencsg_public/dataflow:argo-latest \
    dataflow
 
 ```
 
-## Installation data-flow-celery
+## Scheduling
 
-```bash
+DataFlow submits job execution to CSGHub/Argo. The API server builds a DAG and references the Argo execution image via `CSGHUB_DATAFLOW_TEMPLATE_IMAGE`. The old standalone `data-flow-celery` worker deployment is retired and should not be started anymore.
 
-docker run -d --name celery-work -p 8001:8001 \
-   -v /tmp/data_flow/celery-data:/data/dataflow_celery \
-   -c "celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent" \
-   -e DATA_DIR=/data/dataflow_celery \
-   -e CSGHUB_ENDPOINT=https://hub.opencsg.com \
-   -e MAX_WORKERS=99 \
-   -e RAY_ADDRESS=auto \
-   -e RAY_ENABLE=False \
-   -e RAY_LOG_DIR=/data/ray_output \
-   -e API_SERVER=0.0.0.0 \
-   -e API_PORT=8001 \
-   -e ENABLE_OPENTELEMETRY=False \
-   -e DATABASE_DB=data_flow \
-   -e DATABASE_USERNAME=postgres \
-   -e DATABASE_PASSWORD=postgres \
-   -e DATABASE_HOSTNAME=127.0.0.1 \
-   -e DATABASE_PORT=5433 \
-   -e REDIS_HOST_URL=redis://127.0.0.1:16379 \
-   -e MONG_HOST_URL=mongodb://root:example@127.0.0.1:27017 \
-   dataflow-celery
-
-```
+See [Argo Execution Image](#argo-execution-image) above for build and configuration details.
 
 ## Run data-flow server in development mode locally
 
@@ -155,17 +174,9 @@ uv pip install -r docker/dataflow_requirements.txt -i https://mirrors.aliyun.com
 uvicorn data_server.main:app --reload
 ```
 
-## Run data-flow-celery server in development mode locally
-
-```bash
-
-# Run the celery server locally
-celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent
-```
-
 Notes: 
 - `kenlm`, `simhash-pybind`, `opencc==1.1.8`, `imagededup` in file `environments/science_requires.txt` are only support X86 platform. Remove them if you are using ARM platform. 
-- The configuration information of `REDIS_HOST_URL` and `MONG_HOST_URL` in `data-flow` and `data-flow-celery` must be consistent.
+- DataFlow no longer relies on standalone Celery workers for task scheduling. Use the DataFlow API together with the CSGHub/Argo execution chain.
 - If you want to use the data annotation service, please install and enable the **[Label Studio](https://github.com/OpenCSGs/label-studio)** service. Additionally, you need to set the `STUDIO_JUMP_URL` variable of the `data-flow` service to the address of the `Label Studio` service.
 
 ## 🛣️ Roadmap

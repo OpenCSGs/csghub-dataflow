@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 from fastapi import UploadFile, Request
 from loguru import logger
-from data_celery.utils import get_project_root
+from data_server.utils.project_paths import get_project_root
 
 class FileStorageManager:
 
@@ -47,12 +47,12 @@ class FileStorageManager:
 
             file_url = f"api/v1/dataflow/real_static_files/{category}/{file_name}"
             
-            logger.info(f"文件保存成功: {file_path}, 代码: {file_code}")
+            logger.info(f"File saved successfully: {file_path}, code: {file_code}")
             
             return file_code, file_url
             
         except Exception as e:
-            logger.error(f"保存文件失败: {str(e)}")
+            logger.error(f"Failed to save file: {str(e)}")
             raise
 
     def delete_file_by_name(self, filename: str, category: str = "operator") -> bool:
@@ -61,23 +61,23 @@ class FileStorageManager:
 
             category_dir = self.upload_dir / category
             if not category_dir.exists():
-                logger.warning(f"分类目录不存在: {category_dir}")
+                logger.warning(f"Category directory does not exist: {category_dir}")
                 return False
 
             file_path = category_dir / filename
 
 
             if not file_path.exists():
-                logger.warning(f"文件不存在: {file_path}")
+                logger.warning(f"File does not exist: {file_path}")
                 return False
 
 
             file_path.unlink()
-            logger.info(f"文件删除成功: {file_path}")
+            logger.info(f"File deleted successfully: {file_path}")
             return True
 
         except Exception as e:
-            logger.error(f"删除文件失败: {str(e)}")
+            logger.error(f"Failed to delete file: {str(e)}")
             return False
 
 

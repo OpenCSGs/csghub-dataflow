@@ -74,9 +74,9 @@ def intercept_web_token(username: str) -> Optional[str]:
         return user_token
         
     except requests.exceptions.RequestException as e:
-        print(f"请求发生错误: {str(e)}")
+        print(f"Request error: {str(e)}")
     except Exception as e:
-        print(f"提取user_token失败: {str(e)}")
+        print(f"Failed to extract user_token: {str(e)}")
     
     return None
     

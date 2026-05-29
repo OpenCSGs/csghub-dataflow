@@ -107,7 +107,11 @@ class TemplateExecutorSe(TOOL):
             return Path(self.tool_def.export_path)
 
         finally:
-            pass
+            if temp_name and os.path.isfile(temp_name):
+                try:
+                    os.remove(temp_name)
+                except OSError:
+                    logger.warning("Failed to remove temp template config {}", temp_name)
 
     @classmethod
     @property

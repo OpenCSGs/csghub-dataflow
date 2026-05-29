@@ -281,7 +281,7 @@ class MdToJsonlPreprocess(TOOL):
                         print_report=False,
                         print_report_every=1,
                         allow_patterns=None,
-                        ignore_patterns=None
+                        ignore_patterns=None,
                     )
                     
                     logger.info(f'='*80)

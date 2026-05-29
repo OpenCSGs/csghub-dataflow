@@ -7,6 +7,7 @@ from pycsghub.cmd.repo_types import RepoType
 from pycsghub.upload_large_folder.main import upload_large_folder_internal
 
 from data_engine.exporter.base_exporter import Exporter
+from data_engine.exporter.csghub_lfs_patch import apply_csghub_lfs_exists_patch
 from loguru import logger
 from pycsghub.repository import Repository
 from pycsghub.utils import (build_csg_headers,
@@ -101,23 +102,31 @@ class ExporterCSGHUB(Exporter):
 
     def export_large_folder(self):
         try:
-            if self.branch is None:
-                self.branch = 'main'
-                self.branch = self.get_avai_branch(self.branch)
-            logger.info(f'Start to upload {self.export_path} to repo: {self.repo_id} with branch: {self.branch}')
+            origin_branch = (self.branch or "").strip() or "main"
+            if self.repo_id and self.auto_version:
+                self.output_branch_name = self.get_avai_branch(origin_branch)
+            else:
+                self.output_branch_name = origin_branch
+            upload_branch = self.output_branch_name
+            logger.info(
+                f'Start to upload {self.export_path} to repo: {self.repo_id} '
+                f'with branch: {upload_branch} (auto_version={self.auto_version})'
+            )
+            apply_csghub_lfs_exists_patch()
             upload_large_folder_internal(
                 repo_id=self.repo_id,
                 local_path=self.export_path,
                 repo_type=RepoType.DATASET,
-                revision=self.branch,
+                revision=upload_branch,
                 endpoint=get_endpoint(endpoint=GetHubEndpoint()),
                 token=self.user_token,
                 num_workers=1,
                 print_report=False,
                 print_report_every=1,
                 allow_patterns=None,
-                ignore_patterns=None
+                ignore_patterns=None,
             )
+            return self.output_branch_name
         except Exception as e:
             traceback.print_exc()
             logger.error(f'Failed to upload folder to {self.repo_id}: {str(e)}')
@@ -152,6 +161,7 @@ class ExporterCSGHUB(Exporter):
                 os.makedirs(self.repo_work_dir, exist_ok=True)
             logger.info(
                 f'Start to push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name},user_name: {self.user_name}, token: {self.user_token}')
+            apply_csghub_lfs_exists_patch()
             upload_large_folder_internal(
                 repo_id=self.repo_id,
                 local_path=self.upload_path,
@@ -163,7 +173,7 @@ class ExporterCSGHUB(Exporter):
                 print_report=False,
                 print_report_every=1,
                 allow_patterns=None,
-                ignore_patterns=None
+                ignore_patterns=None,
             )
             logger.info(f'Done push {self.upload_path} to repo: {self.repo_id} with branch: {self.output_branch_name}')
             if os.path.exists(self.repo_work_dir):
@@ -216,32 +226,21 @@ class ExporterCSGHUB(Exporter):
         
         # Operator execution task: automatically generate version number
         latestNum = 0
-        
+
         for b in valid_branches:
-            if origin_branch == "main" and re.match(r"^v\d+", b):
-                # Handle main branch case, find v1, v2, v3, etc.
-                numStr = b.split(".")[0][1:]
-                if not numStr.isdigit():
-                    continue
-                num = int(numStr)
-                latestNum = max(latestNum, num)
+            if origin_branch == "main" and re.match(r"^v\d+$", b):
+                numStr = b[1:]
+                if numStr.isdigit():
+                    latestNum = max(latestNum, int(numStr))
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):
-                # Handle other branch cases, find origin_branch.1, origin_branch.2, etc.
                 numStr = b[len(origin_branch) + 1:]
-                if not numStr.isdigit():
-                    continue
-                num = int(numStr)
-                latestNum = max(latestNum, num)
-            else:
-                continue
-        
+                if numStr.isdigit():
+                    latestNum = max(latestNum, int(numStr))
+
         if origin_branch == "main":
-            if latestNum > 0:
-                return "v" + str(latestNum + 1)
-            else:
-                return "v1"
-        else:
-            if latestNum > 0:
-                return origin_branch + "." + str(latestNum + 1)
-            else:
-                return origin_branch + ".1"
+            return f"v{latestNum + 1}" if latestNum > 0 else "v1"
+        if latestNum > 0:
+            return f"{origin_branch}.{latestNum + 1}"
+        if origin_branch in valid_branches:
+            return f"{origin_branch}.1"
+        return origin_branch

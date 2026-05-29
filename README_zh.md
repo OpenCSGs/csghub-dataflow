@@ -13,139 +13,76 @@ uvicorn data_server.main:app --reload
 uvicorn data_server.main:app --host 0.0.0.0 --port 8001
 ```
 
-### 启动celery
-eventlet 可以提高并发性能
+### 调度说明
+当前任务调度已切换为 DataFlow 调用 CSGHub，由 CSGHub 转换为 Argo Workflow 执行。
 
-直接启动，启动多个celery进程不推荐，会存在重复的worker name
-```cmd
+DataFlow API 负责创建 DAG 并提交任务；Argo Pod 内实际执行数据采集、格式转换、数据处理、工具任务。Pod 使用 **Argo 执行镜像**（`Dockerfile-argo` 构建），入口命令为：
 
-[//]: # (celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet --concurrency=5)
-celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent --concurrency=5
+```bash
+python run_dataflow_task.py --task-type <datasource|formatify|pipeline|tool> --task-params '<json>'
 ```
 
-### celery任务配置
-data_celery 项目包下配置任务
-具体参考test01 任务，test01是python包名
-每创建一个任务需要以包的方式创建，该包下有tasks.py文件，在里面定义任务
-```python
-from data_celery.main import celery_app
-from loguru import logger
-import time
+旧的本地 Celery worker 启动方式已废弃，不需要再单独启动 `celery -A data_celery.main:celery_app worker ...`。
 
-@celery_app.task(name="test_01")
-def test_01(name):
-    logger.info(f"test_01:{name} 开启执行")
-    time.sleep(10)
-    logger.info(f"test_01:{name} 执行结束")
-    return True
+### Argo 执行镜像
 
-@celery_app.task(name="test_02")
-def test_02(name):
-    logger.info(f"test_02:{name} 开启执行")
-    time.sleep(10)
-    logger.info(f"test_02:{name} 执行结束")
-    return True
-```
-### celery任务调用
+DataFlow 使用两类镜像，职责不同：
 
-```python
-from data_celery.main import celery_app
-from data_celery.test01.tasks import test_01, test_02
-import time
+| 镜像 | Dockerfile | 用途 |
+|------|------------|------|
+| API 服务 | `Dockerfile` | 运行 `data_server` API，向 CSGHub/Argo 提交任务 |
+| Argo 执行 | `Dockerfile-argo` | 在 Argo Workflow Pod 内执行具体任务 |
 
-if __name__ == '__main__':
-    print("main")
-    # 保存任务结果对象
-    result1 = test_01.apply_async(args=("123123",))
-    result2 = test_02.delay("c2")
+Argo 镜像包含全量算子依赖（`docker/dataflow_requirements.txt`）及运行代码（`data_server`、`data_engine`、`run_dataflow_task.py`）。
 
-    print(f"任务1 ID: {result1.id}")
-    print(f"任务2 ID: {result2.id}")
+**本地构建（不推送）：**
 
-    print("main end")
-
-    # 可选：检查任务状态（不推荐立即检查，仅用于调试）
-    time.sleep(1)
-    print(f"任务1状态: {result1.status}")
-    print(f"任务2状态: {result2.status}")
+```bash
+docker build -f Dockerfile-argo \
+  --build-arg BUILD_CN=true \
+  --build-arg PRELOAD_ASSETS=true \
+  -t opencsg_public/dataflow:argo-latest .
 ```
 
+**构建并推送（推荐）：**
 
-### 配置内网穿透redis连接
-默认使用本地环境，如果其他地方开发，需要配置内网穿透，新建.nat 文件，内容不限制
-启动时会判断.nat文件是否存在，如果存在则使用内网穿透的redis连接
-
-### celery docker部署
-/docker-compose下增加redis镜像前置
-配置启动命令
-
-```yaml
-services:
-  postgres_db:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsg_public/postgres
-    volumes:
-      - postgres_db:/var/lib/postgresql/data
-    command: -p ${DATABASE_PORT}
-    environment:
-      - POSTGRES_DB=${DATABASE_DB}
-      - POSTGRES_USER=${DATABASE_USERNAME}
-      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
-    env_file:
-      - .env
-    expose: 
-      - ${DATABASE_PORT}
-    ports:
-      - "5433:${DATABASE_PORT}"
-  celery_redis:
-    restart: unless-stopped
-    image: redis:latest  # 使用最新的官方 Redis 镜像
-    volumes:
-      - celery_redis_data:/data  # 挂载数据卷以持久化 Redis 数据
-    ports:
-      - "6379:6379"  # 将主机的 6379 端口映射到容器的 6379 端口
-  api_server:
-    build: .
-    env_file:
-      - .env
-    volumes:
-      # - .:/dataflow
-      - ${DATA_DIR}:${DATA_DIR}
-    ports:
-      - "8000:8000"
-    depends_on:
-      - postgres_db
-    # command: ["uvicorn", "data_server.main:app", "--host", "0.0.0.0", "--port", "8000"]
-  celery_worker1:
-    build: .
-    command: >
-      sh -c "
-        celery -A data_celery.main:celery_app worker --loglevel=info --pool=eventlet -n NODENAME1
-      "
-    depends_on:
-      - celery_redis
-volumes:
-  postgres_db:
-  celery_redis_data:
+```bash
+# ./scripts/build-push-argo.sh [registry] [tag]
+./scripts/build-push-argo.sh 192.168.2.98:8140 argo-latest
+./scripts/build-push-argo.sh opencsg-registry.cn-beijing.cr.aliyuncs.com argo-20260529
 ```
 
-#### 单台部署 api_server 启动celery
+**多平台构建：**
 
-使用docker-compose 启动 直接启动，celery image 使用build image的镜像即可
+```bash
+docker buildx build --provenance false --platform linux/amd64 \
+  -f Dockerfile-argo \
+  --build-arg BUILD_CN=true \
+  --build-arg PRELOAD_ASSETS=true \
+  -t opencsg_public/dataflow:argo-latest .
+```
 
-redis 使用docker-compose 启动，使用自己配置好redis 镜像，在.env 中配置redis_url
+常用构建参数：
 
-celery 服务启动时会读取env中的redis_url
+- `BUILD_CN=true` — 使用国内 apt/pip 镜像源（国内环境推荐）
+- `PRELOAD_ASSETS=true` — 预下载 Data Juicer 资源/模型到镜像内（生产环境推荐）
 
-#### 多台部署
-celery image 使用build image的镜像即可
-使用docker-compose 启动 api_server 可以去掉 celery_worker1 节点，
+**在 API 服务中配置镜像：**
 
-celery_worker1 单独启动时 去掉其他的节点，单独启动 celery_worker 服务
+在 DataFlow API 的环境变量中设置 `CSGHUB_DATAFLOW_TEMPLATE_IMAGE`（`.env` 或 `docker run` 均可）。CSGHub 会自动拼接仓库前缀，此处只需填写仓库内路径，例如：
 
-每个celery_worker 服务启动前 配置 -n 参数，例如 -n worker_hostname_des,多台部署，节点名称必须是唯一的，否则会启动重名的节点服务
+```bash
+CSGHUB_DATAFLOW_TEMPLATE_IMAGE=opencsg_public/dataflow:argo-latest
+```
 
-单台启动多个celery 服务时可以配置多个节点 celery_worker1 、celery_worker2 、celery_worker3
+同时确保 API 服务的 `DATA_DIR` 与 CSGHub 创建 Workflow 时 `workflow-data` 卷的 `mountPath` 一致（默认 `/data/dataflow_data`）。
+
+### 部署说明
+当前部署只需要启动 DataFlow API 服务，以及其依赖的数据库、存储和网关相关配置。
+
+Argo 执行镜像需提前构建并推送到 CSGHub 可访问的镜像仓库，并在 API 服务中通过 `CSGHUB_DATAFLOW_TEMPLATE_IMAGE` 指定。
+
+原 `celery_worker`、`Dockerfile-celery`、独立 Celery compose/脚本 已下线，不再作为部署方案的一部分。
 
 ### DataSource extra_config 示例
 ```json

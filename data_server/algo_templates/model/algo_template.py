@@ -9,35 +9,35 @@ class AlgoTemplate(Base):
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
 
-    user_id = Column(String(255), comment="用户id")
+    user_id = Column(String(255), comment="User ID")
 
-    name = Column(String(255), comment="算法模块名称")
+    name = Column(String(255), comment="Algorithm module name")
 
-    description = Column(String(255), comment="算法模版描述")
+    description = Column(String(255), comment="Algorithm template description")
 
-    type = Column(String(255), comment="算法模版类型")
+    type = Column(String(255), comment="Algorithm template type")
 
-    buildin = Column(Boolean, comment="是否为内置模版")
+    buildin = Column(Boolean, comment="Whether built-in template")
 
-    project_name = Column(String(255), comment="项目名称")
+    project_name = Column(String(255), comment="Project name")
 
-    dataset_path = Column(String(255), comment="输入数据集路径")
+    dataset_path = Column(String(255), comment="Input dataset path")
 
-    exprot_path = Column(String(255), comment="输出数据集路径")
+    exprot_path = Column(String(255), comment="Output dataset path")
 
-    np = Column(String(255), comment="并行处理的进程数，控制CPU使用和处理速度")
+    np = Column(String(255), comment="Number of parallel processes; controls CPU usage and speed")
 
-    open_tracer = Column(Boolean, comment="是否开启操作追踪，用于调试和性能分析")
+    open_tracer = Column(Boolean, comment="Whether to enable operation tracing for debugging and profiling")
 
-    trace_num = Column(String(255), comment="追踪的样本数量，每个操作追踪多少个样本的处理过程")
+    trace_num = Column(String(255), comment="Number of samples to trace per operation")
 
-    backend_yaml = Column(Text, comment="后端yaml格式")
+    backend_yaml = Column(Text, comment="Backend YAML format")
 
-    dslText = Column(Text, comment="前端yaml格式")
+    dslText = Column(Text, comment="Frontend YAML format")
 
-    created_at = Column(DateTime, default=datetime.now, comment="创建时间")
+    created_at = Column(DateTime, default=datetime.now, comment="Created at")
 
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="修改时间")
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now, comment="Updated at")
 
     def __repr__(self):
         return f"<AlgoTemplate(id={self.id}, name='{self.name}', type='{self.type}', user_id='{self.user_id}')>"

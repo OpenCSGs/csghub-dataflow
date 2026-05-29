@@ -1,9 +1,9 @@
 import pymysql
 from pymysql.cursors import DictCursor
-from data_server.datasource.schemas import DataSourceCreate
+from data_server.datasource.schemas import DataSourceBase
 
 class MySQLConnector:
-    def __init__(self, datasource:DataSourceCreate):
+    def __init__(self, datasource: DataSourceBase):
         self.datasource = datasource
 
     def test_connection(self):

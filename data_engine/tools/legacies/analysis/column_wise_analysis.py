@@ -3,6 +3,7 @@ import os
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from loguru import logger
 from tqdm import tqdm
 
 from data_engine.utils.constant import Fields
@@ -100,8 +101,18 @@ class ColumnWiseAnalysis:
         width_unit = 4
         height_unit = 6
 
-        columns = self.stats.columns
+        # Only plot columns that overall analysis could describe (e.g. skip dict *_detail).
+        if self.overall_result is not None and len(self.overall_result.columns) > 0:
+            columns = [
+                c for c in self.stats.columns
+                if c in self.overall_result.columns
+            ]
+        else:
+            columns = list(self.stats.columns)
         num = len(columns)
+        if num == 0:
+            logger.warning('No analyzable stats columns for column-wise analysis.')
+            return
 
         # get the recommended "best" number of columns and rows
         rec_row, rec_col, grid_indexes = get_row_col(num, num_subcol)
@@ -114,8 +125,7 @@ class ColumnWiseAnalysis:
             fig = plt.figure(figsize=(rec_width, rec_height),
                              layout='constrained')
             subfigs = fig.subfigures(rec_row, rec_col, wspace=0.01)
-        for i, column_name in enumerate(tqdm(columns.to_list(),
-                                             desc='Column')):
+        for i, column_name in enumerate(tqdm(columns, desc='Column')):
             data = self.stats[column_name]
             # explode data to flatten inner list
             data = data.explode().infer_objects()

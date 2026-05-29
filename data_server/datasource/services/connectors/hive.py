@@ -1,10 +1,10 @@
 from pyhive import hive
 from TCLIService.ttypes import TOperationState
-from data_server.datasource.schemas import DataSourceCreate
+from data_server.datasource.schemas import DataSourceBase
 
 
 class HiveConnector:
-    def __init__(self, datasource: DataSourceCreate):
+    def __init__(self, datasource: DataSourceBase):
         self.datasource = datasource
 
 

@@ -64,7 +64,7 @@ async def get_algo_templates(
         )
         
     except Exception as e:
-        logger.error(f"查询算法模板列表失败: {e}")
+        logger.error(f"Failed to list algo templates: {e}")
         return response_fail(msg="查询失败")
     finally:
         db.close()
@@ -95,7 +95,7 @@ async def get_algo_template_by_id(
         )
         
     except Exception as e:
-        logger.error(f"查询算法模板详情失败: {e}")
+        logger.error(f"Failed to get algo template details: {e}")
         return response_fail(msg="查询失败")
     finally:
         db.close()
@@ -132,7 +132,7 @@ async def create_algo_template(
         )
         
     except Exception as e:
-        logger.error(f"创建算法模板失败: {e}")
+        logger.error(f"Failed to create algo template: {e}")
         return response_fail(msg="创建模版失败:" + str(e))
     finally:
         db.close()
@@ -178,7 +178,7 @@ async def update_algo_template(
         )
         
     except Exception as e:
-        logger.error(f"更新算法模板失败: {e}")
+        logger.error(f"Failed to update algo template: {e}")
         return response_fail(msg="算法更新失败:" + str(e))
     finally:
         db.close()
@@ -207,7 +207,7 @@ async def delete_algo_template(
         )
         
     except Exception as e:
-        logger.error(f"删除算法模板失败: {e}")
+        logger.error(f"Failed to delete algo template: {e}")
         return response_fail(msg="删除失败")
     finally:
         db.close()
@@ -248,7 +248,7 @@ async def get_algo_template_by_name(
         )
         
     except Exception as e:
-        logger.error(f"根据名称查询算法模板失败: {e}")
+        logger.error(f"Failed to get algo template by name: {e}")
         return response_fail(msg="查询失败")
     finally:
         db.close()

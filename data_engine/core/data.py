@@ -203,9 +203,9 @@ class NestedDataset(Dataset, DJDataset):
                                 f'Left {len(dataset)} samples.')
         except Exception as e:
             logger.error(f'An error occurred during Op [{op._name}].')
-            # 同时写入 MongoDB，让任务日志界面可以看到
+            # Also write to task log file for UI visibility
             if hasattr(op, 'job_uid') and op.job_uid:
-                from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error
+                from data_server.log_tools.tools import insert_pipline_job_run_task_log_error
                 insert_pipline_job_run_task_log_error(
                     op.job_uid,
                     f'An error occurred during Op [{op._name}]: {e}',
@@ -213,7 +213,7 @@ class NestedDataset(Dataset, DJDataset):
                     operator_index=getattr(op, 'pipline_index', 0)
                 )
             traceback.print_exc()
-            # 重新抛出异常，让上层异常处理能够捕获并停止任务
+            # Re-raise so upper handler can stop the task
             raise
         finally:
             if checkpointer and dataset is not self:

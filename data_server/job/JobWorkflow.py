@@ -69,6 +69,8 @@ def get_env_vars():
         {"name": "AZURE_OPENAI_API_KEY", "value": os.getenv("AZURE_OPENAI_API_KEY")},
         {"name": "OPENAI_API_VERSION", "value": os.getenv("OPENAI_API_VERSION")},
         {"name": "ENABLE_OPENTELEMETRY", "value": os.getenv("ENABLE_OPENTELEMETRY", "False")},
+        {"name": "MINERU_API_URL", "value": os.getenv("MINERU_API_URL", "http://111.4.242.20:30000")},
+        {"name": "MINERU_BACKEND", "value": os.getenv("MINERU_BACKEND", "http-client")},
     ]
     return env_vars
 

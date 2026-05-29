@@ -1,9 +1,9 @@
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
-from data_server.datasource.schemas import DataSourceCreate
+from data_server.datasource.schemas import DataSourceBase
 
 class MongoDBConnector:
-    def __init__(self, datasource:DataSourceCreate):
+    def __init__(self, datasource: DataSourceBase):
         self.datasource = datasource
         # default_timeout_setting_milliseconds
         self.timeout_ms = 5000  # 5s

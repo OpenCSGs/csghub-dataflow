@@ -7,12 +7,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from loguru import logger
 #from data_server.agent.deps import init_managers, cleanup_managers
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
-from data_celery.main import celery_app
-from data_celery.redis_tools.tools import (celery_server_status_is_exists,get_celery_server_list,
-                                           del_celery_server_list)
-from data_celery.utils import get_project_root
+from data_server.utils.project_paths import get_project_root
 import threading
 import os
 
@@ -20,14 +15,6 @@ from data_server.api.endpoints.op_pic_upload import op_pic_router
 
 _stop_event: threading.Event = None
 _workflow_thread: threading.Thread = None
-
-
-def celery_status_scheduled_task():
-
-    try:
-        pass
-    except Exception as e:
-        logger.error(f"celery_status_scheduled_task 定时任务执行出错: {e}")
 
 
 @asynccontextmanager
@@ -45,17 +32,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # Initialize managers (DB, Connection, Team)
         #await init_managers()
         logger.info("Managers initialized successfully")
-
-        # _scheduler = BackgroundScheduler()
-        # _scheduler.add_job(
-        #     func=celery_status_scheduled_task,
-        #     trigger=IntervalTrigger(seconds=3),
-        #     id='celery_status_scheduled_task',
-        #     name='celery_status_scheduled_task Task',
-        #     replace_existing=True
-        #
-        # _scheduler.start()
-        # logger.info("APScheduler started with scheduled task (every 3 seconds)")
 
         if os.getenv("WORKFLOW_ENABLED", "False") == "True":
             from data_server.job.JobWorkflow import watch_dataflow_resources

@@ -15,67 +15,6 @@ services:
     networks:
       - csg-network
 
-  dataflow_mongo_db:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/mongo:8.0.12
-    volumes:
-      - /data/v2/mongodata:/data/db
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=root
-      - MONGO_INITDB_ROOT_PASSWORD=example
-    ports:
-      - "27017:27017"
-    networks:
-      - csg-network
-
-  dataflow_celery_redis:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
-    volumes:
-      - /dataflow_data/celery_redis_data:/data
-    ports:
-      - "16379:6379"
-    networks:
-      - csg-network
-
-  dataflow_celery_worker:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20251130
-    command: >
-      sh -c "
-        MILLISECOND_TIMESTAMP=$$(date +%s%3N);
-        NODENAME=worker_$$MILLISECOND_TIMESTAMP@$$(hostname -f);
-        celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent -n $$NODENAME
-      "
-    volumes:
-      - /data/v2/apidata:/data/dataflow_data
-    environment:
-      - DATA_DIR=/data/dataflow_data
-      - CSGHUB_ENDPOINT=https://hub.opencsg.com
-      - MAX_WORKERS=99
-      - RAY_ADDRESS=auto
-      - RAY_ENABLE=False
-      - RAY_LOG_DIR=/home/output
-      - API_SERVER=0.0.0.0
-      - API_PORT=8001
-      - ENABLE_OPENTELEMETRY=False
-      - DATABASE_DB=data_flow
-      - DATABASE_USERNAME=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_HOSTNAME=dataflow_postgres_db
-      - DATABASE_PORT=5432
-      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
-      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
-      - MINERU_API_URL=http://111.4.242.20:30000
-    ports:
-      - "8001:8001"
-    depends_on:
-      - dataflow_celery_redis
-      - dataflow_mongo_db
-      - dataflow_postgres_db
-    networks:
-      - csg-network
-
   dataflow_label_studio:
     stdin_open: true
     tty: true
@@ -131,15 +70,11 @@ services:
       - DATABASE_HOSTNAME=dataflow_postgres_db
       - DATABASE_PORT=5432
       - STUDIO_JUMP_URL=http://8.152.218.254:8002
-      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
-      - MONG_HOST_URL=mongodb://root:example@dataflow_mongo_db:27017
+      - CSGHUB_DATAFLOW_TEMPLATE_IMAGE=opencsg_public/dataflow:argo-latest
     ports:
       - "8000:8000"
     depends_on:
-      - dataflow_celery_redis
-      - dataflow_mongo_db
       - dataflow_postgres_db
-      - dataflow_celery_worker
     networks:
       - csg-network
 

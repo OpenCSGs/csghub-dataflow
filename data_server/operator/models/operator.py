@@ -56,6 +56,6 @@ class OperatorDocument(Base):
 
     id = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
     operator_id = Column(BigInteger, ForeignKey("operator_info.id", ondelete="CASCADE"), nullable=False, index=True)
-    content = Column(Text, nullable=False)  # Markdown文档内容
+    content = Column(Text, nullable=False)  # Markdown document content
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

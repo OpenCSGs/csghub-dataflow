@@ -1,0 +1,54 @@
+# Git / IDE
+.git
+.gitignore
+.idea
+.vscode
+.cursor
+
+# Python cache / packaging
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+*.egg-info
+.eggs
+dist
+build
+htmlcov
+.coverage
+
+# 非 Argo Pod 运行所需
+demos/
+docs/
+test-yaml/
+tests/
+tool_legacy/
+data_agents/
+scripts/
+*.md
+README*
+LICENSE
+docker-compose*.yml
+Dockerfile
+Dockerfile-server
+docker/Dockerfile.apiserver
+
+# 环境文件（镜像内不写死密钥）
+.env*
+!.env.example
+
+# 大体积/本地产物
+runtime_logs/
+**/*.parquet
+**/*.arrow
+**/*.pt
+**/*.pth
+**/*.ckpt
+**/*.onnx
+**/*.zip
+**/*.tar.gz
+
+# 前端与其它子项目
+csghub-dev/
+csghub-ui/

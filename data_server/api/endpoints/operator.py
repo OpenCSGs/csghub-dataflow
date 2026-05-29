@@ -5,7 +5,7 @@ import base64
 import os
 from pathlib import Path
 from loguru import logger
-from data_celery.utils import get_project_root
+from data_server.utils.project_paths import get_project_root
 
 from data_server.database.session import get_sync_session
 
@@ -293,7 +293,7 @@ async def upload_operator_document_api(
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content_str)
         
-        logger.info(f"算子 {operator_id} ({operator.operator_name}) 的文档已保存到: {file_path}")
+        logger.info(f"Document for operator {operator_id} ({operator.operator_name}) saved to: {file_path}")
         
         return response_success(
             data={
@@ -306,7 +306,7 @@ async def upload_operator_document_api(
     except UnicodeDecodeError:
         return response_fail(msg="文件编码错误，请使用 UTF-8 编码")
     except Exception as e:
-        logger.error(f"上传文档失败: {str(e)}")
+        logger.error(f"Failed to upload document: {str(e)}")
         return response_fail(msg=f"文档上传失败: {str(e)}")
     finally:
         db.close()
@@ -348,7 +348,7 @@ def get_operator_document_api(
             msg="获取文档成功"
         )
     except Exception as e:
-        logger.error(f"获取文档失败: {str(e)}")
+        logger.error(f"Failed to get document: {str(e)}")
         return response_fail(msg=f"获取文档失败: {str(e)}")
     finally:
         db.close()

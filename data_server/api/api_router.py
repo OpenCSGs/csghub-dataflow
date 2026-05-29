@@ -9,9 +9,11 @@ from .endpoints import tool
 from .endpoints import datasource
 from .endpoints import formatify
 from .endpoints import op_pic_upload
-from .endpoints import celery_server
 from .endpoints import jump_to_studio
 from .endpoints import model_validator
+from .endpoints import csghub_status
+from .endpoints import trace_sync
+from .endpoints import workflow_sync
 
 api_router = APIRouter(prefix="/api/v1/dataflow")
 
@@ -23,8 +25,10 @@ api_router.include_router(tool.router, prefix="/tools", tags=["Tools"])
 #api_router.include_router(agent.router, prefix="/agent", tags=["Agent"])
 api_router.include_router(datasource.router, prefix="/datasource", tags=["Datasource"])
 api_router.include_router(formatify.router, prefix="/formatify", tags=["Formatify"])
-api_router.include_router(celery_server.router, prefix="/celery", tags=["Celery 相关接口"])
 api_router.include_router(jump_to_studio.router, prefix="/studio", tags=["Studio"])
+api_router.include_router(csghub_status.router, prefix="/csghub", tags=["CSGHub 主任务状态回调"])
+api_router.include_router(trace_sync.router, prefix="/trace", tags=["Pod trace 回传"])
+api_router.include_router(workflow_sync.router, prefix="/workflow", tags=["Pod 工作流同步"])
 
 api_router.include_router(operator.router, prefix="/operator", tags=["算子相关接口"])
 api_router.include_router(operator_permission.router, prefix="/operator_permission", tags=["算子权限相关接口"])

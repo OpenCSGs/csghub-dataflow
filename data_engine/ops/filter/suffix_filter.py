@@ -2,7 +2,7 @@ from typing import List, Tuple, Union
 
 from data_engine.utils.constant import Fields
 
-from data_celery.pg_log_tools.tools import (
+from data_server.log_tools.tools import (
     insert_pipline_job_run_task_log_error,
     insert_pipline_job_run_task_log_info,
     set_pipline_job_operator_status,
@@ -201,5 +201,5 @@ class SuffixFilter(Filter):
         from loguru import logger
         logger.info(message)
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
+            from data_server.log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(self.job_uid, message, operator_name=self._name, operator_index=self.pipline_index)

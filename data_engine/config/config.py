@@ -648,7 +648,7 @@ def update_op_process(cfg, parser):
         )
 
         if has_replace_content_mapper:
-            logger.warning(f'replace_content_mapper bug（jsonargparse Union 类型已知 bug，退出码: {e.code}）')
+            logger.warning(f'replace_content_mapper bug (known jsonargparse Union type bug, exit code: {e.code})')
         else:
             logger.error(f'Config initialization failed with exit code: {e.code}')
             raise Exception(f"Config initialization failed") from e
@@ -681,8 +681,23 @@ def namespace_to_arg_list(namespace, prefix='', includes=None, excludes=None):
 
 def config_backup(cfg):
     cfg_path = cfg.config[0].absolute
+    if not cfg_path or not os.path.isfile(cfg_path):
+        return
     work_dir = cfg.work_dir
-    target_path = os.path.join(work_dir, os.path.basename(cfg_path))
+    basename = os.path.basename(cfg_path)
+    # init_configs often loads from system temp; do not copy tmpXXXXXX(.yaml) to work_dir
+    try:
+        real_cfg = os.path.realpath(cfg_path)
+        real_tmp = os.path.realpath(tempfile.gettempdir())
+        if real_cfg == real_tmp or real_cfg.startswith(real_tmp + os.sep):
+            logger.debug(f'Skip config backup for temp config file [{cfg_path}]')
+            return
+    except OSError:
+        pass
+    if basename.startswith('tmp'):
+        logger.debug(f'Skip config backup for ephemeral config [{cfg_path}]')
+        return
+    target_path = os.path.join(work_dir, basename)
     logger.info(f'Back up the input config file [{cfg_path}] into the '
                 f'work_dir [{work_dir}]')
     if not os.path.exists(target_path):
