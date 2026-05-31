@@ -343,10 +343,29 @@ async def read_pipline_job_log(id: int,
 @router.post("/pipline_job_operators_status", response_model=dict,description="Get the operators_status of the job by id")
 async def read_pipline_job_operators_status(
                                operators: OperatorIdentifier,
-                               user_id: Annotated[str | None,Header(alias="User-Id")] = None,
+                               user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+                               user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+                               user_token: Annotated[str | None, Header(alias="User-Token")] = None,
+                               authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+                               isadmin: Annotated[bool | None, Header(alias="isadmin")] = None,
                                session: Session = Depends(get_sync_session)):
     try:
-        job = get_job_data(job_id=operators.job_id, user_id=user_id, session=session)
+        org_uuids = resolve_organization_namespace_uuids_for_list(
+            user_name=user_name,
+            authorization=authorization,
+            user_token=user_token,
+            isadmin=isadmin,
+        )
+        job = get_job_data(
+            job_id=operators.job_id,
+            user_id=user_id,
+            session=session,
+            isadmin=isadmin,
+            organization_namespace_uuids=org_uuids,
+            user_name=user_name,
+            authorization=authorization,
+            user_token=user_token,
+        )
         if not job:
             return response_fail(msg="job not exist")
         status_list = get_pipline_job_operators_status_from_subtasks(
@@ -362,11 +381,32 @@ async def read_pipline_job_operators_status(
         return response_fail(msg=f"failed by error :{e}")
 
 @router.get("/get_pipline_job_operators_status/{job_id}", response_model=dict,description="Get the operators_status of the job by id")
-async def get_pipline_job_operators_status_api(job_id: int,
-                               user_id: Annotated[str | None,Header(alias="User-Id")] = None,
-                               session: Session = Depends(get_sync_session)):
+async def get_pipline_job_operators_status_api(
+    job_id: int,
+    user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+    user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+    user_token: Annotated[str | None, Header(alias="User-Token")] = None,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    isadmin: Annotated[bool | None, Header(alias="isadmin")] = None,
+    session: Session = Depends(get_sync_session),
+):
     try:
-        job = get_job_data(job_id=job_id, user_id=user_id, session=session)
+        org_uuids = resolve_organization_namespace_uuids_for_list(
+            user_name=user_name,
+            authorization=authorization,
+            user_token=user_token,
+            isadmin=isadmin,
+        )
+        job = get_job_data(
+            job_id=job_id,
+            user_id=user_id,
+            session=session,
+            isadmin=isadmin,
+            organization_namespace_uuids=org_uuids,
+            user_name=user_name,
+            authorization=authorization,
+            user_token=user_token,
+        )
         if not job:
             return response_fail(msg="job not exist")
         status_list = get_pipline_job_total_operators_status_from_subtasks(
@@ -384,12 +424,32 @@ async def get_pipline_job_operators_status_api(job_id: int,
 
 
 @router.get("/resource/{id}", response_model=dict,description="Get the process resource of the job by id")
-async def read_task_resource_info(id: int,
-                    user_id: Annotated[str | None,
-                    Header(alias="User-Id")] = None,
-                    session: Session = Depends(get_sync_session)):
+async def read_task_resource_info(
+    id: int,
+    user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+    user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+    user_token: Annotated[str | None, Header(alias="User-Token")] = None,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    isadmin: Annotated[bool | None, Header(alias="isadmin")] = None,
+    session: Session = Depends(get_sync_session),
+):
     try:
-        job = get_job_data(job_id=id, user_id=user_id,session=session)
+        org_uuids = resolve_organization_namespace_uuids_for_list(
+            user_name=user_name,
+            authorization=authorization,
+            user_token=user_token,
+            isadmin=isadmin,
+        )
+        job = get_job_data(
+            job_id=id,
+            user_id=user_id,
+            session=session,
+            isadmin=isadmin,
+            organization_namespace_uuids=org_uuids,
+            user_name=user_name,
+            authorization=authorization,
+            user_token=user_token,
+        )
         if not job:
             return response_fail(msg="job not exist")
         return response_fail(msg="任务资源监控旧链路已下线")
