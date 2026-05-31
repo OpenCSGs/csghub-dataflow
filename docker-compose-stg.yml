@@ -15,73 +15,6 @@ services:
     networks:
       - csg-network
 
-  dataflow_log_postgres_db:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/postgres:15.10
-    volumes:
-      - /dataflow_data/log_postgres_db_data:/var/lib/postgresql/data
-    command: -p 5432
-    environment:
-      - POSTGRES_DB=data_flow_log
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    ports:
-      - "5434:5432"
-    networks:
-      - csg-network
-
-  dataflow_celery_redis:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/redis:7.2.5
-    volumes:
-      - /dataflow_data/celery_redis_data:/data
-    ports:
-      - "16379:6379"
-    networks:
-      - csg-network
-
-  dataflow_celery_worker:
-    restart: unless-stopped
-    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/dataflow:20251130.1
-    command: >
-      sh -c "
-        MILLISECOND_TIMESTAMP=$$(date +%s%3N);
-        NODENAME=worker_$$MILLISECOND_TIMESTAMP@$$(hostname -f);
-        celery -A data_celery.main:celery_app worker --loglevel=info --pool=gevent -n $$NODENAME
-      "
-    volumes:
-      - /dataflow_data/apidata:/data/dataflow_data
-    environment:
-      - DATA_DIR=/data/dataflow_data
-      - CSGHUB_ENDPOINT=https://hub.opencsg-stg.com
-      - MAX_WORKERS=99
-      - RAY_ADDRESS=auto
-      - RAY_ENABLE=False
-      - RAY_LOG_DIR=/home/output
-      - API_SERVER=0.0.0.0
-      - API_PORT=8001
-      - ENABLE_OPENTELEMETRY=False
-      - DATABASE_DB=data_flow
-      - DATABASE_USERNAME=postgres
-      - DATABASE_PASSWORD=postgres
-      - DATABASE_HOSTNAME=dataflow_postgres_db
-      - DATABASE_PORT=5432
-      - LOG_DATABASE_DB=data_flow_log
-      - LOG_DATABASE_USERNAME=postgres
-      - LOG_DATABASE_PASSWORD=postgres
-      - LOG_DATABASE_HOSTNAME=dataflow_log_postgres_db
-      - LOG_DATABASE_PORT=5432
-      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
-      - MINERU_API_URL=http://111.4.242.20:30000
-    ports:
-      - "8001:8001"
-    depends_on:
-      - dataflow_celery_redis
-      - dataflow_postgres_db
-      - dataflow_log_postgres_db
-    networks:
-      - csg-network
-
   dataflow_label_studio:
     stdin_open: true
     tty: true
@@ -135,21 +68,13 @@ services:
       - DATABASE_PASSWORD=postgres
       - DATABASE_HOSTNAME=dataflow_postgres_db
       - DATABASE_PORT=5432
-      - LOG_DATABASE_DB=data_flow_log
-      - LOG_DATABASE_USERNAME=postgres
-      - LOG_DATABASE_PASSWORD=postgres
-      - LOG_DATABASE_HOSTNAME=dataflow_log_postgres_db
-      - LOG_DATABASE_PORT=5432
       - STUDIO_JUMP_URL=http://39.102.214.107:8002
-      - REDIS_HOST_URL=redis://dataflow_celery_redis:6379
       - MINERU_API_URL=http://111.4.242.20:30000
+      - CSGHUB_DATAFLOW_TEMPLATE_IMAGE=opencsg_public/dataflow:argo-latest
     ports:
       - "8000:8000"
     depends_on:
-      - dataflow_celery_redis
       - dataflow_postgres_db
-      - dataflow_log_postgres_db
-      - dataflow_celery_worker
     networks:
       - csg-network
 
