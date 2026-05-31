@@ -2,8 +2,36 @@ import json
 from concurrent.futures import ProcessPoolExecutor
 import os, uuid
 
-exclude_fields_config=['buildin', 'name', 'template_id', 'description', 'type', 'job_source', 'dslText', 'is_run', 'task_run_time', 'pic_base64']
+# Exclude when generating data_engine operator YAML: DataFlow/CSGHub scheduling only, not Data-Juicer config fields
+exclude_fields_config = [
+    "buildin",
+    "name",
+    "template_id",
+    "description",
+    "type",
+    "job_source",
+    "dslText",
+    "is_run",
+    "task_run_time",
+    "pic_base64",
+    "cluster_id",
+    "cluster_name",
+    "resource_id",
+    "resource_name",
+    "storage_size",
+    "namespace_uuid",
+    "namespace_type",
+    "task_scope",
+]
 executor = None
+
+
+def strip_recipe_scheduler_fields(config: dict | None) -> dict:
+    """Remove scheduling and namespace UI fields from config submitted to CSGHub / data_engine."""
+    if not isinstance(config, dict):
+        return {}
+    drop = set(exclude_fields_config)
+    return {k: v for k, v in config.items() if k not in drop}
 
 
 def greate_task_uid():

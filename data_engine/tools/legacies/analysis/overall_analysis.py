@@ -71,21 +71,39 @@ class OverallAnalysis:
         # merge default and customized percentiles and get overall information
         percentiles = list(set(percentiles + self.default_percentiles))
 
-        results = []
-        pool = Pool(num_proc)
+        pending = []
         for col_name in self.stats.columns:
             this_col = self.refine_single_column(self.stats[col_name])
+            if this_col is None:
+                continue
+            pending.append((col_name, this_col))
+
+        if not pending:
+            logger.warning('No analyzable stats columns found; skipping overall analysis.')
+            return pd.DataFrame()
+
+        pool = Pool(num_proc)
+        async_results = []
+        for col_name, this_col in pending:
             res = pool.apply_async(_single_column_analysis,
                                    kwds={
                                        'col': this_col,
                                        'percentiles': percentiles,
                                        'include': 'all',
                                    })
-            results.append(res)
+            async_results.append((col_name, res))
         pool.close()
         pool.join()
-        result_cols = [res.get() for res in tqdm(results)]
+
+        result_cols = []
+        col_names = []
+        for col_name, res in tqdm(async_results):
+            series = res.get()
+            series.name = col_name
+            result_cols.append(series)
+            col_names.append(col_name)
         overall = pd.DataFrame(result_cols).T
+        overall.columns = col_names
 
         # export to result report file
         if not skip_export:

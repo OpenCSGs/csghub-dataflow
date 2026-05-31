@@ -29,10 +29,10 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
         target = edge['target']
 
         if source not in id_to_node:
-            logger.error(f"edges中引用的source节点 '{source}' 不存在于process中！")
+            logger.error(f"Source node '{source}' referenced in edges does not exist in process!")
             raise ValueError(f"edges中引用的source节点 '{source}' 不存在于process中！")
         if target not in id_to_node:
-            logger.error(f"edges中引用的target节点 '{target}' 不存在于process中！")
+            logger.error(f"Target node '{target}' referenced in edges does not exist in process!")
             raise ValueError(f"edges中引用的target节点 '{target}' 不存在于process中！")
 
         adj[source].append(target)
@@ -81,7 +81,7 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
                         param_value = option_record.name
                     db.close()
                 except Exception as e:
-                    print(f"查询operator_config_select_options失败: {e}")
+                    print(f"Failed to query operator_config_select_options: {e}")
                     pass
             # handle_string_array_format_like_"['1','2']"_or_"[''1'', ''2'']"
             elif param_value and isinstance(param_value, str) and param_value.startswith('[') and param_value.endswith(']'):
@@ -106,13 +106,13 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
                                         converted_list.append(item)
                                     db.close()
                                 except Exception as e:
-                                    print(f"查询operator_config_select_options失败: {e}")
+                                    print(f"Failed to query operator_config_select_options: {e}")
                                     converted_list.append(item)
                             else:
                                 converted_list.append(item)
                         param_value = converted_list
                 except (ValueError, SyntaxError) as e:
-                    print(f"解析字符串数组失败: {e}")
+                    print(f"Failed to parse string array: {e}")
                     pass
             # handle_the_numeric_id_of_list_type
             elif param_value and isinstance(param_value, list):
@@ -130,7 +130,7 @@ def convert_raw_to_processed(raw_yaml: str) -> str:
                                 converted_list.append(item)
                             db.close()
                         except Exception as e:
-                            print(f"查询operator_config_select_options失败: {e}")
+                            print(f"Failed to query operator_config_select_options: {e}")
                             converted_list.append(item)
                     else:
                         converted_list.append(item)

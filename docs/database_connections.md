@@ -85,7 +85,7 @@ def test_connection(self):
 ### 3.3 连接实现
 ```python
 def sqlalchemy_database_uri() -> URL:
-    database_hostname = "192.168.2.98"
+    database_hostname = "192.168.2.126"
     if os.path.exists(".nat"):
         database_hostname = "home.sxcfx.cn"
     return URL.create(

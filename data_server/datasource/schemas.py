@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator
 from typing import Optional, Dict, List, Any
 from datetime import datetime
+from data_server.utils.storage_size import normalize_storage_size
 
 
 
@@ -19,13 +20,27 @@ class DataSourceBase(BaseModel):
     # Whether to execute (default is not to execute)
     is_run: Optional[bool] = False
     task_run_time: Optional[datetime] = None
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
+    resource_id: Optional[int] = None
+    resource_name: Optional[str] = None
+    storage_size: Optional[str] = None
+    namespace_uuid: Optional[str] = None
+    namespace_type: Optional[str] = "personal"
+
+    @field_validator("storage_size", mode="before")
+    @classmethod
+    def validate_storage_size(cls, value):
+        if value is None or (isinstance(value, str) and not str(value).strip()):
+            return None
+        return normalize_storage_size(value)
 
 
 class DataSourceCreate(DataSourceBase):
     pass
 
 
-class DataSourceUpdate(DataSourceBase):
+class DataSourceUpdate(BaseModel):
     name: Optional[str] = None
     host: Optional[str] = None
     port: Optional[int] = None
@@ -33,7 +48,8 @@ class DataSourceUpdate(DataSourceBase):
     password: Optional[str] = None
     database: Optional[str] = None
     extra_config: Optional[Dict] = None
-
+    namespace_uuid: Optional[str] = None
+    namespace_type: Optional[str] = None
 
 
 class DataSourceResponse(BaseModel):
@@ -93,7 +109,6 @@ class CollectionTaskResponse(BaseModel):
     id: int
     task_uid: Optional[str] = None
     task_run_host: Optional[str] = None
-    task_celery_uid: Optional[str] = None
     datasource_id: int
     task_status: int
     created_at: datetime

@@ -119,12 +119,12 @@ def update_operator(db: Session, operator_id: int, operator_data: dict) -> Optio
                     if key != "id" and key != "operator_id":
                         if key == "select_options" and value is None:
                             continue
-                        print(f"更新字段 {key}: {value} (类型: {type(value)})")
+                        print(f"Updating field {key}: {value} (type: {type(value)})")
                         old_value = getattr(existing_config, key, None)
-                        print(f"原值: {old_value}")
+                        print(f"Old value: {old_value}")
                         setattr(existing_config, key, value)
                         new_value = getattr(existing_config, key, None)
-                        print(f"新值: {new_value}")
+                        print(f"New value: {new_value}")
 
                 db.add(existing_config)
                 db_configs.append(existing_config)

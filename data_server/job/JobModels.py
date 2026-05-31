@@ -8,44 +8,56 @@ class Job(Base):
     __tablename__ = "job"
 
 
-    job_id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="任务唯一主键ID，自增整数")
-    job_name = Column(String(255), nullable=False, comment="任务名称，用户可读的任务标识")
-    uuid = Column(String(100), comment="任务唯一标识")
-    job_celery_uuid = Column(String(100), comment="celery任务调度唯一标识")
-    task_run_host = Column(String(100), comment="任务执行的服务器")
-    job_celery_work_name = Column(String(255), comment="任务执行的服务器名称")
+    job_id = Column(Integer, primary_key=True, index=True, autoincrement=True, comment="Unique task primary key ID, auto-increment integer")
+    job_name = Column(String(255), nullable=False, comment="Task name, human-readable task identifier")
+    uuid = Column(String(100), comment="Unique task identifier")
+    task_run_host = Column(String(100), comment="Server executing the task")
 
-    job_source = Column(String(50), comment="任务来源类型：'pipeline'(流水线任务) 或 'tool'(工具任务)")
-    job_type = Column(String(50), comment="任务业务类型：'data_refine'(数据精炼)、'data_generation'(数据生成)、'data_enhancement'(数据增强)等")
+    job_source = Column(String(50), comment="Task source type: 'pipeline' (pipeline task) or 'tool' (tool task)")
+    job_type = Column(String(50), comment="Task business type: 'data_refine', 'data_generation', 'data_enhancement', etc.")
 
 
-    status = Column(String(20), comment="任务执行状态：'Queued'(排队)、'Processing'(处理中)、'Finished'(完成)、'Failed'(失败)、'Timeout'(超时)")
+    status = Column(String(20), comment="Task execution status: 'Queued', 'Processing', 'Finished', 'Failed', 'Timeout'")
 
 
-    data_source = Column(String(500), comment="输入数据路径，告诉执行器从哪里读取数据")
-    data_target = Column(String(500), comment="输出数据路径，告诉执行器将结果保存到哪里")
-    work_dir = Column(String(500), comment="任务工作目录，存放临时文件、配置文件、日志等")
+    data_source = Column(String(500), comment="Input data path for the executor to read from")
+    data_target = Column(String(500), comment="Output data path for the executor to write results")
+    work_dir = Column(String(500), comment="Task work directory for temp files, config, logs, etc.")
 
 
-    data_count = Column(Integer, comment="处理的数据条数")
-    process_count = Column(Integer, comment="实际处理的数据条数，通常与data_count相同")
+    data_count = Column(Integer, comment="Number of data records processed")
+    process_count = Column(Integer, comment="Actual processed record count, usually same as data_count")
 
 
-    date_posted = Column(DateTime, default=datetime.datetime.now, comment="任务创建时间，自动设置")
-    date_finish = Column(DateTime, comment="任务完成时间，由JobExecutor在任务完成时设置")
+    date_posted = Column(DateTime, default=datetime.datetime.now, comment="Task creation time, auto-set")
+    date_finish = Column(DateTime, comment="Task finish time, set by JobExecutor on completion")
 
 
-    is_active = Column(Boolean(), default=True, comment="任务是否激活/有效，False表示已删除(软删除标记)")
-    owner_id = Column(Integer, comment="任务所有者的用户ID，用于权限控制")
+    is_active = Column(Boolean(), default=True, comment="Whether task is active; False means soft-deleted")
+    owner_id = Column(Integer, comment="Owner user ID for permission control")
+    owner_org_id = Column(String(255), comment="Task owner organization ID")
+    owner_org_name = Column(String(255), comment="Task owner organization name")
 
 
-    repo_id = Column(String(255), comment="输入数据的仓库ID，如'user/dataset-repo'，用于从Git仓库获取数据")
-    branch = Column(String(100), comment="输入数据的分支名，默认'main'，指定从哪个分支获取数据")
-    export_repo_id = Column(String(255), comment="输出数据的目标仓库ID，将处理结果推送到指定仓库")
-    export_branch_name = Column(String(100), comment="输出数据的目标分支名，将结果推送到指定分支")
+    repo_id = Column(String(255), comment="Input repo ID, e.g. 'user/dataset-repo', for fetching data from Git")
+    branch = Column(String(100), comment="Input branch name, default 'main', branch to fetch data from")
+    export_repo_id = Column(String(255), comment="Target repo ID for pushing processed results")
+    export_branch_name = Column(String(100), comment="Target branch name for pushing results")
 
 
-    first_op = Column(String(255), comment="流水线中第一个操作符的名称，用于统计文件路径生成")
-    yaml_config = Column(Text, comment="后端yaml格式任务配置数据，后端执行时使用的完整配置")
-    dslText = Column(Text, comment="前端yaml格式任务配置数据，前端界面展示和编辑使用")
+    first_op = Column(String(255), comment="First operator name in pipeline, used for stats file paths")
+    yaml_config = Column(Text, comment="Backend YAML task config used at execution time")
+    dslText = Column(Text, comment="Frontend YAML task config for UI display and editing")
+    flow_id = Column(String(32), comment="DataFlow global task ID submitted to CSGHub")
+    cluster_id = Column(String(255), comment="Cluster ID selected when submitting to CSGHub")
+    cluster_name = Column(String(255), comment="Cluster name selected when submitting to CSGHub")
+    resource_id = Column(Integer, comment="Resource ID selected when submitting to CSGHub")
+    resource_name = Column(String(255), comment="Resource name selected when submitting to CSGHub")
+    storage_size = Column(String(32), comment="Work volume storage size, e.g. 4Gi")
+    csghub_job_id = Column(String(100), comment="Job ID returned by CSGHub")
+    csghub_status = Column(String(100), comment="Task status on CSGHub side")
+    csghub_request_payload = Column(Text, comment="Request body for CSGHub task creation")
+    csghub_response_payload = Column(Text, comment="Raw response from CSGHub")
+    namespace_uuid = Column(String(255), comment="namespace UUID in CSGHub DataFlow path")
+    namespace_type = Column(String(32), comment="namespace scope: personal / organization")
 

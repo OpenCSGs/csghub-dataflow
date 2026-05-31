@@ -41,7 +41,7 @@ class IngesterCSGHUB(Ingester):
             logger.info(f'model_id:{self.repo_id}')
             endpoint = get_endpoint(endpoint=GetHubEndpoint())
             logger.info(f'endpoint:{endpoint}')
-            logger.info(f'入参:repo_id:{self.repo_id}, repo_type:{REPO_TYPE_DATASET}, revision:{self.branch}, cache_dir:{self._src_path}, endpoint:{endpoint}, token:{self.user_token}')
+            logger.info(f'args: repo_id:{self.repo_id}, repo_type:{REPO_TYPE_DATASET}, revision:{self.branch}, cache_dir:{self._src_path}, endpoint:{endpoint}, token:{self.user_token}')
             result = snapshot_download(
                 repo_id=self.repo_id,
                 repo_type=REPO_TYPE_DATASET,

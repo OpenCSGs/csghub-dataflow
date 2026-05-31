@@ -6,18 +6,17 @@ that remain in 'Processing' state after service restart or unexpected interrupti
 """
 
 import datetime
-from typing import Dict, List
+import os
+from typing import Dict
+
 from sqlalchemy.orm import Session
-from celery.result import AsyncResult
 from loguru import logger
 
 from data_server.database.session import get_sync_session
-from data_celery.main import celery_app
 from data_server.job.JobModels import Job
 from data_server.schemas.responses import JOB_STATUS
-
-# Celery task states that indicate a task is actually running
-CELERY_RUNNING_STATES = ['PENDING', 'RECEIVED', 'STARTED', 'RETRY']
+from data_server.utils.csghub_client import fetch_platform_job_status
+from data_server.utils.csghub_status_sync import RUNNING_STATUSES, _entity_namespace_uuid, _status_key
 
 
 def fix_orphaned_jobs() -> Dict[str, any]:
@@ -25,7 +24,7 @@ def fix_orphaned_jobs() -> Dict[str, any]:
     Fix orphaned jobs after service restart.
 
     This function checks all jobs in 'Processing' state and verifies if they are
-    actually running in Celery. If not, marks them as 'Failed'.
+    actually running in CSGHub. If not, marks them as 'Failed'.
 
     Returns:
         dict: Statistics about fixed jobs
@@ -69,7 +68,8 @@ def fix_orphaned_jobs() -> Dict[str, any]:
                             'job_id': job.job_id,
                             'job_name': job.job_name,
                             'job_source': job.job_source,
-                            'celery_uuid': job.job_celery_uuid or 'N/A'
+                            'flow_id': job.flow_id or 'N/A',
+                            'csghub_job_id': job.csghub_job_id or 'N/A',
                         })
                         fixed_count += 1
 
@@ -120,8 +120,8 @@ def _check_job_actually_running(job: Job) -> bool:
     """
     Check if a job is actually running in the backend.
 
-    For pipeline jobs (Celery-based), checks Celery task status.
-    For regular jobs, assumes not running (as they run in separate processes).
+    For jobs submitted to CSGHub, checks CSGHub main task status.
+    For records without CSGHub identifiers, assumes not running after restart.
 
     Args:
         job: Job object to check
@@ -129,40 +129,51 @@ def _check_job_actually_running(job: Job) -> bool:
     Returns:
         bool: True if job is actually running, False otherwise
     """
-    # Check if it's a pipeline job with Celery UUID
-    if job.job_celery_uuid and len(job.job_celery_uuid) > 0:
+    if job.flow_id or job.csghub_job_id:
         logger.debug(
-            f"Job {job.job_id}: Checking Celery task {job.job_celery_uuid}"
+            f"Job {job.job_id}: Checking CSGHub task flow_id={job.flow_id}, job_id={job.csghub_job_id}"
         )
-        return _check_celery_task_running(job.job_celery_uuid)
+        return _check_csghub_job_running(job)
 
-    # For regular jobs without Celery UUID, assume not running after restart
-    # (as they run in multiprocessing.Process which won't survive restart)
     logger.debug(
-        f"Job {job.job_id}: No Celery UUID found, "
+        f"Job {job.job_id}: No CSGHub identifier found, "
         f"assuming not running (job_source: {job.job_source})"
     )
     return False
 
 
-def _check_celery_task_running(celery_uuid: str) -> bool:
+def _check_csghub_job_running(job: Job) -> bool:
     """
-    Check if a Celery task is actually running.
+    Check if a CSGHub task is actually running.
 
     Args:
-        celery_uuid: Celery task UUID
+        job: Job record
 
     Returns:
         bool: True if task is in running state, False otherwise
     """
-    try:
-        task_result = AsyncResult(celery_uuid, app=celery_app)
-        task_status = task_result.status
+    namespace = _entity_namespace_uuid(job)
+    authorization = os.getenv("CSGHUB_HEALTH_CHECK_AUTHORIZATION", "").strip() or None
+    if not namespace or not authorization:
+        logger.warning(
+            "Job {}: skip CSGHub status check (need namespace_uuid and CSGHUB_HEALTH_CHECK_AUTHORIZATION)",
+            job.job_id,
+        )
+        return False
 
-        is_running = task_status in CELERY_RUNNING_STATES
+    try:
+        parsed = fetch_platform_job_status(
+            namespace=namespace,
+            csghub_job_id=job.csghub_job_id,
+            flow_id=job.flow_id,
+            authorization=authorization,
+            csghub_response_payload=job.csghub_response_payload,
+        )
+        task_status = parsed.get("status") or ""
+        is_running = _status_key(task_status) in RUNNING_STATUSES
 
         logger.debug(
-            f"Celery task {celery_uuid}: status = {task_status}, "
+            f"CSGHub task flow_id={job.flow_id}, job_id={job.csghub_job_id}: status = {task_status}, "
             f"is_running = {is_running}"
         )
 
@@ -170,7 +181,7 @@ def _check_celery_task_running(celery_uuid: str) -> bool:
 
     except Exception as e:
         logger.warning(
-            f"Failed to check Celery task {celery_uuid}: {str(e)}, "
+            f"Failed to check CSGHub task for job {job.job_id}: {str(e)}, "
             f"assuming not running"
         )
         return False

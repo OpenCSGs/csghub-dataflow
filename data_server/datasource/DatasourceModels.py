@@ -31,21 +31,30 @@ class DataSourceTaskStatusEnum(Enum):
 class DataSource(Base):
     __tablename__ = 'datasources'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    name = Column(String(100), nullable=False, comment="数据源名称")
-    des = Column(String(2048), comment="数据源描述")
-    source_type = Column(Integer, nullable=False, comment="DataSourceTypeEnum 枚举 数据源类型")
-    host = Column(String(100), nullable=False, comment="服务器地址")
-    port = Column(Integer, comment="端口号")
-    auth_type = Column(String(20), comment="认证方式")
-    username = Column(String(100), comment="用户名")
-    password = Column(String(200), comment="密码")
-    database = Column(String(100), comment="数据库名")
-    extra_config = Column(JSON, comment="额外配置,具体存储根据数据库类型而定")
-    source_status = Column(Integer,comment="DataSourceStatusEnum 枚举")
-    owner_id = Column(Integer, comment="所属用户")
-    task_run_time = Column(DateTime, comment='任务开始时间')
-    created_at = Column(DateTime, default=datetime.datetime.now, comment='任务创建时间')
-    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now, comment='更新时间')
+    name = Column(String(100), nullable=False, comment="Data source name")
+    des = Column(String(2048), comment="Data source description")
+    source_type = Column(Integer, nullable=False, comment="DataSourceTypeEnum: data source type")
+    host = Column(String(100), nullable=False, comment="Server address")
+    port = Column(Integer, comment="Port number")
+    auth_type = Column(String(20), comment="Authentication method")
+    username = Column(String(100), comment="Username")
+    password = Column(String(200), comment="Password")
+    database = Column(String(100), comment="Database name")
+    extra_config = Column(JSON, comment="Extra config; storage format depends on database type")
+    source_status = Column(Integer,comment="DataSourceStatusEnum")
+    owner_id = Column(Integer, comment="Owner user")
+    owner_org_id = Column(String(255), comment="Owner organization ID")
+    owner_org_name = Column(String(255), comment="Owner organization name")
+    cluster_id = Column(String(255), comment="Default cluster ID")
+    cluster_name = Column(String(255), comment="Default cluster name")
+    resource_id = Column(Integer, comment="Default resource ID")
+    resource_name = Column(String(255), comment="Default resource name")
+    storage_size = Column(String(32), comment="Work volume storage size, e.g. 4Gi")
+    namespace_uuid = Column(String(255), comment="namespace UUID in CSGHub DataFlow path")
+    namespace_type = Column(String(32), comment="namespace scope: personal / organization")
+    task_run_time = Column(DateTime, comment='Task start time')
+    created_at = Column(DateTime, default=datetime.datetime.now, comment='Task creation time')
+    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now, comment='Last updated time')
 
     def to_json(self):
         # Handle extra_config, ensure correct parsing and return
@@ -93,6 +102,15 @@ class DataSource(Base):
             "extra_config": extra_config,
             "source_status": self.source_status,
             "owner_id": self.owner_id,
+            "owner_org_id": self.owner_org_id,
+            "owner_org_name": self.owner_org_name,
+            "cluster_id": self.cluster_id,
+            "cluster_name": self.cluster_name,
+            "resource_id": self.resource_id,
+            "resource_name": self.resource_name,
+            "storage_size": getattr(self, "storage_size", None),
+            "namespace_uuid": getattr(self, "namespace_uuid", None),
+            "namespace_type": getattr(self, "namespace_type", None),
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
             "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S") if self.updated_at else None,
             "task_run_time": self.task_run_time.strftime("%Y-%m-%d %H:%M:%S") if self.task_run_time else None,
@@ -105,28 +123,59 @@ class DataSource(Base):
 class CollectionTask(Base):
     __tablename__ = 'collection_tasks'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    task_uid = Column(String(100), comment="任务唯一标识")
-    task_run_host = Column(String(30), comment="任务执行的服务器")
-    task_celery_uid = Column(String(100), comment="celery任务调度唯一标识")
+    task_uid = Column(String(100), comment="Unique task identifier")
+    task_run_host = Column(String(30), comment="Server executing the task")
     datasource_id = Column(Integer, ForeignKey('datasources.id'), nullable=False)
-    task_status = Column(Integer, nullable=False, comment="任务状态")
-    created_at = Column(DateTime, default=datetime.datetime.now, comment='任务创建时间')
-    total_count = Column(Integer, comment='总条数')
-    records_count = Column(Integer, comment='已处理条数')
-    records_per_second = Column(Integer, comment='每秒处理条数')
-    start_run_at = Column(DateTime, comment='运行开始时间')
-    csg_hub_server_branch = Column(String(100), comment="csghub-server 分支名称")
-    end_run_at = Column(DateTime, comment='运行结束时间')
+    task_status = Column(Integer, nullable=False, comment="Task status")
+    created_at = Column(DateTime, default=datetime.datetime.now, comment='Task creation time')
+    total_count = Column(Integer, comment='Total record count')
+    records_count = Column(Integer, comment='Processed record count')
+    records_per_second = Column(Integer, comment='Records processed per second')
+    start_run_at = Column(DateTime, comment='Run start time')
+    csg_hub_server_branch = Column(String(100), comment="csghub-server branch name")
+    end_run_at = Column(DateTime, comment='Run end time')
+    flow_id = Column(String(32), comment="DataFlow global task ID submitted to CSGHub")
+    cluster_id = Column(String(255), comment="Cluster ID selected when submitting to CSGHub")
+    cluster_name = Column(String(255), comment="Cluster name selected when submitting to CSGHub")
+    resource_id = Column(Integer, comment="Resource ID selected when submitting to CSGHub")
+    resource_name = Column(String(255), comment="Resource name selected when submitting to CSGHub")
+    storage_size = Column(String(32), comment="Work volume storage size, e.g. 4Gi")
+    owner_id = Column(Integer, comment="User ID who triggered the task")
+    owner_org_id = Column(String(255), comment="Organization ID who triggered the task")
+    owner_org_name = Column(String(255), comment="Organization name who triggered the task")
+    csghub_job_id = Column(String(100), comment="Job ID returned by CSGHub")
+    csghub_status = Column(String(100), comment="Task status on CSGHub side")
+    csghub_request_payload = Column(Text, comment="Request body for CSGHub task creation")
+    csghub_response_payload = Column(Text, comment="Raw response from CSGHub")
+    namespace_uuid = Column(String(255), comment="namespace UUID in CSGHub DataFlow path")
+    namespace_type = Column(String(32), comment="namespace scope: personal / organization")
+    is_active = Column(Boolean, default=True, comment="False means logically deleted")
+    deleted_at = Column(DateTime, comment="Logical deletion time")
     datasource = relationship("DataSource", backref="tasks")
 
     def to_dict(self):
+        from data_server.utils.workflow_sync_store import collection_task_export_aliases
+
+        export_aliases = collection_task_export_aliases(self)
         return {
             "id": self.id,
             "task_uid": self.task_uid,
             "task_run_host": self.task_run_host,
-            "task_celery_uid": self.task_celery_uid,
             "datasource_id": self.datasource_id,
             "task_status": self.task_status,
+            "flow_id": self.flow_id,
+            "cluster_id": self.cluster_id,
+            "cluster_name": self.cluster_name,
+            "resource_id": self.resource_id,
+            "resource_name": self.resource_name,
+            "storage_size": getattr(self, "storage_size", None),
+            "owner_id": self.owner_id,
+            "owner_org_id": self.owner_org_id,
+            "owner_org_name": self.owner_org_name,
+            "namespace_uuid": getattr(self, "namespace_uuid", None),
+            "namespace_type": getattr(self, "namespace_type", None),
+            "csghub_job_id": self.csghub_job_id,
+            "csghub_status": self.csghub_status,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
             "total_count": self.total_count,
             "records_count": self.records_count,
@@ -134,5 +183,7 @@ class CollectionTask(Base):
             "start_run_at": self.start_run_at.strftime("%Y-%m-%d %H:%M:%S") if self.start_run_at else None,
             "csg_hub_server_branch": self.csg_hub_server_branch,
             "end_run_at": self.end_run_at.strftime("%Y-%m-%d %H:%M:%S") if self.end_run_at else None,
+            "export_repo_id": export_aliases.get("export_repo_id"),
+            "export_branch_name": export_aliases.get("export_branch_name"),
             "datasource": self.datasource.to_json()
         }

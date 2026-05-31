@@ -1,10 +1,17 @@
 from typing import Union, Literal, Any, Optional
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from data_server.schemas import responses
 import yaml
 from yaml.dumper import SafeDumper
 from data_engine.config.config import default_suffixes
 from datetime import datetime
+from data_server.utils.storage_size import normalize_storage_size
+
+
+def _coerce_storage_size(value: Any) -> str | None:
+    if value is None or (isinstance(value, str) and not str(value).strip()):
+        return None
+    return normalize_storage_size(value)
 
 def represent_none(self, _):
     return self.represent_scalar('tag:yaml.org,2002:null', '')
@@ -19,6 +26,20 @@ class OperatorIdentifier(BaseModel):
     job_id: int
     operators:list[OperatorIdentifierItem]
 
+
+
+def _normalize_namespace_type_fields(data: Any) -> Any:
+    """Normalize namespace_type; drop deprecated task_scope."""
+    if not isinstance(data, dict):
+        return data
+    out = dict(data)
+    out.pop("task_scope", None)
+    nt = str(out.get("namespace_type") or "personal").strip().lower()
+    if nt in ("organization", "personal"):
+        out["namespace_type"] = nt
+    else:
+        out["namespace_type"] = "personal"
+    return out
 
 
 class BaseModelExtended(BaseModel):
@@ -153,6 +174,23 @@ class Recipe(BaseModelExtended):
 
     is_run: Optional[bool]= False
     task_run_time: Optional[datetime] = None
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
+    resource_id: Optional[int] = None
+    resource_name: Optional[str] = None
+    storage_size: Optional[str] = None
+    namespace_uuid: Optional[str] = None
+    namespace_type: str = "personal"
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_namespace_fields(cls, data: Any):
+        return _normalize_namespace_type_fields(data)
+
+    @field_validator("storage_size", mode="before")
+    @classmethod
+    def validate_storage_size(cls, value: Any):
+        return _coerce_storage_size(value)
 
     # @field_validator("process")
     # def process_non_empty(cls, process):
@@ -227,6 +265,23 @@ class Tool(BaseModel):
     ray_address: str = "auto"
     keep_stats_in_res_ds: bool = False
     keep_hashes_in_res_ds: bool = False
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
+    resource_id: Optional[int] = None
+    resource_name: Optional[str] = None
+    storage_size: Optional[str] = None
+    namespace_uuid: Optional[str] = None
+    namespace_type: str = "personal"
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_namespace_fields(cls, data: Any):
+        return _normalize_namespace_type_fields(data)
+
+    @field_validator("storage_size", mode="before")
+    @classmethod
+    def validate_storage_size(cls, value: Any):
+        return _coerce_storage_size(value)
 
 
 class ExecutedParams(BaseModel):

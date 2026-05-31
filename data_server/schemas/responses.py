@@ -66,7 +66,22 @@ class ShowJob(JobBase):
     export_branch_name: Optional[str] = None
     yaml_config: Optional[str] = None
     dslText: Optional[str] = None
-    
+    owner_org_id: Optional[str] = None
+    owner_org_name: Optional[str] = None
+    flow_id: Optional[str] = None
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
+    resource_id: Optional[int] = None
+    resource_name: Optional[str] = None
+    storage_size: Optional[str] = None
+    csghub_job_id: Optional[str] = None
+    csghub_status: Optional[str] = None
+    uuid: Optional[str] = None
+    namespace_uuid: Optional[str] = None
+    csghub_remote_job_id: Optional[str] = None
+    owner_id: Optional[int] = None
+    can_delete: Optional[bool] = False
+
     @field_serializer('date_posted')
     def serialize_dt(self, dt: datetime, _info):
         if dt is None:
@@ -84,6 +99,7 @@ class JobDetails(ShowJob):
     date_finish: Optional[datetime] = None
     owner_id: int
     is_active: bool
+    can_delete: Optional[bool] = False
     
     @field_serializer('date_finish')
     def serialize_dt_finish(self, dt: datetime, _info):

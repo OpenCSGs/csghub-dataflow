@@ -1,0 +1,70 @@
+# Argo Pod 全量算子镜像：完整 dataflow 依赖 + 仅复制运行代码
+# 构建: ./scripts/build-push-argo.sh [registry] [tag]
+
+ARG PYTHON_IMAGE=docker.io/python:3.10.14
+FROM ${PYTHON_IMAGE}
+
+WORKDIR /dataflow
+ENV DATA_DIR=/dataflow_data \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+ARG BUILD_CN=false
+ARG PRELOAD_ASSETS=true
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple/
+
+# 系统库：DB、OpenCV、git-lfs、kenlm/fasttext 等原生扩展编译
+RUN if [ "$BUILD_CN" = "true" ]; then \
+      rm -rf /etc/apt/sources.list.d/debian.sources || true; \
+      echo "deb http://mirrors.aliyun.com/debian bookworm main contrib non-free" > /etc/apt/sources.list; \
+      echo "deb http://mirrors.aliyun.com/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list; \
+      echo "deb http://mirrors.aliyun.com/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list; \
+    fi && \
+    apt-get update && \
+    apt-get install --no-install-recommends -y \
+      build-essential \
+      libpq-dev \
+      libgl1-mesa-glx \
+      libsndfile1 \
+      git-lfs \
+      wget \
+      ca-certificates && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    git lfs install
+
+# 全量 Python 依赖（与 docker/dataflow_requirements.txt 一致，覆盖全部算子）
+COPY docker/dataflow_requirements.txt /tmp/docker/dataflow_requirements.txt
+
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ "$BUILD_CN" = "true" ]; then \
+      pip install --no-cache-dir -r /tmp/docker/dataflow_requirements.txt -i "${PIP_INDEX_URL}"; \
+    else \
+      pip install --no-cache-dir -r /tmp/docker/dataflow_requirements.txt; \
+    fi
+
+RUN git config --global user.email "dataflow@opencsg.com" && \
+    git config --global user.name "dataflow" && \
+    git config --global --add safe.directory '*'
+
+RUN if [ "$PRELOAD_ASSETS" = "true" ]; then \
+      mkdir -p /root/.cache/data_engine/assets /root/.cache/data_engine/models && \
+      wget -q -O /root/.cache/data_engine/assets/flagged_words.json \
+        https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/flagged_words.json && \
+      wget -q -O /root/.cache/data_engine/assets/stopwords.json \
+        https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/stopwords.json && \
+      wget -q -O /root/.cache/data_engine/models/zh.sp.model \
+        https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/models/zh.sp.model && \
+      wget -q -O /root/.cache/data_engine/models/en.sp.model \
+        https://dail-wlcb.oss-cn-wulanchabu.aliyuncs.com/data_juicer/models/en.sp.model; \
+    fi
+
+# 运行代码（不 COPY 整仓 demos/docs 等，见 .dockerignore）
+# setup.py 供 data_server.utils.project_paths.get_project_root() 定位项目根（runtime_logs 等路径）
+COPY setup.py ./
+COPY run_dataflow_task.py ./
+COPY data_server ./data_server
+COPY data_engine ./data_engine
+COPY configs ./configs
+
+CMD ["python", "run_dataflow_task.py", "--help"]

@@ -71,8 +71,15 @@ def find_files_with_suffix(
     if path.is_file():
         files = [path]
     else:
+        # trace, log under pipeline output/ are auxiliary; excluded from dataset loading
+        _skip_dir_names = frozenset({"trace", "log", "logs", "__pycache__"})
         searched_files = path.rglob('*')
-        files = [file for file in searched_files if file.is_file()]
+        files = [
+            file
+            for file in searched_files
+            if file.is_file()
+            and not any(part in _skip_dir_names for part in file.parts)
+        ]
 
     extractor = Extractor
     logger.info(f'params suffixes defined: {suffixes}')

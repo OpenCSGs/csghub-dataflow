@@ -129,7 +129,10 @@ class Exporter:
             # export stats of datasets into a single file.
             logger.info('Exporting computed stats into a single file...')
             ds_stats = dataset.select_columns(Fields.stats)
-            stats_file = export_path.replace('.' + suffix, '_stats.jsonl')
+            stats_dir = os.path.dirname(export_path)
+            stats_name = os.path.splitext(os.path.basename(export_path))[0] + '_stats.jsonl'
+            stats_file = os.path.join(stats_dir, stats_name)
+            os.makedirs(stats_dir, exist_ok=True)
             Exporter.to_jsonl(
                 ds_stats,
                 stats_file,

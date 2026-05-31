@@ -70,7 +70,7 @@ class CleanCopyrightMapper(Mapper):
 
         # Compile custom regex patterns; skip invalid ones with warning
         self.matching_rules = []
-        self._invalid_regex_warnings = []  # stored for MongoDB logging in run()
+        self._invalid_regex_warnings = []  # stored for task-log output in run()
         fixed_patterns = []
         for p in raw_patterns:
             p_fixed = _fix_over_escape(p)
@@ -138,7 +138,7 @@ class CleanCopyrightMapper(Mapper):
         # Log invalid regex warnings to MongoDB when job_uid is available
         invalid_warnings = getattr(self, '_invalid_regex_warnings', [])
         if invalid_warnings and hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
+            from data_server.log_tools.tools import insert_pipline_job_run_task_log_info
             for msg in invalid_warnings:
                 insert_pipline_job_run_task_log_info(
                     self.job_uid, msg,
@@ -173,7 +173,7 @@ class CleanCopyrightMapper(Mapper):
             error_msg = f"Failed to generate mapper logging: {e}\n{traceback.format_exc()}"
             logger.error(error_msg)
             if hasattr(self, 'job_uid') and self.job_uid:
-                from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_error
+                from data_server.log_tools.tools import insert_pipline_job_run_task_log_error
                 insert_pipline_job_run_task_log_error(
                     self.job_uid, error_msg,
                     operator_name=self._name, operator_index=self.pipline_index
@@ -183,7 +183,7 @@ class CleanCopyrightMapper(Mapper):
         from loguru import logger
         logger.info(message)
         if hasattr(self, 'job_uid') and self.job_uid:
-            from data_celery.pg_log_tools.tools import insert_pipline_job_run_task_log_info
+            from data_server.log_tools.tools import insert_pipline_job_run_task_log_info
             insert_pipline_job_run_task_log_info(
                 self.job_uid, message,
                 operator_name=self._name, operator_index=self.pipline_index

@@ -6,7 +6,7 @@ from pathlib import Path
 from loguru import logger
 from data_server.utils.file_storage import file_storage_manager
 from data_server.schemas.responses import response_success, response_fail
-from data_celery.utils import get_project_root
+from data_server.utils.project_paths import get_project_root
 
 
 op_pic_router = APIRouter()
@@ -58,11 +58,11 @@ async def upload_image(
             "url": file_url
         }
 
-        logger.info(f"图片上传成功: {file.filename} -> {file_code}")
+        logger.info(f"Image uploaded successfully: {file.filename} -> {file_code}")
         return response_success(result)
         
     except Exception as e:
-        logger.error(f"图片上传失败: {str(e)}")
+        logger.error(f"Failed to upload image: {str(e)}")
         return response_fail(msg=f"图片上传失败: {str(e)}")
 
 
@@ -74,13 +74,13 @@ async def delete_uploaded_file_by_name(filename: str) -> Dict[str, Any]:
         success = file_storage_manager.delete_file_by_name(filename, category="operator")
 
         if success:
-            logger.info(f"文件删除成功: {filename}")
+            logger.info(f"File deleted successfully: {filename}")
             return response_success(msg="文件删除成功")
         else:
             return response_fail(msg="文件不存在或删除失败")
 
     except Exception as e:
-        logger.error(f"删除文件失败: {str(e)}")
+        logger.error(f"Failed to delete file: {str(e)}")
         return response_fail(msg=f"删除文件失败: {str(e)}")
 
 

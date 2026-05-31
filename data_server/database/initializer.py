@@ -2,7 +2,7 @@ import os
 import re
 import sqlparse
 from loguru import logger
-from data_celery.utils import get_project_root
+from data_server.utils.project_paths import get_project_root
 from sqlalchemy import text
 from data_server.database.session import get_sync_session
 

@@ -38,36 +38,26 @@ class BranchTool:
 
     def find_next_version(self, origin_branch: str, valid_branches: List) -> str:
         """
-        算子执行任务的版本生成逻辑：自动生成 v1, v2 等版本号
+        Version generation for operator execution tasks: auto v1, v2, etc.
+        Same as md_to_jsonl_preprocess._get_available_branch.
         """
         latestNum = 0
-        
+
         for b in valid_branches:
-            if origin_branch == "main" and re.match(r"^v\d+", b):
-                # Handle main branch case, find v1, v2, v3, etc.
-                numStr = b.split(".")[0][1:]
-                if not numStr.isdigit():
-                    continue
-                num = int(numStr)
-                latestNum = max(latestNum, num)
+            if origin_branch == "main" and re.match(r"^v\d+$", b):
+                numStr = b[1:]
+                if numStr.isdigit():
+                    latestNum = max(latestNum, int(numStr))
             elif b.startswith(origin_branch) and len(b) > len(origin_branch):
-                # Handle other branch cases, find origin_branch.1, origin_branch.2, etc.
                 numStr = b[len(origin_branch) + 1:]
-                if not numStr.isdigit():
-                    continue
-                num = int(numStr)
-                latestNum = max(latestNum, num)
-            else:
-                continue
-        
+                if numStr.isdigit():
+                    latestNum = max(latestNum, int(numStr))
+
         if origin_branch == "main":
-            if latestNum > 0:
-                return "v" + str(latestNum + 1)
-            else:
-                return "v1"
-        else:
-            if latestNum > 0:
-                return origin_branch + "." + str(latestNum + 1)
-            else:
-                return origin_branch + ".1"
-        
+            return f"v{latestNum + 1}" if latestNum > 0 else "v1"
+        if latestNum > 0:
+            return f"{origin_branch}.{latestNum + 1}"
+        if origin_branch in valid_branches:
+            return f"{origin_branch}.1"
+        return origin_branch
+

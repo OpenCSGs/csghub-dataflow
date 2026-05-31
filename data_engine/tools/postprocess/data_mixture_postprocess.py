@@ -32,14 +32,14 @@ class DataMixture(TOOL):
                     if ' ' in tempVal_str:
                         try:
                             self.weights = [x.strip() for x in tempVal_str.split()]
-                            print(f"解析为多个值: {self.weights}")
+                            print(f"Parsed as multiple values: {self.weights}")
                         except ValueError:
                             self.weights = [1.0]  # Default value
                     else:
                         # Single value
                         try:
                             self.weights = [tempVal_str]
-                            print(f"解析为单个值: {self.weights}")
+                            print(f"Parsed as single value: {self.weights}")
                         except ValueError:
                             self.weights = [1.0]  # Default value
                 else:
@@ -68,7 +68,7 @@ class DataMixture(TOOL):
         else:
             self.max_samples = None
 
-        print(f"解析结果 - weights: {self.weights}, max_samples: {self.max_samples}")
+        print(f"Parse result - weights: {self.weights}, max_samples: {self.max_samples}")
 
     def process(self):
         target_path = legacy.main(data_path=self.tool_def.dataset_path,

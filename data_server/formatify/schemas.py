@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, List, Any
+from data_server.utils.storage_size import normalize_storage_size
 
 
 class DataFormatTaskRequest(BaseModel):
@@ -17,4 +18,18 @@ class DataFormatTaskRequest(BaseModel):
     to_data_type: Optional[int] = None
     mineru_api_url: Optional[str] = None
     mineru_backend: Optional[str] = None
-    skip_meta: Optional[bool] = False  # 如果为 True，则生成并上传 meta.log 文件；如果为 False，则不生成 meta.log 文件
+    skip_meta: Optional[bool] = False  # If True, generate and upload meta.log; if False, skip meta.log
+    cluster_id: Optional[str] = None
+    cluster_name: Optional[str] = None
+    resource_id: Optional[int] = None
+    resource_name: Optional[str] = None
+    storage_size: Optional[str] = None
+    namespace_uuid: Optional[str] = None
+    namespace_type: str = "personal"
+
+    @field_validator("storage_size", mode="before")
+    @classmethod
+    def validate_storage_size(cls, value):
+        if value is None or (isinstance(value, str) and not str(value).strip()):
+            return None
+        return normalize_storage_size(value)

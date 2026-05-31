@@ -39,29 +39,44 @@ class DataFormatTaskStatusEnum(Enum):
 class DataFormatTask(Base):
     __tablename__ = 'data_format_tasks'
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    name = Column(String(100), nullable=False, comment="任务名称")
-    des = Column(String(2048), comment="任务描述")
-    from_csg_hub_dataset_name = Column(String(100), comment="CSG Hub 源数据集名称")
-    from_csg_hub_dataset_id = Column(Integer, comment="CSG Hub 源数据集ID")
-    from_csg_hub_repo_id = Column(String(100), comment="CSG Hub 源仓库ID")
-    from_csg_hub_dataset_branch = Column(String(100), comment="CSG Hub 源数据集分支")
-    from_data_type = Column(Integer, comment="转换源类型 DataFormatTypeEnum")
-    to_csg_hub_dataset_name = Column(String(100), comment="CSG Hub 存储数据集名称")
-    to_csg_hub_dataset_id = Column(Integer, comment="CSG Hub 存储数据集ID")
-    to_csg_hub_repo_id = Column(String(100), comment="CSG Hub 存储仓库ID")
-    to_csg_hub_dataset_default_branch = Column(String(100), comment="CSG Hub 存储数据集默认分支 main/master")
-    to_data_type = Column(Integer, comment="转换目标类型DataFormatTypeEnum ")
-    task_uid = Column(String(100), comment="任务唯一标识")
-    task_celery_uid = Column(String(100), comment="celery任务调度唯一标识")
-    task_status = Column(Integer, nullable=False, comment="任务状态 DataFormatTaskStatusEnum 枚举")
-    owner_id = Column(Integer, comment="所属用户")
-    mineru_api_url = Column(String(500), comment="MinerU API 地址")
-    mineru_backend = Column(String(100), comment="MinerU 后端类型")
-    skip_meta = Column(Boolean, default=False, comment="如果为 True，则生成并上传 meta.log 文件；如果为 False，则不生成 meta.log 文件")
-    start_run_at = Column(DateTime, comment='运行开始时间')
-    end_run_at = Column(DateTime, comment='运行结束时间')
-    created_at = Column(DateTime, default=datetime.datetime.now, comment='任务创建时间')
-    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now, comment='更新时间')
+    name = Column(String(100), nullable=False, comment="Task name")
+    des = Column(String(2048), comment="Task description")
+    from_csg_hub_dataset_name = Column(String(100), comment="CSG Hub source dataset name")
+    from_csg_hub_dataset_id = Column(Integer, comment="CSG Hub source dataset ID")
+    from_csg_hub_repo_id = Column(String(100), comment="CSG Hub source repo ID")
+    from_csg_hub_dataset_branch = Column(String(100), comment="CSG Hub source dataset branch")
+    from_data_type = Column(Integer, comment="Source format type DataFormatTypeEnum")
+    to_csg_hub_dataset_name = Column(String(100), comment="CSG Hub target dataset name")
+    to_csg_hub_dataset_id = Column(Integer, comment="CSG Hub target dataset ID")
+    to_csg_hub_repo_id = Column(String(100), comment="CSG Hub target repo ID")
+    to_csg_hub_dataset_default_branch = Column(String(100), comment="CSG Hub target dataset default branch main/master")
+    to_data_type = Column(Integer, comment="Target format type DataFormatTypeEnum")
+    task_uid = Column(String(100), comment="Unique task identifier")
+    task_status = Column(Integer, nullable=False, comment="Task status DataFormatTaskStatusEnum enum")
+    owner_id = Column(Integer, comment="Owner user")
+    owner_org_id = Column(String(255), comment="Owner organization ID")
+    owner_org_name = Column(String(255), comment="Owner organization name")
+    mineru_api_url = Column(String(500), comment="MinerU API URL")
+    mineru_backend = Column(String(100), comment="MinerU backend type")
+    skip_meta = Column(Boolean, default=False, comment="If True, generate and upload meta.log; if False, skip meta.log")
+    flow_id = Column(String(32), comment="DataFlow global task ID submitted to CSGHub")
+    cluster_id = Column(String(255), comment="Cluster ID selected when submitting to CSGHub")
+    cluster_name = Column(String(255), comment="Cluster name selected when submitting to CSGHub")
+    resource_id = Column(Integer, comment="Resource ID selected when submitting to CSGHub")
+    resource_name = Column(String(255), comment="Resource name selected when submitting to CSGHub")
+    storage_size = Column(String(32), comment="Work volume storage size, e.g. 4Gi")
+    csghub_job_id = Column(String(100), comment="Job ID returned by CSGHub")
+    csghub_status = Column(String(100), comment="Task status on CSGHub side")
+    csghub_request_payload = Column(Text, comment="Request body for CSGHub task creation")
+    csghub_response_payload = Column(Text, comment="Raw response from CSGHub")
+    namespace_uuid = Column(String(255), comment="namespace UUID in CSGHub DataFlow path")
+    namespace_type = Column(String(32), comment="namespace scope: personal / organization")
+    start_run_at = Column(DateTime, comment='Run start time')
+    end_run_at = Column(DateTime, comment='Run end time')
+    created_at = Column(DateTime, default=datetime.datetime.now, comment='Task creation time')
+    updated_at = Column(DateTime, default=datetime.datetime.now, onupdate=datetime.datetime.now, comment='Last updated time')
+    is_active = Column(Boolean, default=True, comment="False means logically deleted")
+    deleted_at = Column(DateTime, comment="Logical deletion time")
 
     def to_dict(self):
         return {
@@ -79,12 +94,23 @@ class DataFormatTask(Base):
             "to_csg_hub_dataset_default_branch": self.to_csg_hub_dataset_default_branch,
             "to_data_type": self.to_data_type,
             "task_uid": self.task_uid,
-            "task_celery_uid": self.task_celery_uid,
             "task_status": self.task_status,
             "owner_id": self.owner_id,
+            "owner_org_id": self.owner_org_id,
+            "owner_org_name": self.owner_org_name,
+            "namespace_uuid": getattr(self, "namespace_uuid", None),
+            "namespace_type": getattr(self, "namespace_type", None),
             "mineru_api_url": self.mineru_api_url,
             "mineru_backend": self.mineru_backend,
             "skip_meta": getattr(self, 'skip_meta', False),  # Use getattr to handle missing column
+            "flow_id": self.flow_id,
+            "cluster_id": self.cluster_id,
+            "cluster_name": self.cluster_name,
+            "resource_id": self.resource_id,
+            "resource_name": self.resource_name,
+            "storage_size": getattr(self, "storage_size", None),
+            "csghub_job_id": self.csghub_job_id,
+            "csghub_status": self.csghub_status,
             "start_run_at": self.start_run_at,
             "end_run_at": self.end_run_at,
             "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
