@@ -165,7 +165,7 @@ INSERT INTO "public"."operator_config" VALUES (115, 30, 'field_key', 'input', NU
 INSERT INTO "public"."operator_config" VALUES (112, 29, 'upper_percentile', 'slider', NULL, '0', '0', '1', '0.01', 'f', 'f', NULL, NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067', NULL);
 INSERT INTO "public"."operator_config" VALUES (114, 29, 'upper_rank', 'number', NULL, '1', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:05:56.444067', '2025-07-29 17:05:56.444067', NULL);
 INSERT INTO "public"."operator_config" VALUES (117, 30, 'topk', 'number', NULL, '1', '0', NULL, NULL, 'f', 'f', '1', NULL, '2025-07-29 17:06:02.760052', '2025-07-29 17:06:02.760052', NULL);
-INSERT INTO "public"."operator_config" VALUES (30, 17, 'swap_random_word', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:06:37.159089', '2025-07-28 22:06:37.159089', NULL);
+INSERT INTO "public"."operator_config" VALUES (30, 17, 'replace_homophone_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:06:37.159089', '2025-07-28 22:06:37.159089', NULL);
 INSERT INTO "public"."operator_config" VALUES (68, 48, 'tokenization', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:47:06.922281', '2025-07-29 16:47:06.922281', NULL);
 INSERT INTO "public"."operator_config" VALUES (48, 37, 'tokenization', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-29 16:43:33.224115', '2025-07-29 16:43:33.224115', NULL);
 INSERT INTO "public"."operator_config" VALUES (31, 17, 'delete_random_char', 'checkbox', NULL, 'false', NULL, NULL, NULL, 'f', 'f', NULL, NULL, '2025-07-28 22:06:37.159089', '2025-07-28 22:06:37.159089', NULL);
