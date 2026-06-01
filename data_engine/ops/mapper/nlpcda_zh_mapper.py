@@ -166,7 +166,9 @@ class NlpcdaZhMapper(Mapper):
         return [
             Param("replace_similar_word", DataType.BOOLEAN,
                 None, False),
-            Param("swap_random_word", DataType.BOOLEAN,
+            # Param("swap_random_word", DataType.BOOLEAN,
+            #     None, False),
+            Param("replace_homophone_char", DataType.BOOLEAN,
                 None, False),
             Param("delete_random_char", DataType.BOOLEAN,
                 None, False),

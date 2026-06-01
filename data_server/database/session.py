@@ -52,17 +52,6 @@ def sqlalchemy_database_uri() -> URL:
         database=db_name
     )
 
-def log_database_uri() -> URL:
-    """log_database"""
-    return URL.create(
-        drivername="postgresql",
-        username=os.getenv('LOG_DATABASE_USERNAME', "postgres"),
-        password=os.getenv('LOG_DATABASE_PASSWORD', "postgres"),
-        host=os.getenv('LOG_DATABASE_HOSTNAME', "192.168.2.94"),
-        port=os.getenv('LOG_DATABASE_PORT', 8198),
-        database=os.getenv('LOG_DATABASE_DB', "data_flow_log")
-    )
-
 # def new_async_engine(uri: URL) -> AsyncEngine:
 #     return create_async_engine(
 #         uri,
@@ -99,18 +88,11 @@ def create_sync_engine(uri: URL) -> Engine:
 _SYNC_ENGINE = create_sync_engine(sqlalchemy_database_uri())
 _SYNC_SESSIONMAKER = sessionmaker(_SYNC_ENGINE, expire_on_commit=False)
 
-_LOG_SYNC_ENGINE = create_sync_engine(log_database_uri())
-_LOG_SYNC_SESSIONMAKER = sessionmaker(_LOG_SYNC_ENGINE, expire_on_commit=False)
-
 
 def get_sync_session() -> Session:  # pragma: no cover
     """obtain_the_business_database_session"""
     return _SYNC_SESSIONMAKER()
 
-
-def get_log_sync_session() -> Session:  # pragma: no cover
-    """obtain_the_log_database_session"""
-    return _LOG_SYNC_SESSIONMAKER()
 
 def add_columns_if_missing(table_name: str, columns: dict[str, str]):
     """Add columns to a table if they do not already exist."""
@@ -278,7 +260,6 @@ from data_server.formatify.FormatifyModels import DataFormatTask
 from data_server.algo_templates.model.algo_template import AlgoTemplate
 from data_server.operator.models.operator import OperatorInfo,OperatorConfig,OperatorConfigSelectOptions
 from data_server.operator.models.operator_permission import OperatorPermission
-from data_server.database.bean.task_log import TaskLog, OperatorStatus
 
 
 def create_tables():
@@ -288,7 +269,7 @@ def create_tables():
     
     logger.info("Starting database table creation...")
 
-    logger.info("Creating business tables in main database...")
+    logger.info("Creating database tables...")
     business_tables = [
         Worker.__table__,
         Job.__table__,
@@ -303,15 +284,7 @@ def create_tables():
         OperatorPermission.__table__,
     ]
     Base.metadata.create_all(_SYNC_ENGINE, tables=business_tables)
-    logger.info("Business tables created successfully in main database")
-
-    logger.info("Creating log tables in log database...")
-    log_tables = [
-        TaskLog.__table__,
-        OperatorStatus.__table__,
-    ]
-    Base.metadata.create_all(_LOG_SYNC_ENGINE, tables=log_tables)
-    logger.info("Log tables created successfully in log database")
+    logger.info("Business tables created successfully")
 
     _initialized = True
 
