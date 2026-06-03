@@ -36,20 +36,6 @@ def _resolve_task_type(task_type: str, task_params: dict) -> str:
     return aliases.get(normalized, normalized)
 
 
-def _sync_step_started(task_type: str, task_params: dict, started_at: str):
-    try:
-        push_workflow_sync(
-            task_params=task_params,
-            event="step_started",
-            finalize=False,
-            started_at=started_at,
-            main_status="Running",
-            fail_on_error=False,
-        )
-    except Exception as exc:
-        logger.warning("workflow step_started sync failed: {}", exc)
-
-
 def _extract_task_progress(result) -> dict[str, int]:
     if not isinstance(result, dict):
         return {}
@@ -169,7 +155,7 @@ def run_formatify_task(task_params: dict):
 def run_task(task_type: str, task_params: dict):
     task_type = _resolve_task_type(task_type, task_params)
     started_at = _utc_now_iso()
-    _sync_step_started(task_type, task_params, started_at)
+    # step_started sync is handled in run_dataflow_task.py before heavy imports
     try:
         if task_type == "pull_data":
             result = run_pull_data(task_params)
