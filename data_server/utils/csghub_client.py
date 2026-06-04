@@ -195,16 +195,15 @@ def _get_http_timeout() -> int:
 
 def _build_csghub_headers(
     user_token: str | None = None,
-    authorization: str | None = None,
 ) -> dict[str, str]:
-    """CSGHub task creation etc.: JWT via authorization; git ops via user_token (User-Token)."""
+    """CSGHub API headers: Authorization = Bearer <user_token> (access token); User-Token for git ops."""
     headers = {
         "Content-Type": "application/json",
     }
-    if authorization and str(authorization).strip():
-        headers["Authorization"] = str(authorization).strip()
     if user_token and str(user_token).strip():
-        headers["User-Token"] = str(user_token).strip()
+        token = str(user_token).strip()
+        headers["Authorization"] = token if token.lower().startswith("bearer ") else f"Bearer {token}"
+        headers["User-Token"] = token
     return headers
 
 
@@ -217,10 +216,10 @@ def _ensure_bearer_authorization(authorization: str | None) -> str | None:
     return auth
 
 
-def _build_api_jwt_headers(authorization: str | None) -> dict[str, str]:
-    """JWT auth for CSGHub/DataFlow HTTP only (e.g. trace sync); no user_token."""
+def _build_api_bearer_headers(user_token: str | None) -> dict[str, str]:
+    """Bearer access token for CSGHub/DataFlow HTTP (e.g. trace sync, platform query)."""
     headers = {"Content-Type": "application/json"}
-    auth = _ensure_bearer_authorization(authorization)
+    auth = _ensure_bearer_authorization(user_token)
     if auth:
         headers["Authorization"] = auth
     return headers
@@ -543,11 +542,10 @@ def submit_job_to_csghub(
     payload: dict[str, Any],
     namespace: str,
     user_token: str | None = None,
-    authorization: str | None = None,
 ) -> dict[str, Any]:
     url = get_csghub_job_create_url(namespace)
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    headers = _build_csghub_headers(user_token=user_token, authorization=authorization)
+    headers = _build_csghub_headers(user_token=user_token)
 
     logger.info(
         "CSGHub create job request | url={url} | namespace={ns} | headers={hdr} | payload_json={payload}",
@@ -792,7 +790,6 @@ def fetch_csghub_job_logs(
     namespace: str,
     csghub_job_id: str,
     user_token: str | None = None,
-    authorization: str | None = None,
     stream: bool = False,
     dag_task_id: str | None = None,
 ) -> str:
@@ -805,20 +802,18 @@ def fetch_csghub_job_logs(
         stream=stream,
         dag_task_id=dag_task_id,
     )
-    headers = _build_csghub_headers(user_token=user_token, authorization=authorization)
+    headers = _build_csghub_headers(user_token=user_token)
     req = request.Request(url, headers=headers, method="GET")
     has_user_token = bool(str(user_token or "").strip())
-    has_authorization = bool(str(authorization or "").strip())
     logger.info(
         "CSGHub fetch job logs request | url={url} | namespace={ns} | job_id={jid} | "
-        "dag_task_id={dag} | stream={stream} | has_user_token={ut} | has_authorization={auth}",
+        "dag_task_id={dag} | stream={stream} | has_user_token={ut}",
         url=url,
         ns=namespace,
         jid=csghub_job_id,
         dag=dag_task_id or "(main)",
         stream=stream,
         ut=has_user_token,
-        auth=has_authorization,
     )
     try:
         with request.urlopen(req, timeout=_get_http_timeout()) as resp:
@@ -929,15 +924,15 @@ def query_platform_job_from_csghub(
     *,
     namespace: str,
     csghub_job_id: str,
-    authorization: str | None = None,
+    user_token: str | None = None,
 ) -> dict[str, Any]:
     """GET /api/v1/platform/dataflow/{namespace}/jobs/{job_id}; return raw JSON."""
-    auth = _ensure_bearer_authorization(authorization)
+    auth = _ensure_bearer_authorization(user_token)
     if not auth:
         raise ValueError("Authorization (Bearer token) is required for platform job query")
 
     url = get_csghub_platform_job_url(namespace, csghub_job_id)
-    headers = _build_api_jwt_headers(auth)
+    headers = _build_api_bearer_headers(auth)
     req = request.Request(url, headers=headers, method="GET")
     try:
         with request.urlopen(req, timeout=_get_http_timeout()) as resp:
@@ -965,7 +960,7 @@ def fetch_platform_job_status(
     namespace: str,
     csghub_job_id: str | None = None,
     flow_id: str | None = None,
-    authorization: str | None = None,
+    user_token: str | None = None,
     csghub_response_payload: Any = None,
 ) -> dict[str, Any]:
     """
@@ -982,14 +977,14 @@ def fetch_platform_job_status(
     if not remote_job_id:
         raise ValueError("无法解析 CSGHub 远端 job_id（argo_task_id）")
 
-    auth = _ensure_bearer_authorization(authorization)
+    auth = _ensure_bearer_authorization(user_token)
     if not auth:
         raise ValueError("查询任务状态需要 Authorization: Bearer")
 
     raw = query_platform_job_from_csghub(
         namespace=str(namespace).strip(),
         csghub_job_id=remote_job_id,
-        authorization=auth,
+        user_token=auth,
     )
     parsed = parse_platform_job_query_response(raw)
     return {**parsed, "raw_response": raw}
@@ -999,18 +994,18 @@ def delete_job_from_csghub(
     *,
     namespace: str,
     csghub_job_id: str,
-    authorization: str | None = None,
+    user_token: str | None = None,
 ) -> dict[str, Any]:
     """
     Call CSGHub DELETE /api/v1/platform/dataflow/{namespace}/jobs/{job_id} to cancel remote task.
     Request must include Authorization: Bearer <token>.
     """
-    auth = _ensure_bearer_authorization(authorization)
+    auth = _ensure_bearer_authorization(user_token)
     if not auth:
         raise ValueError("Authorization (Bearer token) is required for CSGHub job delete")
 
     url = get_csghub_job_delete_url(namespace, csghub_job_id)
-    headers = _build_api_jwt_headers(auth)
+    headers = _build_api_bearer_headers(auth)
 
     logger.info(
         "CSGHub delete job request | url={url} | namespace={ns} | job_id={jid} | headers={hdr}",
@@ -1054,7 +1049,7 @@ def try_cancel_csghub_job(
     *,
     namespace_uuid: str | None,
     csghub_job_id: str | None,
-    authorization: str | None,
+    user_token: str | None,
     flow_id: str | None = None,
     csghub_response_payload: Any = None,
 ) -> tuple[bool, str | None]:
@@ -1074,7 +1069,7 @@ def try_cancel_csghub_job(
             flow_id,
         )
         return True, None
-    if not _ensure_bearer_authorization(authorization):
+    if not _ensure_bearer_authorization(user_token):
         logger.warning(
             "Skip CSGHub job delete: missing Authorization | flow_id={} | csghub_job_id={}",
             flow_id,
@@ -1085,7 +1080,7 @@ def try_cancel_csghub_job(
         delete_job_from_csghub(
             namespace=ns,
             csghub_job_id=jid,
-            authorization=authorization,
+            user_token=user_token,
         )
         logger.info(
             "CSGHub job deleted | flow_id={} | namespace={} | csghub_job_id={}",
@@ -1110,13 +1105,12 @@ def query_job_subtasks_status_from_csghub(
     flow_id: str | None = None,
     csghub_job_id: str | None = None,
     user_token: str | None = None,
-    authorization: str | None = None,
 ) -> dict[str, Any]:
     if not flow_id and not csghub_job_id:
         raise ValueError("flow_id and csghub_job_id cannot both be empty")
 
     url = get_csghub_job_subtask_status_url(flow_id=flow_id, csghub_job_id=csghub_job_id)
-    headers = _build_csghub_headers(user_token=user_token, authorization=authorization)
+    headers = _build_csghub_headers(user_token=user_token)
     req = request.Request(url, headers=headers, method="GET")
     try:
         with request.urlopen(req, timeout=_get_http_timeout()) as resp:

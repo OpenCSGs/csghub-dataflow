@@ -86,7 +86,6 @@ def _fetch_datasource_logs_text(
             dag_task_id=dag_task_id,
             stream=stream,
             user_token=user_token,
-            authorization=authorization,
         )
         logs = payload.get("logs") or ""
         logger.info(
@@ -152,7 +151,6 @@ def _fetch_formatify_logs_text(
             dag_task_id=dag_task_id,
             stream=stream,
             user_token=user_token,
-            authorization=authorization,
         )
         logs = payload.get("logs") or ""
         logger.info(
@@ -227,7 +225,6 @@ def _fetch_job_logs_text(
             dag_task_id=dag_task_id,
             stream=stream,
             user_token=user_token,
-            authorization=authorization,
         )
         logs = payload.get("logs") or ""
         logger.info(

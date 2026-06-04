@@ -338,13 +338,11 @@ def sync_csghub_subtasks_status_by_query(
     flow_id: str | None,
     csghub_job_id: str | None,
     user_token: str | None = None,
-    authorization: str | None = None,
 ) -> dict:
     response = query_job_subtasks_status_from_csghub(
         flow_id=flow_id,
         csghub_job_id=csghub_job_id,
         user_token=user_token,
-        authorization=authorization,
     )
     subtask_items = _extract_subtask_items(response)
     if not subtask_items:
@@ -402,7 +400,6 @@ def sync_csghub_main_task_status(
     status: str,
     callback_payload: dict | None = None,
     user_token: str | None = None,
-    authorization: str | None = None,
 ) -> dict:
     if not flow_id and not csghub_job_id:
         raise ValueError("flow_id 和 csghub_job_id 不能同时为空")
@@ -468,7 +465,6 @@ def sync_csghub_main_task_status(
                 flow_id=flow_id,
                 csghub_job_id=getattr(entity, "csghub_job_id", None),
                 user_token=user_token,
-                authorization=authorization,
             )
         except Exception as exc:
             subtask_sync_error = str(exc)
@@ -519,14 +515,14 @@ def sync_csghub_main_task_status_by_query(
     namespace = _entity_namespace_uuid(entity) if entity is not None else None
     if not namespace:
         raise ValueError("任务缺少 namespace_uuid，无法查询 CSGHub platform 任务状态")
-    if not _ensure_bearer_authorization(authorization):
+    if not _ensure_bearer_authorization(user_token):
         raise ValueError("查询任务状态需要请求头 Authorization: Bearer")
 
     parsed = fetch_platform_job_status(
         namespace=namespace,
         csghub_job_id=csghub_job_id or getattr(entity, "csghub_job_id", None),
         flow_id=flow_id or getattr(entity, "flow_id", None),
-        authorization=authorization,
+        user_token=user_token,
         csghub_response_payload=csghub_response_payload
         or getattr(entity, "csghub_response_payload", None),
     )
@@ -550,7 +546,6 @@ def sync_csghub_main_task_status_by_query(
         status=status,
         callback_payload=response,
         user_token=user_token,
-        authorization=authorization,
     )
     result["query_response"] = response
     result["query_source"] = "platform"

@@ -18,7 +18,6 @@ def fetch_csghub_logs_payload(
     dag_task_id: str | None = None,
     stream: bool = False,
     user_token: str | None = None,
-    authorization: str | None = None,
 ) -> dict[str, Any]:
     """
     Call CSGHub GET .../jobs/{job_id}/logs.
@@ -47,7 +46,6 @@ def fetch_csghub_logs_payload(
         namespace=namespace,
         csghub_job_id=remote_job_id,
         user_token=user_token,
-        authorization=authorization,
         stream=stream,
         dag_task_id=dag_task_id,
     )

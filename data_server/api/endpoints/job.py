@@ -22,6 +22,7 @@ from data_server.job.JobsManager import (
 )
 from data_server.utils.task_access import (
     can_delete_task,
+    resolve_organization_admin_uuids_for_delete,
     resolve_organization_namespace_uuids_for_list,
 )
 from data_server.utils.jwt_utils import parse_jwt_token
@@ -282,7 +283,6 @@ async def read_log(
                     dag_task_id=dag_task_id,
                     stream=stream,
                     user_token=user_token,
-                    authorization=authorization,
                 )
                 return response_success(data=data)
             except ValueError as exc:
@@ -491,7 +491,7 @@ def create_job(
         )
         result = create_new_job(
             job_cfg=config, user_id=user_id, user_name=user_name, user_token=user_token,
-            owner_org_id=owner_org_id, owner_org_name=owner_org_name, authorization=authorization)
+            owner_org_id=owner_org_id, owner_org_name=owner_org_name)
         return result
     except Exception as e:
         raise HTTPException(
@@ -522,7 +522,7 @@ def create_pipline_job(
         result = create_pipline_new_job(
             job_cfg=config, user_id=user_id, user_name=user_name, user_token=user_token,
             yaml_config=yaml_config,
-            owner_org_id=owner_org_id, owner_org_name=owner_org_name, authorization=authorization)
+            owner_org_id=owner_org_id, owner_org_name=owner_org_name)
         return response_success(data=result)
     except Exception as e:
         logger.error(f"Failed to create pipline  job: {str(e)}")
@@ -552,7 +552,7 @@ def stop_pipline_job(
         if not job:
             return response_fail(msg="job not exist")
         if job.status == JOB_STATUS.PROCESSING.value or job.status == JOB_STATUS.QUEUED.value:
-            result, msg = stop_pipline_task(session, job, authorization=authorization)
+            result, msg = stop_pipline_task(session, job, user_token=user_token)
             if result:
                 return response_success(data="Task stopped successfully or queued")
             return response_fail(msg=msg)
@@ -611,7 +611,6 @@ async def run_pipline_job(
             data.get("namespace_uuid"),
             data.get("namespace_type"),
             execute_time,
-            authorization=authorization,
         )
         if not ok:
             return response_fail(msg=msg or "任务执行失败")
@@ -662,7 +661,19 @@ def delete_job(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="The job has not been completed yet.",
             )
-        if not can_delete_task(owner_id=job.owner_id, user_id=user_id, isadmin=isadmin):
+        if not can_delete_task(
+            owner_id=job.owner_id,
+            user_id=user_id,
+            isadmin=isadmin,
+            org_admin_uuids=resolve_organization_admin_uuids_for_delete(
+                user_name=user_name,
+                authorization=authorization,
+                user_token=user_token,
+                isadmin=isadmin,
+            ),
+            namespace_uuid=getattr(job, "namespace_uuid", None),
+            namespace_type=getattr(job, "namespace_type", None),
+        ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="仅任务创建者或管理员可删除",

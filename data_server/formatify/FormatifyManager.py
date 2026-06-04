@@ -62,7 +62,6 @@ def _submit_formatify_task_to_csghub(
     user_token: str | None,
     namespace: str,
     user_name: str | None = None,
-    authorization: str | None = None,
     task_run_time: str | None = None,
 ):
     flow_id = build_job_flow_id("formatify", formatify_task.id)
@@ -71,7 +70,6 @@ def _submit_formatify_task_to_csghub(
     task_params["formatify_id"] = formatify_task.id
     task_params["user_name"] = user_name
     task_params["user_token"] = user_token
-    task_params["authorization"] = authorization
     task_params["flow_id"] = flow_id
     if task_run_time:
         task_params["execute_time"] = task_run_time
@@ -91,7 +89,7 @@ def _submit_formatify_task_to_csghub(
     )
     formatify_task.csghub_request_payload = json.dumps(payload, ensure_ascii=False)
     response = submit_job_to_csghub(
-        payload, namespace=namespace, user_token=user_token, authorization=authorization
+        payload, namespace=namespace, user_token=user_token
     )
     formatify_task.csghub_response_payload = json.dumps(response, ensure_ascii=False)
     parsed = ensure_csghub_job_create_success(response)
@@ -115,7 +113,6 @@ def create_formatify_task(
     user_token: str,
     owner_org_id: str | None = None,
     owner_org_name: str | None = None,
-    authorization: str | None = None,
 ):
 
     # create db model
@@ -166,7 +163,6 @@ def create_formatify_task(
             user_token,
             nu,
             user_name=user_name,
-            authorization=authorization,
         )
         data_format_task_db.task_status = DataFormatTaskStatusEnum.WAITING.value
     except Exception as e:
@@ -372,7 +368,6 @@ def execute_formatify_task(
     formatify_task: DataFormatTask,
     user_name: str,
     user_token: str,
-    authorization: str | None = None,
     task_run_time: str | None = None,
 ):
     """Waiting and not yet submitted to CSGHub: first submit this record."""
@@ -389,7 +384,6 @@ def execute_formatify_task(
             user_token,
             nu,
             user_name=user_name,
-            authorization=authorization,
             task_run_time=task_run_time,
         )
         formatify_task.task_status = DataFormatTaskStatusEnum.WAITING.value
@@ -407,7 +401,6 @@ def execute_new_formatify_task(
     source_task: DataFormatTask,
     user_name: str,
     user_token: str,
-    authorization: str | None = None,
     task_run_time: str | None = None,
 ):
     """List "Execute": copy new task and submit to CSGHub; do not re-run old record."""
@@ -428,7 +421,6 @@ def execute_new_formatify_task(
                 user_token,
                 nu,
                 user_name=user_name,
-                authorization=authorization,
                 task_run_time=task_run_time,
             )
             new_task.task_status = DataFormatTaskStatusEnum.WAITING.value
@@ -446,7 +438,7 @@ def execute_new_formatify_task(
 def stop_formatify_task(
     db_session: Session,
     formatify_task: DataFormatTask,
-    authorization: str | None = None,
+    user_token: str | None = None,
 ):
     """Cancel format conversion task: CSGHub DELETE first, then mark canceled locally."""
     resolved_job_id = resolve_csghub_remote_job_id(
@@ -459,7 +451,7 @@ def stop_formatify_task(
     remote_ok, remote_err = try_cancel_csghub_job(
         namespace_uuid=formatify_task.namespace_uuid,
         csghub_job_id=formatify_task.csghub_job_id,
-        authorization=authorization,
+        user_token=user_token,
         flow_id=formatify_task.flow_id,
         csghub_response_payload=formatify_task.csghub_response_payload,
     )

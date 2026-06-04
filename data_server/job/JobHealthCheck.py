@@ -153,10 +153,10 @@ def _check_csghub_job_running(job: Job) -> bool:
         bool: True if task is in running state, False otherwise
     """
     namespace = _entity_namespace_uuid(job)
-    authorization = os.getenv("CSGHUB_HEALTH_CHECK_AUTHORIZATION", "").strip() or None
-    if not namespace or not authorization:
+    user_token = os.getenv("CSGHUB_HEALTH_CHECK_TOKEN", "").strip() or None
+    if not namespace or not user_token:
         logger.warning(
-            "Job {}: skip CSGHub status check (need namespace_uuid and CSGHUB_HEALTH_CHECK_AUTHORIZATION)",
+            "Job {}: skip CSGHub status check (need namespace_uuid and CSGHUB_HEALTH_CHECK_TOKEN)",
             job.job_id,
         )
         return False
@@ -166,7 +166,7 @@ def _check_csghub_job_running(job: Job) -> bool:
             namespace=namespace,
             csghub_job_id=job.csghub_job_id,
             flow_id=job.flow_id,
-            authorization=authorization,
+            user_token=user_token,
             csghub_response_payload=job.csghub_response_payload,
         )
         task_status = parsed.get("status") or ""

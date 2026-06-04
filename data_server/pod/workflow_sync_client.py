@@ -10,7 +10,7 @@ from loguru import logger
 
 from data_server.pod.http_retry_client import post_json_with_retry
 from data_server.utils.csghub_client import (
-    _build_api_jwt_headers,
+    _build_api_bearer_headers,
     get_dataflow_workflow_sync_url,
 )
 
@@ -45,10 +45,7 @@ def build_current_subtask_payload(task_params: dict, *, status: str | None = Non
 
 
 def _resolve_pod_authorization(task_params: dict) -> str | None:
-    """CSGHub task_params may lack authorization; fall back to user_token / Pod env."""
-    auth = task_params.get("authorization")
-    if auth and str(auth).strip():
-        return str(auth).strip()
+    """Resolve access token: prefers user_token from task_params; falls back to Pod env vars."""
     token = task_params.get("user_token")
     if token and str(token).strip():
         return str(token).strip()
@@ -164,7 +161,7 @@ def push_workflow_sync(
         body["message"] = message
 
     url = get_dataflow_workflow_sync_url()
-    headers = _build_api_jwt_headers(authorization)
+    headers = _build_api_bearer_headers(authorization)
     internal_token = (
         os.getenv("DATAFLOW_INTERNAL_TOKEN", "").strip()
         or os.getenv("CSGHUB_DATAFLOW_CALLBACK_TOKEN", "").strip()
