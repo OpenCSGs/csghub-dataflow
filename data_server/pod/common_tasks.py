@@ -504,7 +504,7 @@ def run_operator_execute(task_params: dict):
         flow_id=flow_id,
         output_dir=output_dir,
         operator_name=operator_name,
-        authorization=task_params.get("authorization"),
+        user_token=task_params.get("user_token"),
         job_id=task_params.get("job_id"),
         operator_index=task_params.get("operator_index"),
     )

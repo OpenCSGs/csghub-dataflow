@@ -22,6 +22,7 @@ from data_server.formatify.FormatifyManager import (
 from data_server.utils.task_access import (
     can_delete_task,
     normalize_user_id,
+    resolve_organization_admin_uuids_for_delete,
     resolve_organization_namespace_uuids_for_list,
 )
 from data_server.datasource.DatasourceManager import apply_cluster_resource_fields
@@ -146,7 +147,6 @@ async def create_formatify_task_api(dataFormatTask: DataFormatTaskRequest,
         formatify_task_id = create_formatify_task(
             db, dataFormatTask, user_id, user_name, user_token,
             owner_org_id=owner_org_id, owner_org_name=owner_org_name,
-            authorization=authorization,
         )
         return response_success(data=formatify_task_id)
     except Exception as e:
@@ -261,7 +261,19 @@ async def delete_formatify(
         )
         if not task:
             return response_fail(msg="任务不存在或无权访问")
-        if not can_delete_task(owner_id=task.owner_id, user_id=user_id, isadmin=isadmin):
+        if not can_delete_task(
+            owner_id=task.owner_id,
+            user_id=user_id,
+            isadmin=isadmin,
+            org_admin_uuids=resolve_organization_admin_uuids_for_delete(
+                user_name=user_name,
+                authorization=authorization,
+                user_token=user_token,
+                isadmin=isadmin,
+            ),
+            namespace_uuid=getattr(task, "namespace_uuid", None),
+            namespace_type=getattr(task, "namespace_type", None),
+        ):
             return response_fail(msg="仅任务创建者或管理员可删除")
         result = delete_formatify_task(db, formatify_id)
         if not result:
@@ -397,7 +409,6 @@ async def run_formatify_task(
                 formatify_task,
                 user_name,
                 user_token,
-                authorization=authorization,
                 task_run_time=task_run_time,
             )
         elif formatify_task.task_status in (
@@ -410,7 +421,6 @@ async def run_formatify_task(
                 formatify_task,
                 user_name,
                 user_token,
-                authorization=authorization,
                 task_run_time=task_run_time,
             )
         else:
@@ -429,6 +439,7 @@ async def run_formatify_task(
 async def stop_formatify(
     formatify_id: int,
     db: Session = Depends(get_sync_session),
+    user_token: Annotated[str | None, Header(alias="User-Token")] = None,
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ):
     """
@@ -448,7 +459,7 @@ async def stop_formatify(
             DataFormatTaskStatusEnum.WAITING.value,
         ):
             return response_fail(msg="Task execution has already ended")
-        result, msg = stop_formatify_task(db, formatify_task, authorization=authorization)
+        result, msg = stop_formatify_task(db, formatify_task, user_token=user_token)
         if result:
             return response_success(data=msg or "Task stopped successfully")
         return response_fail(msg=msg or "Task stop failed")

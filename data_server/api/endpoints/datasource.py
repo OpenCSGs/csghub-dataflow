@@ -36,6 +36,7 @@ from data_server.utils.task_access import (
     attach_can_delete,
     can_delete_task,
     normalize_user_id,
+    resolve_organization_admin_uuids_for_delete,
     resolve_organization_namespace_uuids_for_list,
 )
 from data_server.schemas.responses import response_success, response_fail
@@ -113,8 +114,7 @@ def _fetch_collection_task_logs(
             csghub_response_payload=collection_task.csghub_response_payload,
             dag_task_id=dag_task_id,
             stream=stream,
-            user_token=user_token,
-            authorization=authorization,
+        user_token=user_token,
         )
         data["source"] = "csghub"
         data["log_api"] = (
@@ -294,7 +294,6 @@ async def create_datasource(datasource: DataSourceCreate, db: Session = Depends(
         data_source_id = create_data_source(
             test_result, db, datasource, int(user_id), user_name, user_token,
             owner_org_id=owner_org_id, owner_org_name=owner_org_name,
-            authorization=authorization,
         )
         return response_success(data=data_source_id)
     except Exception as e:
@@ -332,7 +331,23 @@ async def datasource_list(
             source_type,
             organization_namespace_uuids=org_uuids,
         )
+        org_admin_uuids = resolve_organization_admin_uuids_for_delete(
+            user_name=user_name,
+            authorization=authorization,
+            user_token=user_token,
+            isadmin=isadmin,
+        )
         data_sources = [item.to_json() for item in data_sources]
+        for ds in data_sources:
+            attach_can_delete(
+                ds,
+                owner_id=ds.get("owner_id"),
+                user_id=user_id,
+                isadmin=isadmin,
+                org_admin_uuids=org_admin_uuids,
+                namespace_uuid=ds.get("namespace_uuid"),
+                namespace_type=ds.get("namespace_type"),
+            )
         return response_success(data={
             "list": data_sources,
             "total": total
@@ -380,10 +395,33 @@ async def update_datasource(datasource_id: int, datasource: DataSourceUpdate, db
 
 
 @router.delete("/datasource/remove/{datasource_id}", response_model=dict)
-async def delete_datasource(datasource_id: int, db: Session = Depends(get_sync_session)):
-
+async def delete_datasource(
+    datasource_id: int,
+    user_id: Annotated[str | None, Header(alias="User-Id")] = None,
+    isadmin: Annotated[bool | None, Header(alias="isadmin")] = None,
+    user_name: Annotated[str | None, Header(alias="User-Name")] = None,
+    user_token: Annotated[str | None, Header(alias="User-Token")] = None,
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    db: Session = Depends(get_sync_session),
+):
     try:
-
+        datasource = get_datasource(db, datasource_id)
+        if not datasource:
+            return response_fail(msg="数据源不存在")
+        if not can_delete_task(
+            owner_id=datasource.owner_id,
+            user_id=user_id,
+            isadmin=isadmin,
+            org_admin_uuids=resolve_organization_admin_uuids_for_delete(
+                user_name=user_name,
+                authorization=authorization,
+                user_token=user_token,
+                isadmin=isadmin,
+            ),
+            namespace_uuid=getattr(datasource, "namespace_uuid", None),
+            namespace_type=getattr(datasource, "namespace_type", None),
+        ):
+            return response_fail(msg="仅任务创建者或管理员可删除")
         if has_execting_tasks(db, datasource_id):
             return response_fail(msg="存在执行中的任务，无法删除")
         result = delete_data_source(db, datasource_id)
@@ -436,7 +474,6 @@ async def datasource_run_task(datasource_id: int,
         user_token,
         getattr(datasource, "namespace_uuid", None),
         getattr(datasource, "namespace_type", None),
-        authorization=authorization,
     )
     if result:
         return response_success(data="任务执行成功")
@@ -605,7 +642,19 @@ async def delete_collection_task_api(
         )
         if not task:
             return response_fail(msg="任务不存在或无权访问")
-        if not can_delete_task(owner_id=task.owner_id, user_id=user_id, isadmin=isadmin):
+        if not can_delete_task(
+            owner_id=task.owner_id,
+            user_id=user_id,
+            isadmin=isadmin,
+            org_admin_uuids=resolve_organization_admin_uuids_for_delete(
+                user_name=user_name,
+                authorization=authorization,
+                user_token=user_token,
+                isadmin=isadmin,
+            ),
+            namespace_uuid=getattr(task, "namespace_uuid", None),
+            namespace_type=getattr(task, "namespace_type", None),
+        ):
             return response_fail(msg="仅任务创建者或管理员可删除")
         delete_collection_task(db, task_id)
         return response_success(data=True)
@@ -726,7 +775,6 @@ async def run_task(task_id: int,
                 user_token,
                 data.get("namespace_uuid") or collection_task.namespace_uuid,
                 data.get("namespace_type") or collection_task.namespace_type,
-                authorization=authorization,
             )
         else:
             datasource = collection_task.datasource
@@ -739,7 +787,6 @@ async def run_task(task_id: int,
                 user_token,
                 data.get("namespace_uuid") or datasource.namespace_uuid,
                 data.get("namespace_type") or datasource.namespace_type,
-                authorization=authorization,
             )
         if result:
             return response_success(data="任务执行成功")
@@ -753,6 +800,7 @@ async def run_task(task_id: int,
 async def stop_task(
     task_id: int,
     db: Session = Depends(get_sync_session),
+    user_token: Annotated[str | None, Header(alias="User-Token")] = None,
     authorization: Annotated[str | None, Header(alias="Authorization")] = None,
 ):
 
@@ -765,7 +813,7 @@ async def stop_task(
             DataSourceTaskStatusEnum.WAITING.value,
         ):
             return response_fail(msg="该任务执行已结束")
-        result, msg = stop_collection_task(db, collection_task, authorization=authorization)
+        result, msg = stop_collection_task(db, collection_task, user_token=user_token)
         if result:
             return response_success(data=msg or "任务停止成功")
         return response_fail(msg=msg or "任务停止失败")

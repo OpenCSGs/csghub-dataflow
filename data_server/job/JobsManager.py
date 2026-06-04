@@ -167,7 +167,6 @@ def _build_job_task_params(
     user_id=None,
     user_name=None,
     user_token=None,
-    authorization: str | None = None,
     job_cfg=None,
     task_run_time: str | None = None,
 ) -> dict:
@@ -187,7 +186,6 @@ def _build_job_task_params(
         "user_id": user_id,
         "user_name": user_name,
         "user_token": user_token,
-        "authorization": authorization,
         "owner_id": job.owner_id,
         "owner_org_id": job.owner_org_id,
         "owner_org_name": job.owner_org_name,
@@ -507,7 +505,6 @@ def _submit_job_to_csghub(
     namespace: str,
     user_id=None,
     user_name=None,
-    authorization: str | None = None,
     *,
     flow_id: str | None = None,
     reset_work_dir: bool = False,
@@ -534,7 +531,6 @@ def _submit_job_to_csghub(
         user_id=user_id,
         user_name=user_name,
         user_token=user_token,
-        authorization=authorization,
         job_cfg=job_cfg,
         task_run_time=task_run_time,
     )
@@ -567,7 +563,7 @@ def _submit_job_to_csghub(
     )
     job.csghub_request_payload = json.dumps(payload, ensure_ascii=False)
     response = submit_job_to_csghub(
-        payload, namespace=namespace, user_token=user_token, authorization=authorization
+        payload, namespace=namespace, user_token=user_token
     )
     job.csghub_response_payload = json.dumps(response, ensure_ascii=False)
     parsed = ensure_csghub_job_create_success(response)
@@ -605,7 +601,7 @@ def _mark_job_submit_failed(
 
 # def create_new_job(job_cfg, user_id, user_name, user_token,yaml_config):
 def create_new_job(
-    job_cfg, user_id, user_name, user_token, owner_org_id=None, owner_org_name=None, authorization=None
+    job_cfg, user_id, user_name, user_token, owner_org_id=None, owner_org_name=None
 ):
     # replace space to underscore in project name, as the space will lead to job run error
     # print(job_cfg.accelerator)
@@ -637,26 +633,23 @@ def create_new_job(
               )
 
     with get_sync_session() as session:
-        with session.begin():
-            session.add(job)
-            session.flush()
-        session.refresh(job)
         try:
-            _submit_job_to_csghub(
-                session,
-                job,
-                job_cfg,
-                user_token,
-                nu,
-                user_id=user_id,
-                user_name=user_name,
-                authorization=authorization,
-            )
+            with session.begin():
+                session.add(job)
+                session.flush()
+                session.refresh(job)
+                _submit_job_to_csghub(
+                    session,
+                    job,
+                    job_cfg,
+                    user_token,
+                    nu,
+                    user_id=user_id,
+                    user_name=user_name,
+                )
         except Exception as e:
-            _mark_job_submit_failed(job, e, session)
-            session.commit()
+            logger.error("Job CSGHub submit failed, transaction rolled back | error={}", e)
             raise
-        session.commit()
     # from data_server.job.JobExecutor import run_executor
     # executor = setup_executor()
     # executor.submit(run_executor, job_cfg, job.job_id,
@@ -676,7 +669,6 @@ def create_pipline_new_job(
     yaml_config,
     owner_org_id=None,
     owner_org_name=None,
-    authorization=None,
 ):
     # replace space to underscore in project name, as the space will lead to job run error
     # create uuid
@@ -697,27 +689,28 @@ def create_pipline_new_job(
               namespace_type=nt)
 
     with get_sync_session() as session:
-        with session.begin():
-            session.add(job)
-            session.flush()
-        session.refresh(job)
         if job_cfg.is_run:
             try:
-                _submit_job_to_csghub(
-                    session,
-                    job,
-                    job_cfg,
-                    user_token,
-                    nu,
-                    user_id=user_id,
-                    user_name=user_name,
-                    authorization=authorization,
-                )
+                with session.begin():
+                    session.add(job)
+                    session.flush()
+                    session.refresh(job)
+                    _submit_job_to_csghub(
+                        session,
+                        job,
+                        job_cfg,
+                        user_token,
+                        nu,
+                        user_id=user_id,
+                        user_name=user_name,
+                    )
             except Exception as e:
-                _mark_job_submit_failed(job, e, session)
-                session.commit()
+                logger.error("Pipeline job CSGHub submit failed, transaction rolled back | error={}", e)
                 raise
-            session.commit()
+        else:
+            with session.begin():
+                session.add(job)
+                session.flush()
     result = {"job_id": job.job_id,
               "job_name": job.job_name, "status": job.status}
 
@@ -731,7 +724,6 @@ def _submit_existing_job_record(
     user_id,
     user_name,
     user_token,
-    authorization,
     task_run_time: str | None = None,
 ):
     """Waiting: first submit this Job record to CSGHub (fixed flow_id=AC/AD{id})."""
@@ -747,7 +739,6 @@ def _submit_existing_job_record(
         nu,
         user_id=user_id,
         user_name=user_name,
-        authorization=authorization,
         flow_id=build_job_flow_id(job.job_source or "tool", job.job_id),
         reset_work_dir=not bool(job.work_dir),
         task_run_time=task_run_time,
@@ -761,7 +752,6 @@ def _restart_job_record(
     user_id,
     user_name,
     user_token,
-    authorization,
     task_run_time: str | None = None,
 ):
     """Non-waiting: restart with new flow_id to avoid duplicate CSGHub job_id."""
@@ -787,7 +777,6 @@ def _restart_job_record(
             nu,
             user_id=user_id,
             user_name=user_name,
-            authorization=authorization,
             flow_id=restart_flow_id,
             reset_work_dir=True,
             task_run_time=task_run_time,
@@ -809,7 +798,6 @@ def execute_job(
     namespace_uuid,
     namespace_type,
     task_run_time: str = None,
-    authorization=None,
 ) -> tuple[bool, str | None]:
     """
     List "Execute":
@@ -840,7 +828,6 @@ def execute_job(
                 user_id=user_id,
                 user_name=user_name,
                 user_token=user_token,
-                authorization=authorization,
                 task_run_time=task_run_time,
             )
         elif job.status in {
@@ -855,7 +842,6 @@ def execute_job(
                 user_id=user_id,
                 user_name=user_name,
                 user_token=user_token,
-                authorization=authorization,
                 task_run_time=task_run_time,
             )
         else:
@@ -880,7 +866,6 @@ def run_pipline_job_only(
     namespace_uuid,
     namespace_type,
     task_run_time: str = None,
-    authorization=None,
 ):
     """Legacy caller; delegates to execute_job."""
     return execute_job(
@@ -892,7 +877,6 @@ def run_pipline_job_only(
         namespace_uuid,
         namespace_type,
         task_run_time,
-        authorization,
     )
 
 
@@ -900,7 +884,7 @@ def run_pipline_job_only(
 def stop_pipline_task(
     db_session: Session,
     job: Job,
-    authorization: str | None = None,
+    user_token: str | None = None,
 ):
     """Cancel pipeline/tool task: CSGHub DELETE first, then mark canceled locally."""
     resolved_job_id = resolve_csghub_remote_job_id(
@@ -913,7 +897,7 @@ def stop_pipline_task(
     remote_ok, remote_err = try_cancel_csghub_job(
         namespace_uuid=job.namespace_uuid,
         csghub_job_id=job.csghub_job_id,
-        authorization=authorization,
+        user_token=user_token,
         flow_id=job.flow_id,
         csghub_response_payload=job.csghub_response_payload,
     )

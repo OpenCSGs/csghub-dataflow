@@ -18,7 +18,7 @@ from data_server.utils.csghub_namespace import (
     NAMESPACE_TYPE_ORGANIZATION,
     NAMESPACE_TYPE_PERSONAL,
 )
-from data_server.utils.csghub_user_namespaces import fetch_organization_namespace_uuids
+from data_server.utils.csghub_user_namespaces import fetch_organization_admin_uuids, fetch_organization_namespace_uuids
 
 
 def normalize_user_id(user_id) -> int | None:
@@ -78,6 +78,27 @@ def resolve_organization_namespace_uuids_for_list(
     if organization_namespace_uuids is not None:
         return _dedupe_namespace_uuids(organization_namespace_uuids)
     return fetch_organization_namespace_uuids(
+        user_name,
+        authorization=authorization,
+        user_token=user_token,
+    )
+
+
+def resolve_organization_admin_uuids_for_delete(
+    *,
+    user_name: str | None = None,
+    authorization: str | None = None,
+    user_token: str | None = None,
+    isadmin: bool = False,
+) -> list[str]:
+    """
+    Return organization namespace UUIDs where user has admin role.
+    Used for delete permission check: org admin can delete tasks in their org.
+    System admin does not need this check (returns empty list).
+    """
+    if isadmin:
+        return []
+    return fetch_organization_admin_uuids(
         user_name,
         authorization=authorization,
         user_token=user_token,
@@ -255,13 +276,54 @@ def apply_active_filter(query: Query, model) -> Query:
     return query
 
 
-def can_delete_task(*, owner_id, user_id, isadmin: bool = False) -> bool:
+def can_delete_task(
+    *,
+    owner_id,
+    user_id,
+    isadmin: bool = False,
+    org_admin_uuids: list[str] | None = None,
+    namespace_uuid: str | None = None,
+    namespace_type: str | None = None,
+) -> bool:
+    """Check if user can delete a task: system admin, task creator, or org admin."""
     if isadmin:
+        logger.info(
+            "can_delete_task | owner_id={} | user_id={} | isadmin=True | "
+            "is_creator=N/A | is_org_admin=N/A | can_delete=True",
+            owner_id,
+            user_id,
+        )
         return True
     uid = normalize_user_id(user_id)
-    if uid is None or owner_id is None:
-        return False
-    return str(owner_id) == str(uid)
+    is_creator = uid is not None and owner_id is not None and str(owner_id) == str(uid)
+    if is_creator:
+        logger.info(
+            "can_delete_task | owner_id={} | user_id={} (uid={}) | isadmin=False | "
+            "is_creator=True | is_org_admin=N/A | can_delete=True",
+            owner_id,
+            user_id,
+            uid,
+        )
+        return True
+    ns = normalize_namespace_uuid(namespace_uuid)
+    org_admin_set = set(org_admin_uuids or [])
+    is_org_admin = bool(org_admin_uuids and namespace_type == NAMESPACE_TYPE_ORGANIZATION and ns and ns in org_admin_set)
+    result = is_org_admin
+    logger.info(
+        "can_delete_task | owner_id={} | user_id={} (uid={}) | isadmin=False | "
+        "is_creator=False | is_org_admin={} | "
+        "namespace_uuid={} | namespace_type={} | org_admin_uuids={} | "
+        "can_delete={}",
+        owner_id,
+        user_id,
+        uid,
+        is_org_admin,
+        namespace_uuid,
+        namespace_type,
+        org_admin_uuids,
+        result,
+    )
+    return result
 
 
 def attach_can_delete(
@@ -270,9 +332,17 @@ def attach_can_delete(
     owner_id,
     user_id,
     isadmin: bool = False,
+    org_admin_uuids: list[str] | None = None,
+    namespace_uuid: str | None = None,
+    namespace_type: str | None = None,
 ) -> dict:
     payload["can_delete"] = can_delete_task(
-        owner_id=owner_id, user_id=user_id, isadmin=isadmin
+        owner_id=owner_id,
+        user_id=user_id,
+        isadmin=isadmin,
+        org_admin_uuids=org_admin_uuids,
+        namespace_uuid=namespace_uuid,
+        namespace_type=namespace_type,
     )
     return payload
 

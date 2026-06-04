@@ -92,10 +92,40 @@ def parse_user_namespace_scopes(body: Any) -> tuple[str | None, list[str]]:
     return personal_uuid, org_uuids
 
 
-def parse_organization_namespace_uuids(body: Any) -> list[str]:
-    """Organization namespace_uuid only (legacy)."""
-    _, org_uuids = parse_user_namespace_scopes(body)
-    return org_uuids
+def parse_user_org_admin_uuids(body: Any) -> list[str]:
+    """
+    Parse organization namespace UUIDs where the user has 'admin' role.
+    CSGHub /api/v1/user/{username} now includes orgs[].role field.
+    Returns deduplicated list of namespace UUIDs for orgs where role == 'admin'.
+    """
+    if not isinstance(body, dict):
+        return []
+    root = body.get("data") if isinstance(body.get("data"), dict) else body
+    if not isinstance(root, dict):
+        return []
+
+    orgs = root.get("orgs") or root.get("Orgs") or []
+    if not isinstance(orgs, list):
+        return []
+
+    admin_uuids: list[str] = []
+    seen: set[str] = set()
+    for org in orgs:
+        if not isinstance(org, dict):
+            continue
+        role = str(org.get("role") or "").strip().lower()
+        if role != "admin":
+            continue
+        nested = org.get("namespace") or org.get("Namespace")
+        if isinstance(nested, dict):
+            org_uuid = str(nested.get("UUID") or nested.get("uuid") or "").strip()
+        else:
+            org_uuid = str(org.get("uuid") or org.get("UUID") or "").strip()
+        if org_uuid and org_uuid not in seen:
+            seen.add(org_uuid)
+            admin_uuids.append(org_uuid)
+
+    return admin_uuids
 
 
 def fetch_user_namespace_scopes(
@@ -174,3 +204,69 @@ def fetch_organization_namespace_uuids(
         user_token=user_token,
     )
     return org_uuids
+
+
+def fetch_organization_admin_uuids(
+    user_name: str | None,
+    *,
+    authorization: str | None = None,
+    user_token: str | None = None,
+) -> list[str]:
+    """Call CSGHub GET /user/{username}; return org namespace UUIDs where user has admin role."""
+    name = str(user_name or "").strip()
+    if not name:
+        return []
+
+    endpoint = os.getenv("CSGHUB_ENDPOINT", "").rstrip("/")
+    if not endpoint:
+        logger.warning("CSGHUB_ENDPOINT not set; skip fetching org admin uuids")
+        return []
+
+    path = os.getenv("CSGHUB_USER_NAMESPACES_API_PATH", "/api/v1/user/{username}").strip()
+    if not path.startswith("/"):
+        path = f"/{path}"
+    if "{username}" not in path:
+        path = "/user/{username}"
+    url = parse.urljoin(
+        f"{endpoint}/",
+        path.replace("{username}", parse.quote(name, safe="")).lstrip("/"),
+    )
+
+    headers = {"Accept": "application/json"}
+    if authorization and str(authorization).strip():
+        headers["Authorization"] = str(authorization).strip()
+    elif user_token and str(user_token).strip():
+        token = str(user_token).strip()
+        headers["Authorization"] = token if token.lower().startswith("bearer ") else f"Bearer {token}"
+
+    req = request.Request(url, headers=headers, method="GET")
+    try:
+        with request.urlopen(req, timeout=_get_http_timeout()) as resp:
+            raw = resp.read().decode("utf-8")
+        body = json.loads(raw) if raw else {}
+        admin_uuids = parse_user_org_admin_uuids(body)
+        logger.info(
+            "fetch_organization_admin_uuids | user={} | url={} | "
+            "http_status={} | raw_body={} | admin_uuids={}",
+            name,
+            url,
+            resp.getcode(),
+            raw[:2000],
+            admin_uuids,
+        )
+        return admin_uuids
+    except error.HTTPError as exc:
+        logger.warning(
+            "CSGHub org admin uuids HTTP error | user={} | status={} | url={}",
+            name,
+            exc.code,
+            url,
+        )
+    except Exception as exc:
+        logger.warning(
+            "CSGHub org admin uuids request failed | user={} | url={} | err={}",
+            name,
+            url,
+            exc,
+        )
+    return []

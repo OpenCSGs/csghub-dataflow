@@ -9,7 +9,7 @@ from typing import Any
 from loguru import logger
 
 from data_server.pod.http_retry_client import post_json_with_retry
-from data_server.utils.csghub_client import _build_api_jwt_headers, get_dataflow_trace_sync_url
+from data_server.utils.csghub_client import _build_api_bearer_headers, get_dataflow_trace_sync_url
 from data_server.utils.trace_filenames import is_legacy_trace_filename
 
 
@@ -72,13 +72,13 @@ def collect_trace_payload(
 def push_trace_to_dataflow_api(
     payload: dict[str, Any],
     *,
-    authorization: str | None,
+    user_token: str | None,
 ) -> dict[str, Any]:
-    if not authorization or not str(authorization).strip():
-        raise ValueError("authorization (JWT) is required for trace sync")
+    if not user_token or not str(user_token).strip():
+        raise ValueError("user_token is required for trace sync")
 
     url = get_trace_sync_url()
-    headers = _build_api_jwt_headers(authorization)
+    headers = _build_api_bearer_headers(user_token)
     internal_token = (
         os.getenv("DATAFLOW_INTERNAL_TOKEN", "").strip()
         or os.getenv("CSGHUB_DATAFLOW_CALLBACK_TOKEN", "").strip()
@@ -109,7 +109,7 @@ def sync_output_trace(
     flow_id: str,
     output_dir: str,
     operator_name: str,
-    authorization: str | None,
+    user_token: str | None,
     job_id: int | None = None,
     operator_index: int | None = None,
 ) -> bool:
@@ -117,9 +117,9 @@ def sync_output_trace(
     if not operator_name:
         logger.warning("sync_output_trace skipped: missing operator_name flow_id={}", flow_id)
         return False
-    if not authorization or not str(authorization).strip():
+    if not user_token or not str(user_token).strip():
         logger.warning(
-            "sync_output_trace skipped: missing authorization (JWT) flow_id={} operator={}",
+            "sync_output_trace skipped: missing user_token flow_id={} operator={}",
             flow_id,
             operator_name,
         )
@@ -143,7 +143,7 @@ def sync_output_trace(
                 operator_name,
             )
             return False
-        push_trace_to_dataflow_api(payload, authorization=authorization)
+        push_trace_to_dataflow_api(payload, user_token=user_token)
         return True
     except Exception as exc:
         logger.warning(

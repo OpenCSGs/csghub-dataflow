@@ -99,7 +99,6 @@ def _submit_collection_task_to_csghub(
     user_token: str | None,
     namespace: str,
     user_name: str | None = None,
-    authorization: str | None = None,
 ):
     flow_id = build_job_flow_id("datasource", collection_task.id)
     collection_task.flow_id = flow_id
@@ -139,7 +138,6 @@ def _submit_collection_task_to_csghub(
         "owner_org_name": collection_task.owner_org_name,
         "user_name": user_name,
         "user_token": user_token,
-        "authorization": authorization,
         "flow_id": flow_id,
         "cluster_id": collection_task.cluster_id,
         "cluster_name": collection_task.cluster_name,
@@ -167,7 +165,7 @@ def _submit_collection_task_to_csghub(
     )
     collection_task.csghub_request_payload = json.dumps(payload, ensure_ascii=False)
     response = submit_job_to_csghub(
-        payload, namespace=namespace, user_token=user_token, authorization=authorization
+        payload, namespace=namespace, user_token=user_token
     )
     collection_task.csghub_response_payload = json.dumps(response, ensure_ascii=False)
     parsed = ensure_csghub_job_create_success(response)
@@ -192,7 +190,6 @@ def create_data_source(
     user_token: str,
     owner_org_id: str | None = None,
     owner_org_name: str | None = None,
-    authorization: str | None = None,
 ):
     """
     Create a data source
@@ -264,7 +261,6 @@ def create_data_source(
                 user_token,
                 namespace_uuid,
                 user_name=user_name,
-                authorization=authorization,
             )
             collection_task.task_status = DataSourceTaskStatusEnum.WAITING.value
         except Exception as e:
@@ -595,7 +591,6 @@ def execute_collection_task(
     user_token: str,
     namespace_uuid: str,
     namespace_type: str,
-    authorization: str | None = None,
 ):
     """
     Execute a task
@@ -620,7 +615,6 @@ def execute_collection_task(
             user_token,
             nu,
             user_name=user_name,
-            authorization=authorization,
         )
         collection_task.task_status = DataSourceTaskStatusEnum.WAITING.value
         db_session.commit()
@@ -635,7 +629,7 @@ def execute_collection_task(
 def stop_collection_task(
     db_session: Session,
     collection_task: CollectionTask,
-    authorization: str | None = None,
+    user_token: str | None = None,
 ):
     """Cancel collection task: CSGHub DELETE first, then mark canceled locally."""
     namespace_uuid = collection_task.namespace_uuid
@@ -651,7 +645,7 @@ def stop_collection_task(
     remote_ok, remote_err = try_cancel_csghub_job(
         namespace_uuid=namespace_uuid,
         csghub_job_id=collection_task.csghub_job_id,
-        authorization=authorization,
+        user_token=user_token,
         flow_id=collection_task.flow_id,
         csghub_response_payload=collection_task.csghub_response_payload,
     )
@@ -679,7 +673,6 @@ def execute_new_collection_task(
     user_token: str,
     namespace_uuid: str,
     namespace_type: str,
-    authorization: str | None = None,
 ):
     """
     Execute a task
@@ -722,7 +715,6 @@ def execute_new_collection_task(
                 user_token,
                 nu,
                 user_name=user_name,
-                authorization=authorization,
             )
             collection_task.task_status = DataSourceTaskStatusEnum.WAITING.value
             db_session.commit()
