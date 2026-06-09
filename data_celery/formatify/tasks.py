@@ -346,10 +346,7 @@ def format_task(task_id: int, user_name: str, user_token: str):
         # Track used filenames to handle duplicate names
         used_names = {}
         
-        # Iterate files and convert/upload in real-time
-        upload_failure_count = 0  # Consecutive upload failure count (initial upload failure already counted)
-        max_upload_failures = 3  # Maximum consecutive upload failures
-        
+        # Iterate files and convert
         for root, dirs, files in os.walk(ingester_result):
             # Check if task is stopped - with database connection error handling
             db_session, format_task = _refresh_task_with_reconnect(db_session, format_task, task_id)
@@ -421,83 +418,23 @@ def format_task(task_id: int, user_name: str, user_token: str):
                     # to path: relative to converted_dir
                     to_rel_path = final_to_file.replace('\\', '/')
                     
-                    # Immediately upload successfully converted file (update statistics only after successful upload)
-                    try:
-                        exporter.export_large_folder()
-                        insert_formatity_task_log_info(task_uid, f'Uploaded converted file: {final_to_file}')
-                        
-                        # Update statistics only after file upload succeeds
-                        success_count += 1
-                        if skip_meta:
-                            meta_data["files"].append({
-                                "from": from_rel_path,
-                                "to": to_rel_path,
-                                "status": "success"
-                            })
-                            meta_data["result"]["success"] = success_count
-                        upload_failure_count = 0  # Reset failure count
-                    except Exception as e:
-                        upload_failure_count += 1
-                        error_msg = f'[上传失败 {upload_failure_count}/{max_upload_failures}] 文件上传失败: {final_to_file}, 错误: {str(e)}'
-                        insert_formatity_task_log_error(task_uid, error_msg)
-                        logger.error(error_msg)
-                        
-                        # File upload failed, immediately update statistics to failure and update meta.log
-                        failure_count += 1
-                        if skip_meta:
-                            meta_data["files"].append({
-                                "from": from_rel_path,
-                                "to": to_rel_path,
-                                "status": "failure",
-                                "error": f"上传失败: {str(e)}"
-                            })
-                            meta_data["result"]["failure"] = failure_count
-                            
-                            # Ensure total remains unchanged (should not be modified)
-                            assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
-                            
-                            # Immediately update and upload meta.log (record failed uploads)
-                            with open(meta_file_path, 'w', encoding='utf-8') as f:
-                                json.dump(meta_data, f, indent=2, ensure_ascii=False)
-                            try:
-                                exporter.export_large_folder()
-                                insert_formatity_task_log_info(task_uid, f'Updated meta.log with upload failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                                # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
-                            except Exception as e:
-                                # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
-                                error_msg = f'meta.log 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
-                                insert_formatity_task_log_error(task_uid, error_msg)
-                                logger.error(error_msg)
-                                # Don't increment upload_failure_count, doesn't affect file upload failure count
-                        
-                        # If too many consecutive upload failures, stop task
-                        if upload_failure_count >= max_upload_failures:
-                            error_msg = f'[任务终止] 连续上传失败 {upload_failure_count} 次，任务已停止。'
-                            insert_formatity_task_log_error(task_uid, error_msg)
-                            logger.error(error_msg)
-                            _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
-                            raise RuntimeError(f'连续上传失败 {upload_failure_count} 次，任务已停止')
+                    # Record conversion success (upload happens once at the end)
+                    success_count += 1
+                    insert_formatity_task_log_info(task_uid, f'Converted and copied: {final_to_file}')
                     
-                    # When file upload succeeds, update and upload meta.log (only if skip_meta is True)
                     if skip_meta:
+                        meta_data["files"].append({
+                            "from": from_rel_path,
+                            "to": to_rel_path,
+                            "status": "success"
+                        })
+                        meta_data["result"]["success"] = success_count
                         # Ensure total remains unchanged (should not be modified)
                         assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
-                        
-                        if upload_failure_count == 0:  # Only update when upload succeeds (already updated above on failure)
-                            with open(meta_file_path, 'w', encoding='utf-8') as f:
-                                json.dump(meta_data, f, indent=2, ensure_ascii=False)
-                            try:
-                                exporter.export_large_folder()
-                                insert_formatity_task_log_info(task_uid, f'Updated and uploaded meta.log (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                                # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
-                            except Exception as e:
-                                # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
-                                error_msg = f'meta.log 更新上传失败 (文件: {final_to_file}), 错误: {str(e)}'
-                                insert_formatity_task_log_error(task_uid, error_msg)
-                                logger.error(error_msg)
-                                # Don't increment upload_failure_count, doesn't affect file upload failure count
+                        with open(meta_file_path, 'w', encoding='utf-8') as f:
+                            json.dump(meta_data, f, indent=2, ensure_ascii=False)
                 else:
-                    # Also record failed conversions to meta.log (only if skip_meta is True)
+                    # Record conversion failure
                     failure_count += 1
                     if skip_meta:
                         meta_entry = {
@@ -512,22 +449,27 @@ def format_task(task_id: int, user_name: str, user_token: str):
                         meta_data["result"]["failure"] = failure_count
                         # Ensure total remains unchanged (should not be modified)
                         assert meta_data["result"]["total"] == total_count, f"Total should remain {total_count}, but got {meta_data['result']['total']}"
-                        
-                        # Update and upload meta.log (include failure records, don't raise exception, only log)
                         with open(meta_file_path, 'w', encoding='utf-8') as f:
                             json.dump(meta_data, f, indent=2, ensure_ascii=False)
-                        try:
-                            exporter.export_large_folder()
-                            insert_formatity_task_log_info(task_uid, f'Updated meta.log with failure record (total: {total_count}, success: {success_count}, failure: {failure_count})')
-                            # Note: meta.log upload success doesn't reset upload_failure_count, only file upload success resets it
-                        except Exception as e:
-                            # meta.log update/upload failure only logs, doesn't raise exception, doesn't affect file upload failure count
-                            error_msg = f'meta.log 更新上传失败 (转换失败的文件), 错误: {str(e)}'
-                            insert_formatity_task_log_error(task_uid, error_msg)
-                            logger.error(error_msg)
-                            # Don't increment upload_failure_count, doesn't affect file upload failure count
         
         insert_formatity_task_log_info(task_uid, f'All files processed. Total: {total_count}, Success: {success_count}, Failure: {failure_count}')
+        
+        # Final one-shot upload of all converted files
+        if success_count > 0:
+            insert_formatity_task_log_info(task_uid, f'Starting final upload: {success_count} files')
+            max_retries = 3
+            for retry in range(max_retries):
+                try:
+                    exporter.export_large_folder()
+                    insert_formatity_task_log_info(task_uid, f'Final upload succeeded')
+                    break
+                except Exception as e:
+                    if retry < max_retries - 1:
+                        insert_formatity_task_log_info(task_uid, f'Final upload failed (attempt {retry+1}/{max_retries}): {e}, retrying...')
+                    else:
+                        insert_formatity_task_log_error(task_uid, f'Final upload failed after {max_retries} attempts: {e}')
+                        _commit_with_retry(db_session, format_task, task_id, DataFormatTaskStatusEnum.ERROR.value)
+                        return
         
         # Determine final task status based on conversion results
         if success_count == 0 and failure_count > 0:
