@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
-from sqlalchemy import create_engine, Engine, text
+from sqlalchemy import create_engine, Engine, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from collections.abc import AsyncGenerator
 import os
@@ -250,6 +250,369 @@ def add_csghub_integration_columns():
     })
 
 
+def _sqlalchemy_type_to_sql(col_type) -> str:
+    """Convert a SQLAlchemy Column type to a SQL DDL type string."""
+    from sqlalchemy import (
+        Integer, BigInteger, SmallInteger,
+        String, Text, Unicode, UnicodeText,
+        Boolean,
+        DateTime, Date, Time,
+        Float, Numeric,
+        JSON,
+    )
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    type_map = {
+        Integer: "INTEGER",
+        BigInteger: "BIGINT",
+        SmallInteger: "SMALLINT",
+        String: "VARCHAR",
+        Text: "TEXT",
+        Unicode: "VARCHAR",
+        UnicodeText: "TEXT",
+        Boolean: "BOOLEAN",
+        DateTime: "TIMESTAMP",
+        Date: "DATE",
+        Time: "TIME",
+        Float: "FLOAT",
+        Numeric: "NUMERIC",
+        JSON: "JSON",
+        JSONB: "JSONB",
+    }
+
+    for py_type, sql_name in type_map.items():
+        if isinstance(col_type, py_type):
+            if isinstance(col_type, String) and col_type.length:
+                return f"VARCHAR({col_type.length})"
+            return sql_name
+
+    return str(col_type).upper()
+
+
+def sync_missing_columns_for_tables(table_models: list):
+    """
+    自动检测所有 ORM 模型中定义的字段，与数据库实际字段对比，
+    对于数据库中缺失的字段，自动执行 ALTER TABLE ADD COLUMN 补齐。
+
+    这覆盖了未来任意模型字段新增的场景，不再需要为每个新字段硬编码
+    单独的 add_xxx_column() 函数。每个表单独提交事务，失败不影响其他表。
+    """
+    inspector = inspect(_SYNC_ENGINE)
+
+    for table in table_models:
+        table_name = table.name
+        try:
+            db_columns = {col["name"] for col in inspector.get_columns(table_name)}
+        except Exception:
+            logger.debug(f"Table '{table_name}' does not exist yet, skipping column sync")
+            continue
+
+        model_columns = {col.name: col for col in table.columns}
+
+        for col_name, col in model_columns.items():
+            if col_name not in db_columns:
+                col_type_sql = _sqlalchemy_type_to_sql(col.type)
+                nullable = "" if col.nullable else " NOT NULL"
+                default_clause = ""
+                if col.default is not None:
+                    default_val = col.default.arg
+                    if isinstance(default_val, bool):
+                        default_clause = f" DEFAULT {'TRUE' if default_val else 'FALSE'}"
+                    elif isinstance(default_val, (int, float)):
+                        default_clause = f" DEFAULT {default_val}"
+                    elif isinstance(default_val, str):
+                        default_clause = f" DEFAULT '{default_val}'"
+
+                alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type_sql}{default_clause}{nullable}"
+                logger.info(f"Detected missing column: {table_name}.{col_name} -> executing: {alter_sql}")
+
+                with get_sync_session() as session:
+                    try:
+                        session.execute(text(alter_sql))
+                        session.commit()
+                        logger.info(f"Column '{table_name}.{col_name}' added successfully")
+                    except Exception as e:
+                        session.rollback()
+                        logger.error(f"Failed to add column '{table_name}.{col_name}': {e}")
+
+
+def drop_obsolete_columns():
+    """
+    删除 ORM 模型中已不存在、但数据库中仍然残留的废弃字段。
+
+    本次 Argo 迁移移除的字段：
+      - job: job_celery_uuid, job_celery_work_name
+      - collection_tasks: task_celery_uid
+      - data_format_tasks: task_celery_uid
+
+    使用 DROP COLUMN IF EXISTS，重复执行安全。
+    """
+    obsolete_columns = {
+        "job": ["job_celery_uuid", "job_celery_work_name"],
+        "collection_tasks": ["task_celery_uid"],
+        "data_format_tasks": ["task_celery_uid"],
+    }
+
+    logger.info("Checking for obsolete columns to drop...")
+    with get_sync_session() as session:
+        for table_name, columns in obsolete_columns.items():
+            for col_name in columns:
+                try:
+                    session.execute(text(f"ALTER TABLE {table_name} DROP COLUMN IF EXISTS {col_name}"))
+                    session.commit()
+                    logger.info(f"Dropped obsolete column '{table_name}.{col_name}' (if existed)")
+                except Exception as e:
+                    session.rollback()
+                    logger.warning(f"Could not drop obsolete column '{table_name}.{col_name}': {e}")
+
+
+def auto_drop_obsolete_columns(table_models: list):
+    """
+    自动对比数据库实际列与 ORM 模型定义的列，删除数据库中多余（ORM 已不再定义）的列。
+
+    使用 SQLAlchemy Inspector 获取数据库实际列清单，与 ORM 模型的 table.columns 对比，
+    对 ORM 中不存在的列执行 DROP COLUMN IF EXISTS。
+    每个表单独提交事务，失败不影响其他表。
+    """
+    inspector = inspect(_SYNC_ENGINE)
+
+    for table in table_models:
+        table_name = table.name
+        try:
+            db_columns = {col["name"] for col in inspector.get_columns(table_name)}
+        except Exception:
+            logger.debug(f"Table '{table_name}' does not exist yet, skipping obsolete column check")
+            continue
+
+        model_columns = {col.name for col in table.columns}
+
+        for col_name in db_columns - model_columns:
+            logger.info(f"Detected obsolete column: {table_name}.{col_name} -> dropping...")
+            with get_sync_session() as session:
+                try:
+                    session.execute(text(f"ALTER TABLE {table_name} DROP COLUMN IF EXISTS {col_name}"))
+                    session.commit()
+                    logger.info(f"Dropped obsolete column '{table_name}.{col_name}'")
+                except Exception as e:
+                    session.rollback()
+                    logger.error(f"Failed to drop obsolete column '{table_name}.{col_name}': {e}")
+
+
+# ============================================================
+#  Schema Version Management
+# ============================================================
+
+SCHEMA_VERSION = "1.0.4"
+
+
+def _version_to_tuple(v: str) -> tuple:
+    """将版本号字符串转为可比较的元组，如 '1.0.10' -> (1, 0, 10)。"""
+    try:
+        return tuple(int(x) for x in v.split("."))
+    except Exception:
+        return (0,)
+
+
+def _ensure_version_tracking_table():
+    """确保 deletion_status 表存在且结构正确（有主键自增 id）。"""
+    try:
+        with get_sync_session() as session:
+            # Step 1: 创建表（不存在时）
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS deletion_status (
+                    id SERIAL PRIMARY KEY,
+                    version VARCHAR(50),
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT (now() AT TIME ZONE 'Asia/Shanghai')
+                )
+            """))
+            session.commit()
+
+            # Step 2: 修复已有表缺少 id 列的情况
+            result = session.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'deletion_status' AND column_name = 'id'
+            """))
+            if result.fetchone() is None:
+                logger.info("Adding id column to existing deletion_status table...")
+                session.execute(text("ALTER TABLE deletion_status ADD COLUMN id SERIAL"))
+                session.commit()
+
+            # Step 3: 确保 id 列有 PRIMARY KEY 约束
+            result = session.execute(text("""
+                SELECT kc.column_name
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kc ON tc.constraint_name = kc.constraint_name
+                WHERE tc.table_name = 'deletion_status' AND tc.constraint_type = 'PRIMARY KEY'
+            """))
+            pk_columns = [row[0] for row in result.fetchall()]
+            if 'id' not in pk_columns:
+                logger.info("Adding PRIMARY KEY on id column...")
+                session.execute(text("ALTER TABLE deletion_status ADD PRIMARY KEY (id)"))
+                session.commit()
+
+            # Step 4: 确保 id 有对应的 SEQUENCE，支持自动递增
+            seq_name = "deletion_status_id_seq"
+            result = session.execute(text(f"""
+                SELECT sequence_name FROM information_schema.sequences
+                WHERE sequence_name = '{seq_name}'
+            """))
+            if result.fetchone() is None:
+                logger.info(f"Creating sequence {seq_name} for auto-increment...")
+                session.execute(text(f"CREATE SEQUENCE {seq_name}"))
+                session.execute(text(f"ALTER SEQUENCE {seq_name} OWNED BY deletion_status.id"))
+                session.commit()
+            else:
+                session.execute(text(f"ALTER SEQUENCE {seq_name} OWNED BY deletion_status.id"))
+                session.commit()
+
+            # Step 5: 设置 id 默认值从序列取值
+            session.execute(text(f"""
+                ALTER TABLE deletion_status
+                ALTER COLUMN id SET DEFAULT nextval('{seq_name}')
+            """))
+            session.commit()
+
+            # Step 6: 同步序列当前值，避免主键冲突
+            result = session.execute(text("SELECT COALESCE(MAX(id), 0) + 1 FROM deletion_status"))
+            next_val = result.scalar()
+            session.execute(text(f"ALTER SEQUENCE {seq_name} RESTART WITH {next_val}"))
+            session.commit()
+
+    except Exception as e:
+        logger.warning(f"Could not ensure deletion_status table: {e}")
+
+
+def get_db_version() -> str:
+    """读取数据库当前已应用的 schema 版本号。"""
+    _ensure_version_tracking_table()
+    try:
+        with get_sync_session() as session:
+            result = session.execute(
+                text("SELECT version FROM deletion_status ORDER BY id DESC LIMIT 1")
+            )
+            version = result.scalar_one_or_none()
+            return version if version else "0.0.0"
+    except Exception as e:
+        logger.warning(f"Could not read database schema version: {e}")
+        return "0.0.0"
+
+
+def mark_schema_version(version: str):
+    """在 deletion_status 表中记录一个 schema 版本已被应用。"""
+    try:
+        with get_sync_session() as session:
+            session.execute(
+                text("INSERT INTO deletion_status (version, description) VALUES (:ver, :desc)"),
+                {"ver": version, "desc": f"Schema migration applied: version {version}"},
+            )
+            session.commit()
+            logger.info(f"Schema version {version} recorded in database")
+    except Exception as e:
+        logger.warning(f"Could not record schema version {version}: {e}")
+
+
+# ============================================================
+#  Versioned Schema Migrations
+# ============================================================
+
+def _migration_v1_0_3(tables: list):
+    """
+    v1.0.3 迁移：Argo 之前累积的字段新增。
+    包含 first_op、mineru_api_url、mineru_backend、skip_meta 四个列。
+    使用 IF NOT EXISTS 检查，幂等可重复执行。
+    """
+    logger.info("--- Applying schema migration v1.0.3 (pre-Argo column additions) ---")
+    steps = [
+        ("add_first_op_column", add_first_op_column),
+        ("add_mineru_api_url_column", add_mineru_api_url_column),
+        ("add_mineru_backend_column", add_mineru_backend_column),
+        ("add_skip_meta_column", add_skip_meta_column),
+    ]
+    for name, fn in steps:
+        try:
+            fn()
+        except Exception as e:
+            logger.error(f"Migration v1.0.3 - {name} failed: {e}")
+
+
+def _migration_v1_0_4(tables: list):
+    """
+    v1.0.4 迁移：Argo 升级 ——
+      1. 删除 Celery 废弃字段（job_celery_uuid, job_celery_work_name, task_celery_uid）
+      2. 新增 CSGHub 集成字段（owner_org_id, flow_id, cluster_id 等 56 个列）
+      3. 兜底检测：自动补齐 ORM 中有而 DB 中无的字段 / 删除 DB 中有而 ORM 中无的字段
+    """
+    logger.info("--- Applying schema migration v1.0.4 (Argo upgrade) ---")
+    steps = [
+        ("drop_obsolete_columns", drop_obsolete_columns),
+        ("add_csghub_integration_columns", add_csghub_integration_columns),
+    ]
+    for name, fn in steps:
+        try:
+            fn()
+        except Exception as e:
+            logger.error(f"Migration v1.0.4 - {name} failed: {e}")
+
+    # 兜底安全检测：对比 ORM 模型与数据库实际结构的差异
+    for name, fn in [
+        ("sync_missing_columns_for_tables", lambda: sync_missing_columns_for_tables(tables)),
+        ("auto_drop_obsolete_columns", lambda: auto_drop_obsolete_columns(tables)),
+    ]:
+        try:
+            fn()
+        except Exception as e:
+            logger.error(f"Migration v1.0.4 safety check - {name} failed: {e}")
+
+
+# 版本号 → 迁移函数 注册表
+# 新增版本时只需在此追加条目即可
+SCHEMA_MIGRATIONS = {
+    "1.0.3": _migration_v1_0_3,
+    "1.0.4": _migration_v1_0_4,
+}
+
+
+def run_schema_migrations(tables: list):
+    """
+    根据数据库当前版本与目标 SCHEMA_VERSION 的差异，按版本顺序执行所有未应用的迁移。
+
+    版本记录存储在 deletion_status 表中，每条迁移成功后会插入一条记录。
+    每个版本的迁移函数内部都是幂等的，即使重复执行也不会出错。
+    """
+    current_version = get_db_version()
+    logger.info(f"Database schema version: current={current_version}, target={SCHEMA_VERSION}")
+
+    current_tup = _version_to_tuple(current_version)
+
+    # 找出所有 > current_version 的迁移版本，按版本号排序
+    pending = sorted(
+        [v for v in SCHEMA_MIGRATIONS if _version_to_tuple(v) > current_tup],
+        key=_version_to_tuple,
+    )
+
+    if not pending:
+        logger.info("Database schema is up to date, no migrations to apply")
+        return
+
+    logger.info(f"Pending schema migrations: {pending}")
+
+    for version in pending:
+        logger.info(f"--- Applying schema migration {version} ---")
+        try:
+            SCHEMA_MIGRATIONS[version](tables)
+            mark_schema_version(version)
+            logger.info(f"--- Schema migration {version} completed ---")
+        except Exception as e:
+            logger.error(f"Schema migration {version} failed: {e}")
+            # 记录版本避免下次重复执行失败的迁移，同时不阻断启动
+            try:
+                mark_schema_version(version)
+            except Exception:
+                pass
+
+
+
 _initialized = False
 from data_server.database.bean.base import Base
 from data_server.database.bean.work import Worker
@@ -288,33 +651,9 @@ def create_tables():
 
     _initialized = True
 
-    logger.info("Starting database column migrations...")
-    try:
-        add_first_op_column()
-    except Exception as e:
-        logger.error(f"Error in add_first_op_column: {e}")
-    
-    try:
-        add_mineru_api_url_column()
-    except Exception as e:
-        logger.error(f"Error in add_mineru_api_url_column: {e}")
-    
-    try:
-        add_mineru_backend_column()
-    except Exception as e:
-        logger.error(f"Error in add_mineru_backend_column: {e}")
-    
-    try:
-        add_skip_meta_column()
-    except Exception as e:
-        logger.error(f"Error in add_skip_meta_column: {e}")
-
-    try:
-        add_csghub_integration_columns()
-    except Exception as e:
-        logger.error(f"Error in add_csghub_integration_columns: {e}")
-    
-    logger.info("Database column migrations completed")
+    logger.info("Starting database versioned schema migrations...")
+    run_schema_migrations(business_tables)
+    logger.info("Database schema migrations completed")
 def is_table_initialized(table_name: str) -> bool:
     """
     Check if a specific table contains any data.
