@@ -1,0 +1,40 @@
+stages:
+  - build
+  - test
+
+variables:
+  # Docker
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+  DOCKER_BUILDKIT: 1
+
+# =============================================================================
+# Build and push Docker image for default (global) registry
+# =============================================================================
+docker:build:
+  stage: build
+  image: ${ACR_REGISTRY}/opencsg_public/docker-ci:v1.0.1
+  services:
+    - name: ${ACR_REGISTRY}/opencsg_public/docker:27.3-dind
+      command: [ "--feature=containerd-snapshotter", "--experimental" ]
+      alias: docker
+  variables:
+    # Buildx settings
+    BUILD_PLATFORMS: linux/amd64,linux/arm64
+    BUILD_DOCKERFILE: Dockerfile
+    BUILD_PROVENANCE: "false"
+    BUILD_CACHE_FROM: type=registry,ref=${CI_REGISTRY_IMAGE}/cache:buildx
+    BUILD_CACHE_TO: type=registry,ref=${CI_REGISTRY_IMAGE}/cache:buildx,mode=max,image-manifest=true
+    BUILD_REGISTRIES: "$ACR_REGISTRY"
+    BUILD_IMAGE: "opencsghq/dataflow"
+
+    # Dataflow build args
+    BUILD_ARGS: >
+      PYTHON_IMAGE=${ACR_REGISTRY}/opencsg_public/python:3.10.14,
+      BUILD_CN=true
+  script:
+    - buildx
+  rules:
+    - if: $CI_COMMIT_TAG
+  tags:
+    - runner2
