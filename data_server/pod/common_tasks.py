@@ -743,31 +743,78 @@ def run_format_conversion(task_params: dict):
                 continue
             from_file = result.get("from") or file_path_full
             to_file = result.get("to")
+            to_files = result.get("to_files")  # Support for multiple output files
             status = result.get("status")
             try:
                 from_rel_path = str(os.path.relpath(from_file, raw_dir)).replace("\\", "/")
             except Exception:
                 from_rel_path = os.path.basename(from_file)
 
-            if status == "success" and to_file and os.path.exists(to_file):
-                src_path = to_file
-                file_name = os.path.basename(src_path)
-                if file_name in used_names:
-                    name_part, ext_part = os.path.splitext(file_name)
-                    counter = used_names[file_name]
-                    file_name = f"{name_part}_{counter}{ext_part}"
-                    used_names[os.path.basename(src_path)] += 1
-                else:
-                    used_names[file_name] = 1
-                dst_path = os.path.join(output_dir, file_name)
-                shutil.copy2(src_path, dst_path)
-                success_count += 1
-                if meta_enabled:
-                    meta_entries.append({
-                        "from": from_rel_path,
-                        "to": file_name.replace("\\", "/"),
-                        "status": "success",
-                    })
+            # Handle multiple output files (e.g., from multi-sheet Excel)
+            if status == "success" and to_files:
+                # Process multiple files
+                for src_path in to_files:
+                    if os.path.exists(src_path):
+                        file_name = os.path.basename(src_path)
+                        if file_name in used_names:
+                            name_part, ext_part = os.path.splitext(file_name)
+                            counter = used_names[file_name]
+                            file_name = f"{name_part}_{counter}{ext_part}"
+                            used_names[os.path.basename(src_path)] += 1
+                        else:
+                            used_names[file_name] = 1
+                        dst_path = os.path.join(output_dir, file_name)
+                        shutil.copy2(src_path, dst_path)
+                        success_count += 1
+                        if meta_enabled:
+                            meta_entries.append({
+                                "from": from_rel_path,
+                                "to": file_name.replace("\\", "/"),
+                                "status": "success",
+                            })
+            elif status == "success" and to_file:
+                # Handle single file (backward compatible)
+                if isinstance(to_file, list):
+                    # If to_file is a list, process all files
+                    for src_path in to_file:
+                        if os.path.exists(src_path):
+                            file_name = os.path.basename(src_path)
+                            if file_name in used_names:
+                                name_part, ext_part = os.path.splitext(file_name)
+                                counter = used_names[file_name]
+                                file_name = f"{name_part}_{counter}{ext_part}"
+                                used_names[os.path.basename(src_path)] += 1
+                            else:
+                                used_names[file_name] = 1
+                            dst_path = os.path.join(output_dir, file_name)
+                            shutil.copy2(src_path, dst_path)
+                            success_count += 1
+                            if meta_enabled:
+                                meta_entries.append({
+                                    "from": from_rel_path,
+                                    "to": file_name.replace("\\", "/"),
+                                    "status": "success",
+                                })
+                elif os.path.exists(to_file):
+                    # Single file (original behavior)
+                    src_path = to_file
+                    file_name = os.path.basename(src_path)
+                    if file_name in used_names:
+                        name_part, ext_part = os.path.splitext(file_name)
+                        counter = used_names[file_name]
+                        file_name = f"{name_part}_{counter}{ext_part}"
+                        used_names[os.path.basename(src_path)] += 1
+                    else:
+                        used_names[file_name] = 1
+                    dst_path = os.path.join(output_dir, file_name)
+                    shutil.copy2(src_path, dst_path)
+                    success_count += 1
+                    if meta_enabled:
+                        meta_entries.append({
+                            "from": from_rel_path,
+                            "to": file_name.replace("\\", "/"),
+                            "status": "success",
+                        })
             else:
                 failure_count += 1
                 if meta_enabled:
