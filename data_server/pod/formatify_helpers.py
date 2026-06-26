@@ -19,15 +19,49 @@ def convert_excel_to_csv(file_path: str, task_uid) -> Optional[Dict[str, str]]:
     if file_path.lower().endswith((".xlsx", ".xls")):
         log_task_info(task_uid, f"Source file address：{file_path}")
         try:
-            df = pd.read_excel(file_path)
-            new_file = os.path.splitext(file_path)[0] + ".csv"
-            df.to_csv(new_file, index=False)
-            log_task_info(task_uid, f"convert file {new_file} succeed")
+            xls = pd.ExcelFile(file_path)
+            sheet_names = xls.sheet_names
+            sheet_count = len(sheet_names)
+            
+            log_task_info(task_uid, f"Found {sheet_count} sheet(s) in Excel file")
+            
+            result_files = []
+            base_name = os.path.splitext(file_path)[0]
+            
+            for idx, sheet_name in enumerate(sheet_names, 1):
+                try:
+                    log_task_info(task_uid, f"Processing sheet {idx}/{sheet_count}: '{sheet_name}'")
+                    df = pd.read_excel(file_path, sheet_name=sheet_name)
+                    
+                    safe_sheet_name = re.sub(r'[<>:"/\\|?*]', '_', sheet_name)
+                    if sheet_count == 1:
+                        new_file = f"{base_name}.csv"
+                    else:
+                        new_file = f"{base_name}_{safe_sheet_name}.csv"
+                    
+                    # Use utf-8-sig encoding to ensure Excel can open the CSV correctly
+                    df.to_csv(new_file, index=False, encoding='utf-8-sig')
+                    result_files.append(new_file)
+                    log_task_info(task_uid, f"Sheet '{sheet_name}' converted to {new_file}")
+                except Exception as sheet_error:
+                    log_task_error(task_uid, f"Failed to convert sheet '{sheet_name}': {sheet_error}")
+                    continue
+            
             os.remove(file_path)
-            return {"from": file_path, "to": new_file, "status": "success"}
+            
+            if len(result_files) == 0:
+                return {"from": file_path, "to": None, "status": "failure", "error": "No sheets converted"}
+            
+            return {
+                "from": file_path,
+                "to": result_files[0] if len(result_files) == 1 else result_files,
+                "to_files": result_files,
+                "status": "success",
+                "sheets_count": len(result_files)
+            }
         except Exception as e:
             log_task_error(task_uid, f"convert file {file_path} error: {e}")
-            return {"from": file_path, "to": None, "status": "failure"}
+            return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
     return None
 
 
@@ -35,15 +69,48 @@ def convert_excel_to_json(file_path: str, task_uid) -> Optional[Dict[str, str]]:
     if file_path.lower().endswith((".xlsx", ".xls")):
         log_task_info(task_uid, f"Source file address：{file_path}")
         try:
-            df = pd.read_excel(file_path)
-            new_file = os.path.splitext(file_path)[0] + ".json"
-            df.to_json(new_file, orient="records", force_ascii=False)
-            log_task_info(task_uid, f"convert file {new_file} succeed")
+            xls = pd.ExcelFile(file_path)
+            sheet_names = xls.sheet_names
+            sheet_count = len(sheet_names)
+            
+            log_task_info(task_uid, f"Found {sheet_count} sheet(s) in Excel file")
+            
+            result_files = []
+            base_name = os.path.splitext(file_path)[0]
+            
+            for idx, sheet_name in enumerate(sheet_names, 1):
+                try:
+                    log_task_info(task_uid, f"Processing sheet {idx}/{sheet_count}: '{sheet_name}'")
+                    df = pd.read_excel(file_path, sheet_name=sheet_name)
+                    
+                    safe_sheet_name = re.sub(r'[<>:"/\\|?*]', '_', sheet_name)
+                    if sheet_count == 1:
+                        new_file = f"{base_name}.json"
+                    else:
+                        new_file = f"{base_name}_{safe_sheet_name}.json"
+                    
+                    df.to_json(new_file, orient="records", force_ascii=False)
+                    result_files.append(new_file)
+                    log_task_info(task_uid, f"Sheet '{sheet_name}' converted to {new_file}")
+                except Exception as sheet_error:
+                    log_task_error(task_uid, f"Failed to convert sheet '{sheet_name}': {sheet_error}")
+                    continue
+            
             os.remove(file_path)
-            return {"from": file_path, "to": new_file, "status": "success"}
+            
+            if len(result_files) == 0:
+                return {"from": file_path, "to": None, "status": "failure", "error": "No sheets converted"}
+            
+            return {
+                "from": file_path,
+                "to": result_files[0] if len(result_files) == 1 else result_files,
+                "to_files": result_files,
+                "status": "success",
+                "sheets_count": len(result_files)
+            }
         except Exception as e:
             log_task_error(task_uid, f"convert file {file_path} error: {e}")
-            return {"from": file_path, "to": None, "status": "failure"}
+            return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
     return None
 
 
@@ -51,25 +118,96 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
     if file_path.lower().endswith((".xlsx", ".xls")):
         log_task_info(task_uid, f"Source file address：{file_path}")
         try:
-            df = pd.read_excel(file_path)
-            for col in df.columns:
-                if df[col].dtype == "object":
-                    df[col] = df[col].astype(str)
-                    df[col] = df[col].replace("nan", None)
-                elif pd.api.types.is_integer_dtype(df[col]):
-                    if df[col].isna().any():
-                        df[col] = df[col].astype(str)
-                elif pd.api.types.is_float_dtype(df[col]):
-                    if df[col].isna().any():
-                        pass
-            new_file = os.path.splitext(file_path)[0] + ".parquet"
-            df.to_parquet(new_file, index=False, engine="pyarrow")
-            log_task_info(task_uid, f"convert file {new_file} succeed")
+            # Read Excel file to get all sheet names
+            xls = pd.ExcelFile(file_path)
+            sheet_names = xls.sheet_names
+            sheet_count = len(sheet_names)
+            
+            log_task_info(task_uid, f"Found {sheet_count} sheet(s) in Excel file")
+            
+            result_files = []
+            base_name = os.path.splitext(file_path)[0]
+            
+            # Process each sheet
+            for idx, sheet_name in enumerate(sheet_names, 1):
+                try:
+                    log_task_info(task_uid, f"Processing sheet {idx}/{sheet_count}: '{sheet_name}'")
+                    
+                    # Read the sheet
+                    df = pd.read_excel(file_path, sheet_name=sheet_name)
+                    
+                    # Data type processing (same as original logic)
+                    for col in df.columns:
+                        if df[col].dtype == "object":
+                            df[col] = df[col].astype(str)
+                            df[col] = df[col].replace("nan", None)
+                        elif pd.api.types.is_integer_dtype(df[col]):
+                            if df[col].isna().any():
+                                df[col] = df[col].astype(str)
+                        elif pd.api.types.is_float_dtype(df[col]):
+                            if df[col].isna().any():
+                                pass
+                    
+                    # Generate output file name
+                    # Clean sheet name to remove invalid file system characters
+                    safe_sheet_name = re.sub(r'[<>:"/\\|?*]', '_', sheet_name)
+                    
+                    # If only one sheet, use simple naming; otherwise include sheet name
+                    if sheet_count == 1:
+                        new_file = f"{base_name}.parquet"
+                    else:
+                        new_file = f"{base_name}_{safe_sheet_name}.parquet"
+                    
+                    # Save to parquet
+                    df.to_parquet(new_file, index=False, engine="pyarrow")
+                    result_files.append(new_file)
+                    
+                    log_task_info(
+                        task_uid, 
+                        f"Sheet '{sheet_name}' converted successfully: {new_file} "
+                        f"({len(df)} rows, {len(df.columns)} columns)"
+                    )
+                    
+                except Exception as sheet_error:
+                    log_task_error(task_uid, f"Failed to convert sheet '{sheet_name}': {sheet_error}")
+                    # Continue processing other sheets even if one fails
+                    continue
+            
+            # Clean up source file
             os.remove(file_path)
-            return {"from": file_path, "to": new_file, "status": "success"}
+            
+            # Return result
+            if len(result_files) == 0:
+                return {
+                    "from": file_path,
+                    "to": None,
+                    "status": "failure",
+                    "error": "No sheets were successfully converted",
+                    "sheets_count": 0
+                }
+            
+            log_task_info(
+                task_uid, 
+                f"Excel conversion completed: {len(result_files)}/{sheet_count} sheets converted successfully"
+            )
+            
+            # Return format compatible with both single and multiple files
+            return {
+                "from": file_path,
+                "to": result_files[0] if len(result_files) == 1 else result_files,
+                "to_files": result_files,  # Always provide list for consistency
+                "status": "success",
+                "sheets_count": len(result_files)
+            }
+            
         except Exception as e:
             log_task_error(task_uid, f"convert file {file_path} error: {e}")
-            return {"from": file_path, "to": None, "status": "failure"}
+            return {
+                "from": file_path,
+                "to": None,
+                "status": "failure",
+                "error": str(e)
+            }
     return None
 
 

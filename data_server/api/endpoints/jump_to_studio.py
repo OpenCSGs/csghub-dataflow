@@ -41,8 +41,8 @@ async def jump_to_studio(
         'Content-Type': 'application/json'
     }
 
-    print(f"final_url:{target_url}")
-    print(f"payload:{payload}")
+    # Avoid leaking credentials (authorization/user_token) to logs (see issue #201).
+    logger.info(f"jump-to-studio target_url:{target_url} user_name:{user_name} payload_keys:{list(payload.keys())}")
     try:
         async with httpx.AsyncClient() as client:
             # Send the payload in the JSON body of the POST request

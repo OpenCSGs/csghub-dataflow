@@ -41,7 +41,8 @@ def sqlalchemy_database_uri() -> URL:
     db_host_port = os.getenv('DATABASE_PORT', 8198)
 
     db_name = os.getenv('DATABASE_DB', "data_flow")
-    print(f"connect to {db_user_name}:{db_user_pwd}@{db_host_name}:{db_host_port}/{db_name}")
+    # Avoid leaking the DB password to logs (see issue #201): mask the credential.
+    logger.info(f"connect to {db_user_name}:***@{db_host_name}:{db_host_port}/{db_name}")
     return URL.create(
         # drivername="postgresql+asyncpg",
         drivername="postgresql",

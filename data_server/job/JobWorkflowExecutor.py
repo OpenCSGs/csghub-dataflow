@@ -58,7 +58,8 @@ def run_executor(config, job_id, job_name, user_id, user_name, user_token):
 
         workflow = create_argo_workflow(namespace=namespace, job_id=job_id, job_conf=json_str, user_id=user_id, user_name=user_name, user_token=user_token, job_type=job_type, uuid_str=uuid_str)
         if workflow:
-            logger.info(f"Workflow job_id:{job_id} user_id:{user_id} user_name:{user_name} user_token:{user_token} created successfully")
+            # Avoid leaking the user token to logs (see issue #201).
+            logger.info(f"Workflow job_id:{job_id} user_id:{user_id} user_name:{user_name} created successfully")
     except Exception as e:
         logger.error(f"Failed to create workflow job_id:{job_id} error: {e}")
         date_finish = datetime.datetime.now()
