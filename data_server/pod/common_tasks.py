@@ -372,19 +372,35 @@ def run_upload_data(task_params: dict):
         path_is_dir=path_is_dir,
         auto_version=True,
     )
+    # Branch write-back trace: input branch (user-entered) vs actual auto-versioned branch
+    logger.info(
+        "upload_data start | flow_id={} | repo_id={} | input_branch={} | auto_version=True",
+        flow_id,
+        repo_id,
+        branch,
+    )
     max_retries = int(task_params.get("upload_max_retries") or 3)
     for attempt in range(1, max_retries + 1):
         try:
             upload_branch = exporter.export_large_folder()
+            actual_branch = upload_branch or branch
+            logger.info(
+                "upload_data done | flow_id={} | repo_id={} | input_branch={} | actual_branch={} "
+                "(will be synced back to task record)",
+                flow_id,
+                repo_id,
+                branch,
+                actual_branch,
+            )
             task_uid = task_params.get("task_uid")
             if task_uid:
                 log_task_info(
                     task_uid,
-                    f"Datasource upload_data finished successfully, branch={upload_branch or branch}",
+                    f"upload_data finished successfully, input_branch={branch}, actual_branch={actual_branch}",
                 )
             return {
                 "upload_repo_id": repo_id,
-                "upload_branch": upload_branch or branch,
+                "upload_branch": actual_branch,
             }
         except Exception:
             logger.exception(f"upload_data failed on attempt {attempt}/{max_retries}")

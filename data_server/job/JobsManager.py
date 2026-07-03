@@ -618,6 +618,8 @@ def create_new_job(
     job = Job(job_name=job_cfg.project_name.replace(" ", "_"), data_source=job_cfg.dataset_path,
               data_target=job_cfg.export_path,
               repo_id=job_cfg.repo_id, branch=job_cfg.branch,
+              export_repo_id=getattr(job_cfg, "export_repo_id", None),
+              export_branch_name=getattr(job_cfg, "export_branch_name", None),
               status=responses.JOB_STATUS.QUEUED.value, job_type=job_cfg.type, job_source=job_cfg.job_source,
               owner_id=user_id,
               owner_org_id=owner_org_id,
@@ -679,6 +681,8 @@ def create_pipline_new_job(
     )
     job = Job(uuid=task_uuid,job_name=job_cfg.project_name.replace(" ", "_"), data_source=job_cfg.dataset_path, data_target=job_cfg.export_path,
               repo_id=job_cfg.repo_id, branch=job_cfg.branch,
+              export_repo_id=getattr(job_cfg, "export_repo_id", None),
+              export_branch_name=getattr(job_cfg, "export_branch_name", None),
               status=responses.JOB_STATUS.QUEUED.value, job_type=job_cfg.type, job_source=job_cfg.job_source,
               owner_id=user_id, owner_org_id=owner_org_id, owner_org_name=owner_org_name,
               dslText=job_cfg.dslText, yaml_config=yaml_config,

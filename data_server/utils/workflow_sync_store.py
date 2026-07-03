@@ -72,17 +72,30 @@ def _apply_upload_fields(entity_type: str, entity, upload: dict | None) -> dict[
         return {}
     applied: dict[str, Any] = {"repo_id": repo_id or None, "branch": branch}
     if entity_type == "datasource":
+        # Collection tasks record the actual branch on csg_hub_server_branch (list/detail read this first)
+        old_branch = getattr(entity, "csg_hub_server_branch", None)
         entity.csg_hub_server_branch = branch
         applied["csg_hub_server_branch"] = branch
     elif entity_type == "formatify":
+        old_branch = getattr(entity, "to_csg_hub_dataset_default_branch", None)
         entity.to_csg_hub_dataset_default_branch = branch
         applied["to_csg_hub_dataset_default_branch"] = branch
     elif entity_type == "job":
+        old_branch = getattr(entity, "export_branch_name", None)
         entity.export_branch_name = branch
         applied["export_branch_name"] = branch
         if repo_id:
             entity.export_repo_id = repo_id
             applied["export_repo_id"] = repo_id
+    else:
+        old_branch = None
+    logger.info(
+        "data-flow branch write-back | entity_type={} | id={} | input_branch={} -> actual_branch={}",
+        entity_type,
+        getattr(entity, "id", getattr(entity, "job_id", None)),
+        old_branch,
+        branch,
+    )
     return applied
 
 

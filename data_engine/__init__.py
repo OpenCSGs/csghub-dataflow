@@ -14,8 +14,10 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # For now, only INFO will be shown. Later the severity level will be changed
 # when setup_logger is called to initialize the logger.
+# backtrace/diagnose disabled: keep failure logs to the concise reason, not a huge
+# annotated stack trace that buries the actual cause (issue #213).
 logger.remove()
-logger.add(sys.stderr, level='INFO')
+logger.add(sys.stderr, level='INFO', backtrace=False, diagnose=False)
 
 
 def _cuda_device_count():
