@@ -47,7 +47,6 @@
   {"text": "机器学习是AI的核心"},
   {"text": "Hello World"},
   {"text": "Hello  World"}
-
 ]
 ```
 
@@ -55,7 +54,7 @@
 ```json
 [
   {"text": "人工智能正在改变世界"},
-  {"text": "机器学习是AI的核心"}
+  {"text": "机器学习是AI的核心"},
   {"text": "Hello World"},
   {"text": "Hello  World"}
 ]

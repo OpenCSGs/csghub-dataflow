@@ -37,7 +37,7 @@
   {"text": "这是一篇正常的文章"},
   {"text": "这是一条广告信息"},
   {"text": "这是垃圾内容"},
-  {"text": "This is spam"},
+  {"text": "This is spam"}
 ]
 ```
 
@@ -45,6 +45,6 @@
 ```json
 [
   {"text": "这是一篇正常的文章"},
-  {"text": "This is spam"},
+  {"text": "This is spam"}
 ]
 ```
