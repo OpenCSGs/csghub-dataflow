@@ -678,7 +678,7 @@ def delete_job(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="仅任务创建者或管理员可删除",
             )
-        delete_job_by_id(id=id, session=session)
+        delete_job_by_id(id=id, session=session, user_token=user_token)
         return {"detail": "Successfully deleted."}
     except Exception as e:
         raise HTTPException(

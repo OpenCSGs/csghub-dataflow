@@ -656,7 +656,7 @@ async def delete_collection_task_api(
             namespace_type=getattr(task, "namespace_type", None),
         ):
             return response_fail(msg="仅任务创建者或管理员可删除")
-        delete_collection_task(db, task_id)
+        delete_collection_task(db, task_id, user_token=user_token)
         return response_success(data=True)
     except ValueError as e:
         return response_fail(msg=str(e))

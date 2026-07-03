@@ -942,7 +942,43 @@ def parse_yaml_config(yaml_string: str,config):
     return convert_raw_to_processed(new_dsl_data)
 
 
-def delete_job_by_id(id: int, session: Session):
+def _cancel_csghub_task_on_delete(job: Job, user_token: str | None) -> None:
+    """Best-effort: delete the CSGHub/Argo task before soft-deleting the job locally,
+    so the remote workflow does not linger. A remote failure must not block the
+    local deletion."""
+    if not (getattr(job, "csghub_job_id", None) or getattr(job, "flow_id", None)):
+        return
+    try:
+        resolved_job_id = resolve_csghub_remote_job_id(
+            job.csghub_job_id,
+            flow_id=job.flow_id,
+            csghub_response_payload=job.csghub_response_payload,
+        )
+        if resolved_job_id:
+            job.csghub_job_id = resolved_job_id
+        remote_ok, remote_err = try_cancel_csghub_job(
+            namespace_uuid=job.namespace_uuid,
+            csghub_job_id=job.csghub_job_id,
+            user_token=user_token,
+            flow_id=job.flow_id,
+            csghub_response_payload=job.csghub_response_payload,
+        )
+        logger.info(
+            "Delete job: CSGHub task deleted | job_id={} | flow_id={} | remote_ok={} | err={}",
+            job.job_id,
+            job.flow_id,
+            remote_ok,
+            remote_err,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Delete job: CSGHub task delete failed (continuing local delete) | job_id={}: {}",
+            getattr(job, "job_id", None),
+            exc,
+        )
+
+
+def delete_job_by_id(id: int, session: Session, user_token: str | None = None):
     matched_job = (
         session.query(Job)
         .filter(Job.job_id == id, Job.is_active.is_(True))
@@ -950,6 +986,8 @@ def delete_job_by_id(id: int, session: Session):
     )
     if not matched_job:
         return 0
+    # Sync-delete the CSGHub/Argo workflow so it doesn't linger after local removal.
+    _cancel_csghub_task_on_delete(matched_job, user_token)
     soft_delete_record(session, matched_job)
     return 1
 
