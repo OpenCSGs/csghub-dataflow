@@ -275,7 +275,7 @@ async def delete_formatify(
             namespace_type=getattr(task, "namespace_type", None),
         ):
             return response_fail(msg="仅任务创建者或管理员可删除")
-        result = delete_formatify_task(db, formatify_id)
+        result = delete_formatify_task(db, formatify_id, user_token=user_token)
         if not result:
             return response_fail(msg="Deletion failed")
         return response_success(data=True)

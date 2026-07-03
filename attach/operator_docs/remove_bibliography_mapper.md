@@ -2,7 +2,7 @@
 
 ## 算子功能
 
-这是一个专门用来清理LaTeX学术论文的工具,它能自动识别并删除论文末尾的参考文献部分和附录内容,只保留论文的正文部分。
+这是一个专门用来清理LaTeX学术论文的工具，它能自动识别并删除论文末尾的参考文献部分和附录内容，只保留论文的正文部分。
 
 
 ## 处理逻辑
@@ -14,7 +14,7 @@
 5. **保留正文** - 只保留标记之前的正文部分
 6. **记录统计** - 统计有多少文档被修改
 
-算子能识别以下5种参考文献标记:
+算子能识别以下5种参考文献标记：
 
 | 标记 | 说明 | 示例 |
 |------|------|------|
@@ -26,16 +26,20 @@
 
 ### 示例
 
-**输入数据(JSON)**:
+**输入数据:**
 ```json
-{
+[
+  {
   "text": "\\section{Conclusion}\nThis is the conclusion.\n\n\\clearpage\n\\bibliographystyle{ACM-Reference-Format}\n\\bibliography{sample-base}\n\\end{document}\n\\endinput"
-}
+  }
+]
 ```
 
-**输出数据(JSON)**:
+**输出数据:**
 ```json
-{
+[
+  {
   "text": "\\section{Conclusion}\nThis is the conclusion.\n\n\\clearpage\n\\bibliographystyle{ACM-Reference-Format}\n"
-}
+  }
+]
 ```

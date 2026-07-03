@@ -306,7 +306,45 @@ def get_formatify_task_for_user(
     return None
 
 
-def delete_formatify_task(db_session: Session, formatify_id: int) -> bool:
+def _cancel_csghub_task_on_delete(formatify_task: DataFormatTask, user_token: str | None) -> None:
+    """Best-effort: delete the CSGHub/Argo task before soft-deleting the formatify task
+    locally, so the remote workflow does not linger. A remote failure must not block
+    the local deletion."""
+    if not (getattr(formatify_task, "csghub_job_id", None) or getattr(formatify_task, "flow_id", None)):
+        return
+    try:
+        resolved_job_id = resolve_csghub_remote_job_id(
+            formatify_task.csghub_job_id,
+            flow_id=formatify_task.flow_id,
+            csghub_response_payload=formatify_task.csghub_response_payload,
+        )
+        if resolved_job_id:
+            formatify_task.csghub_job_id = resolved_job_id
+        remote_ok, remote_err = try_cancel_csghub_job(
+            namespace_uuid=formatify_task.namespace_uuid,
+            csghub_job_id=formatify_task.csghub_job_id,
+            user_token=user_token,
+            flow_id=formatify_task.flow_id,
+            csghub_response_payload=formatify_task.csghub_response_payload,
+        )
+        logger.info(
+            "Delete formatify: CSGHub task deleted | task_id={} | flow_id={} | remote_ok={} | err={}",
+            formatify_task.id,
+            formatify_task.flow_id,
+            remote_ok,
+            remote_err,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Delete formatify: CSGHub task delete failed (continuing local delete) | task_id={}: {}",
+            getattr(formatify_task, "id", None),
+            exc,
+        )
+
+
+def delete_formatify_task(
+    db_session: Session, formatify_id: int, user_token: str | None = None
+) -> bool:
     formatify_task = (
         db_session.query(DataFormatTask)
         .filter(DataFormatTask.id == formatify_id, DataFormatTask.is_active.is_(True))
@@ -316,6 +354,8 @@ def delete_formatify_task(db_session: Session, formatify_id: int) -> bool:
         return False
     if formatify_task.task_status == DataFormatTaskStatusEnum.EXECUTING.value:
         raise ValueError("任务执行中，无法删除")
+    # Sync-delete the CSGHub/Argo workflow so it doesn't linger after local removal.
+    _cancel_csghub_task_on_delete(formatify_task, user_token)
     soft_delete_record(db_session, formatify_task)
     return True
 

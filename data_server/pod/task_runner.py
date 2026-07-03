@@ -12,10 +12,48 @@ from data_server.pod.common_tasks import (
     run_upload_data,
 )
 from data_server.pod.job_progress import extract_job_progress_from_task_result
+from data_server.pod.pod_logger import log_task_error
 from data_server.pod.workflow_sync_client import (
     is_workflow_finalize_step,
     push_workflow_sync,
 )
+
+# Human-readable English names per stage, used in the error report (issue #213).
+_STAGE_LABELS = {
+    "pull_data": "pull data (download source dataset)",
+    "data_harvesting": "data harvesting (collect from external datasource)",
+    "tool_execute": "tool execution",
+    "operator_execute": "operator execution",
+    "format_conversion": "format conversion",
+    "upload_data": "upload data (push result dataset)",
+}
+
+
+def _build_task_error_report(task_type: str, task_params: dict, exc: BaseException) -> str:
+    """Build a concise English error reason for a failed Argo stage (issue #213).
+
+    Only the root-cause reason is reported (exception type + message + failing
+    stage). The full stack trace is intentionally NOT included here: it is noise
+    in the task log; the concise reason is what users need to act on.
+    """
+    stage_name = (
+        task_params.get("current_task_name")
+        or task_params.get("task_stage")
+        or task_type
+    )
+    stage_label = _STAGE_LABELS.get(task_type, task_type)
+    exc_type = type(exc).__name__
+    exc_msg = str(exc).strip() or "(no message)"
+
+    context = f"stage={stage_name} flow_id={task_params.get('flow_id')}"
+    job_id = task_params.get("job_id")
+    if job_id is not None:
+        context += f" job_id={job_id}"
+
+    return (
+        f"[{task_type}] Task failed during {stage_label}. "
+        f"Reason: {exc_type}: {exc_msg} ({context})"
+    )
 
 
 def _utc_now_iso() -> str:
@@ -64,6 +102,14 @@ def _sync_step_success(task_type: str, task_params: dict, started_at: str, resul
         branch = result.get("upload_branch") or result.get("branch")
         if repo and branch:
             upload = {"repo_id": str(repo), "branch": str(branch)}
+            logger.info(
+                "workflow finalize | flow_id={} | task_type={} | syncing actual upload branch "
+                "back to task record: repo_id={} branch={}",
+                task_params.get("flow_id"),
+                task_type,
+                repo,
+                branch,
+            )
 
     progress = _extract_task_progress(result)
 
@@ -182,11 +228,21 @@ def run_task(task_type: str, task_params: dict):
         _sync_step_success(task_type, task_params, started_at, result)
         return result
     except Exception as exc:
-        if task_params.get("collection_task_id") is not None and task_type in {
+        # Surface a concise English root-cause reason (issue #213). The stack trace
+        # is noise in the task log, so it is emitted only at DEBUG level; the task
+        # log / task detail get just the reason.
+        error_report = _build_task_error_report(task_type, task_params, exc)
+        logger.error(error_report)
+        logger.opt(exception=exc).debug("Full traceback for the failure above")
+        is_collection = task_params.get("collection_task_id") is not None and task_type in {
             "data_harvesting",
             "upload_data",
             "datasource",
-        }:
-            _mark_collection_task_failed(task_params, str(exc))
-        _sync_step_failed(task_type, task_params, started_at, str(exc))
+        }
+        if is_collection:
+            # Writes the reason to the collection task log (mark-failed hook).
+            _mark_collection_task_failed(task_params, error_report)
+        else:
+            log_task_error(task_params.get("task_uid"), error_report)
+        _sync_step_failed(task_type, task_params, started_at, error_report)
         raise

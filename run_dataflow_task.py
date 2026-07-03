@@ -81,5 +81,8 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        logger.exception("Dataflow pod task failed: {}", exc)
+        # Concise root-cause reason only; the full stack trace is noise in the task
+        # log (issue #213). Keep the traceback available at DEBUG level for devs.
+        logger.error("Dataflow pod task failed: {}: {}", type(exc).__name__, exc)
+        logger.opt(exception=exc).debug("Full traceback for the pod task failure above")
         sys.exit(1)

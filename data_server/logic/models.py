@@ -138,6 +138,9 @@ class Recipe(BaseModelExtended):
     project_name: str
     repo_id: Optional[str] = ""
     branch: Optional[str] = "main"
+    # Data flow target: personal dataset repo the results are pushed to (auto-versioned on upload)
+    export_repo_id: Optional[str] = None
+    export_branch_name: Optional[str] = None
     dataset_path: Optional[str] = None
     export_path: Optional[str] = None
     export_shard_size: int = 0
@@ -252,6 +255,9 @@ class Tool(BaseModel):
     repo_id: Optional[str] = ""
     project_name: str = "auto"
     branch: Optional[str] = "main"
+    # Data flow target: personal dataset repo the results are pushed to (auto-versioned on upload)
+    export_repo_id: Optional[str] = None
+    export_branch_name: Optional[str] = None
     dataset_path: Optional[str] = None
     export_path: Optional[str] = None
     export_shard_size: int = 0

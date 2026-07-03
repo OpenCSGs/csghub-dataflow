@@ -22,6 +22,9 @@ exclude_fields_config = [
     "namespace_uuid",
     "namespace_type",
     "task_scope",
+    # Data flow output target: consumed by DataFlow upload stage, not a Data-Juicer arg
+    "export_repo_id",
+    "export_branch_name",
 ]
 executor = None
 

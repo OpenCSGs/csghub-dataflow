@@ -134,13 +134,19 @@ def setup_logger(save_dir,
 
     # only keep logger in rank0 process
     if distributed_rank == 0:
+        # backtrace/diagnose disabled: keep failure logs to the concise reason, not a
+        # huge annotated stack trace that buries the actual cause (issue #213).
         logger.add(
             sys.stderr,
             format=loguru_format,
             level=level,
             enqueue=True,
+            backtrace=False,
+            diagnose=False,
         )
-        new_log_id = logger.add(save_file, format=loguru_format)
+        new_log_id = logger.add(
+            save_file, format=loguru_format, backtrace=False, diagnose=False
+        )
         logger.info(f"Create logger ID {new_log_id} with loglevel: {level}, export to {save_file}")        
 
     # redirect stdout/stderr to loguru
