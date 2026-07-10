@@ -18,6 +18,8 @@ docker:build:
     - name: ${ACR_REGISTRY}/opencsg_public/docker:27.3-dind
       command: [ "--feature=containerd-snapshotter", "--experimental" ]
       alias: docker
+  before_script:
+    - echo "$ACR_PASSWORD" | docker login -u $ACR_USERNAME $ACR_REGISTRY --password-stdin
   variables:
     # Buildx settings
     BUILD_PLATFORMS: linux/amd64,linux/arm64
