@@ -403,7 +403,7 @@ def auto_drop_obsolete_columns(table_models: list):
 #  Schema Version Management
 # ============================================================
 
-SCHEMA_VERSION = "1.0.4"
+SCHEMA_VERSION = "1.0.5"
 
 
 def _version_to_tuple(v: str) -> tuple:
@@ -566,11 +566,26 @@ def _migration_v1_0_4(tables: list):
             logger.error(f"Migration v1.0.4 safety check - {name} failed: {e}")
 
 
+def _migration_v1_0_5(tables: list):
+    """
+    v1.0.5 迁移：格式转换任务新增文件级统计字段 ——
+      data_format_tasks: total_count, success_count, failure_count
+    用于区分"全部成功 / 部分成功 / 全部失败"，支撑 PARTIAL_SUCCESS 状态。
+    直接复用 sync_missing_columns_for_tables 自动补齐 ORM 中新增而 DB 中缺失的列，幂等安全。
+    """
+    logger.info("--- Applying schema migration v1.0.5 (formatify file-level stats columns) ---")
+    try:
+        sync_missing_columns_for_tables(tables)
+    except Exception as e:
+        logger.error(f"Migration v1.0.5 - sync_missing_columns_for_tables failed: {e}")
+
+
 # 版本号 → 迁移函数 注册表
 # 新增版本时只需在此追加条目即可
 SCHEMA_MIGRATIONS = {
     "1.0.3": _migration_v1_0_3,
     "1.0.4": _migration_v1_0_4,
+    "1.0.5": _migration_v1_0_5,
 }
 
 

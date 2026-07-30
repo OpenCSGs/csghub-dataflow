@@ -78,7 +78,7 @@ def _extract_task_progress(result) -> dict[str, int]:
     if not isinstance(result, dict):
         return {}
     progress: dict[str, int] = {}
-    for key in ("records_count", "total_count"):
+    for key in ("records_count", "total_count", "success_count", "failure_count"):
         value = result.get(key)
         if value is not None:
             try:

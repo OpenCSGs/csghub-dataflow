@@ -748,6 +748,7 @@ def run_format_conversion(task_params: dict):
     os.makedirs(output_dir, exist_ok=True)
     success_count = 0
     failure_count = 0
+    failed_files = []
     meta_enabled = bool(task_params.get("skip_meta"))
     meta_entries = []
     used_names = {}
@@ -766,6 +767,12 @@ def run_format_conversion(task_params: dict):
             except Exception:
                 from_rel_path = os.path.basename(from_file)
 
+            # success_count / failure_count are counted per SOURCE file (not per output
+            # file): a multi-sheet Excel may produce several outputs but is still one
+            # source file. file_succeeded flips true once any output for this source is
+            # written, so total_count == success_count + failure_count always holds.
+            file_succeeded = False
+
             # Handle multiple output files (e.g., from multi-sheet Excel)
             if status == "success" and to_files:
                 # Process multiple files
@@ -781,7 +788,7 @@ def run_format_conversion(task_params: dict):
                             used_names[file_name] = 1
                         dst_path = os.path.join(output_dir, file_name)
                         shutil.copy2(src_path, dst_path)
-                        success_count += 1
+                        file_succeeded = True
                         if meta_enabled:
                             meta_entries.append({
                                 "from": from_rel_path,
@@ -804,7 +811,7 @@ def run_format_conversion(task_params: dict):
                                 used_names[file_name] = 1
                             dst_path = os.path.join(output_dir, file_name)
                             shutil.copy2(src_path, dst_path)
-                            success_count += 1
+                            file_succeeded = True
                             if meta_enabled:
                                 meta_entries.append({
                                     "from": from_rel_path,
@@ -824,15 +831,21 @@ def run_format_conversion(task_params: dict):
                         used_names[file_name] = 1
                     dst_path = os.path.join(output_dir, file_name)
                     shutil.copy2(src_path, dst_path)
-                    success_count += 1
+                    file_succeeded = True
                     if meta_enabled:
                         meta_entries.append({
                             "from": from_rel_path,
                             "to": file_name.replace("\\", "/"),
                             "status": "success",
                         })
+
+            # Tally once per source file. A source that reported success but produced no
+            # readable output is treated as a failure (nothing was actually converted).
+            if file_succeeded:
+                success_count += 1
             else:
                 failure_count += 1
+                failed_files.append(from_rel_path)
                 if meta_enabled:
                     entry = {
                         "from": from_rel_path,
@@ -843,17 +856,43 @@ def run_format_conversion(task_params: dict):
                         entry["error"] = result["error"]
                     meta_entries.append(entry)
 
+    # Record conversion statistics to the task run log unconditionally (issue: distinguish
+    # full success / partial success / full failure). success_count/failure_count already
+    # accumulated above; total is the number of matched source files.
+    total_count = len(found_files)
+    logger.info(
+        "Format conversion summary | flow_id={} | total={} | success={} | failure={}",
+        flow_id,
+        total_count,
+        success_count,
+        failure_count,
+    )
+    if failure_count > 0:
+        logger.warning(
+            "Format-conversion failed files:\n{}",
+            "\n".join(f"  - {p}" for p in failed_files),
+        )
+
     if meta_enabled:
         _write_format_meta_log(
             output_dir=output_dir,
             task_params=task_params,
             formatify_id=int(task_params.get("formatify_id") or task_params.get("id") or 0),
-            total_count=len(found_files),
+            total_count=total_count,
             success_count=success_count,
             failure_count=failure_count,
             entries=meta_entries,
         )
-    return output_dir
+    # Return per-file stats so the workflow sync can distinguish full/partial/all-failure
+    # and persist counts on the task record. output_dir is kept for backward compatibility;
+    # the downstream upload step reads the converted dir from disk, not from this return value.
+    return {
+        "output_dir": output_dir,
+        "total_count": total_count,
+        "success_count": success_count,
+        "failure_count": failure_count,
+        "failed_files": failed_files,
+    }
 
 
 def _select_convert_func(from_type, to_type):
