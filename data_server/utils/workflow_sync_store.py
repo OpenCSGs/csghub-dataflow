@@ -26,6 +26,7 @@ from data_server.utils.csghub_status_sync import (
     _map_formatify_status,
     _map_job_status,
     _status_key,
+    coerce_formatify_partial_status,
     normalize_csghub_status,
 )
 
@@ -49,6 +50,15 @@ def resolve_entity_by_flow_id(session: Session, flow_id: str, job_id: int | None
 
 def _parse_dt(value) -> datetime | None:
     return _parse_datetime(value)
+
+
+def _coerce_int(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _parse_extra_config_dict(raw) -> dict:
@@ -261,6 +271,14 @@ def _apply_main_task(
         elif entity_type == "formatify":
             mapped = _map_formatify_status(current_status)
             if mapped is not None:
+                # Distinguish partial success / all-failure using per-file counts. Prefer counts
+                # carried in this payload, otherwise fall back to those persisted by the earlier
+                # format_conversion step sync.
+                incoming_success = main.get("success_count")
+                incoming_failure = main.get("failure_count")
+                sc = incoming_success if incoming_success is not None else getattr(entity, "success_count", None)
+                fc = incoming_failure if incoming_failure is not None else getattr(entity, "failure_count", None)
+                mapped = coerce_formatify_partial_status(mapped, _coerce_int(sc), _coerce_int(fc))
                 entity.task_status = mapped
                 result["task_status"] = mapped
             if event == "step_started" or mapped == DataFormatTaskStatusEnum.EXECUTING.value:
@@ -289,6 +307,19 @@ def _apply_main_task(
             try:
                 entity.total_count = int(total_count)
                 result["total_count"] = entity.total_count
+            except (TypeError, ValueError):
+                pass
+
+    if entity_type == "formatify":
+        # Persist per-file conversion stats reported by the format_conversion step so the
+        # finalize step (and later CSGHub status pulls) can compute partial-success status.
+        for field in ("total_count", "success_count", "failure_count"):
+            value = main.get(field)
+            if value is None:
+                continue
+            try:
+                setattr(entity, field, int(value))
+                result[field] = getattr(entity, field)
             except (TypeError, ValueError):
                 pass
 

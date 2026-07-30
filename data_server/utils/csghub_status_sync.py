@@ -62,6 +62,7 @@ COLLECTION_TERMINAL_TASK_STATUSES = frozenset({
 })
 FORMATIFY_TERMINAL_TASK_STATUSES = frozenset({
     DataFormatTaskStatusEnum.COMPLETED.value,
+    DataFormatTaskStatusEnum.PARTIAL_SUCCESS.value,
     DataFormatTaskStatusEnum.ERROR.value,
     DataFormatTaskStatusEnum.STOP.value,
 })
@@ -206,6 +207,28 @@ def _map_formatify_status(status: str | None) -> int | None:
     if status_key in CANCELED_STATUSES:
         return DataFormatTaskStatusEnum.STOP.value
     return None
+
+
+def coerce_formatify_partial_status(
+    mapped_status: int | None,
+    success_count: int | None,
+    failure_count: int | None,
+) -> int | None:
+    """Downgrade a "Succeeded"→COMPLETED result to a finer-grained terminal status when
+    per-file conversion stats indicate failures:
+      - some succeeded and some failed -> PARTIAL_SUCCESS (partial success)
+      - all failed (0 success, >0 failure) -> ERROR (whole task failed)
+    Only applies when the workflow otherwise mapped to COMPLETED; other statuses pass through.
+    """
+    if mapped_status != DataFormatTaskStatusEnum.COMPLETED.value:
+        return mapped_status
+    fc = failure_count or 0
+    sc = success_count or 0
+    if fc <= 0:
+        return mapped_status
+    if sc > 0:
+        return DataFormatTaskStatusEnum.PARTIAL_SUCCESS.value
+    return DataFormatTaskStatusEnum.ERROR.value
 
 
 def _append_callback_payload(existing_payload: str | None, callback_payload: dict | None) -> str | None:
@@ -437,6 +460,13 @@ def sync_csghub_main_task_status(
     elif entity_type == "formatify":
         mapped_status = _map_formatify_status(current_status)
         if mapped_status is not None:
+            # Use persisted per-file counts to distinguish partial success / all-failure
+            # so a plain CSGHub "Succeeded" doesn't overwrite a partial result.
+            mapped_status = coerce_formatify_partial_status(
+                mapped_status,
+                getattr(entity, "success_count", None),
+                getattr(entity, "failure_count", None),
+            )
             entity.task_status = mapped_status
             if mapped_status == DataFormatTaskStatusEnum.EXECUTING.value and entity.start_run_at is None:
                 entity.start_run_at = now

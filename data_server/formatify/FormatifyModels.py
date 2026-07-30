@@ -33,6 +33,7 @@ class DataFormatTaskStatusEnum(Enum):
     COMPLETED = 2
     ERROR = 3
     STOP = 4
+    PARTIAL_SUCCESS = 5  # Completed but some files failed to convert (partial success)
 
 
 
@@ -53,6 +54,9 @@ class DataFormatTask(Base):
     to_data_type = Column(Integer, comment="Target format type DataFormatTypeEnum")
     task_uid = Column(String(100), comment="Unique task identifier")
     task_status = Column(Integer, nullable=False, comment="Task status DataFormatTaskStatusEnum enum")
+    total_count = Column(Integer, default=0, comment="Total number of source files for format conversion")
+    success_count = Column(Integer, default=0, comment="Number of files converted successfully")
+    failure_count = Column(Integer, default=0, comment="Number of files that failed to convert")
     owner_id = Column(Integer, comment="Owner user")
     owner_org_id = Column(String(255), comment="Owner organization ID")
     owner_org_name = Column(String(255), comment="Owner organization name")
@@ -95,6 +99,9 @@ class DataFormatTask(Base):
             "to_data_type": self.to_data_type,
             "task_uid": self.task_uid,
             "task_status": self.task_status,
+            "total_count": getattr(self, "total_count", 0),
+            "success_count": getattr(self, "success_count", 0),
+            "failure_count": getattr(self, "failure_count", 0),
             "owner_id": self.owner_id,
             "owner_org_id": self.owner_org_id,
             "owner_org_name": self.owner_org_name,
