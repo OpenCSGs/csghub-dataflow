@@ -15,7 +15,41 @@ from pptx import Presentation
 from data_server.pod.pod_logger import log_task_error, log_task_info
 
 
+def _read_csv(file_path: str) -> pd.DataFrame:
+    """Read common CSV encodings and let pandas infer the delimiter."""
+    last_error = None
+    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            return pd.read_csv(file_path, encoding=encoding, sep=None, engine="python")
+        except UnicodeDecodeError as error:
+            last_error = error
+    if last_error is not None:
+        raise last_error
+    return pd.read_csv(file_path, sep=None, engine="python")
+
+
+def _non_conflicting_output_path(file_path: str) -> str:
+    """Avoid overwriting an existing source/target file in the raw stage directory."""
+    if not os.path.exists(file_path):
+        return file_path
+    base_name, extension = os.path.splitext(file_path)
+    candidate = f"{base_name}_converted{extension}"
+    counter = 1
+    while os.path.exists(candidate):
+        candidate = f"{base_name}_converted_{counter}{extension}"
+        counter += 1
+    return candidate
+
+
 def convert_excel_to_csv(file_path: str, task_uid) -> Optional[Dict[str, str]]:
+    if file_path.lower().endswith(".csv"):
+        log_task_info(task_uid, f"CSV source file will be copied without conversion: {file_path}")
+        return {
+            "from": file_path,
+            "to": file_path,
+            "to_files": [file_path],
+            "status": "success",
+        }
     if file_path.lower().endswith((".xlsx", ".xls")):
         log_task_info(task_uid, f"Source file address：{file_path}")
         try:
@@ -38,6 +72,7 @@ def convert_excel_to_csv(file_path: str, task_uid) -> Optional[Dict[str, str]]:
                         new_file = f"{base_name}.csv"
                     else:
                         new_file = f"{base_name}_{safe_sheet_name}.csv"
+                    new_file = _non_conflicting_output_path(new_file)
                     
                     # Use utf-8-sig encoding to ensure Excel can open the CSV correctly
                     df.to_csv(new_file, index=False, encoding='utf-8-sig')
@@ -66,6 +101,22 @@ def convert_excel_to_csv(file_path: str, task_uid) -> Optional[Dict[str, str]]:
 
 
 def convert_excel_to_json(file_path: str, task_uid) -> Optional[Dict[str, str]]:
+    if file_path.lower().endswith(".csv"):
+        log_task_info(task_uid, f"Source file address: {file_path}")
+        try:
+            new_file = _non_conflicting_output_path(
+                f"{os.path.splitext(file_path)[0]}.json"
+            )
+            _read_csv(file_path).to_json(new_file, orient="records", force_ascii=False)
+            return {
+                "from": file_path,
+                "to": new_file,
+                "to_files": [new_file],
+                "status": "success",
+            }
+        except Exception as e:
+            log_task_error(task_uid, f"convert file {file_path} error: {e}")
+            return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
     if file_path.lower().endswith((".xlsx", ".xls")):
         log_task_info(task_uid, f"Source file address：{file_path}")
         try:
@@ -88,6 +139,7 @@ def convert_excel_to_json(file_path: str, task_uid) -> Optional[Dict[str, str]]:
                         new_file = f"{base_name}.json"
                     else:
                         new_file = f"{base_name}_{safe_sheet_name}.json"
+                    new_file = _non_conflicting_output_path(new_file)
                     
                     df.to_json(new_file, orient="records", force_ascii=False)
                     result_files.append(new_file)
@@ -115,6 +167,28 @@ def convert_excel_to_json(file_path: str, task_uid) -> Optional[Dict[str, str]]:
 
 
 def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str]]:
+    if file_path.lower().endswith(".csv"):
+        log_task_info(task_uid, f"Source file address: {file_path}")
+        try:
+            new_file = _non_conflicting_output_path(
+                f"{os.path.splitext(file_path)[0]}.parquet"
+            )
+            df = _read_csv(file_path)
+            for col in df.columns:
+                if df[col].dtype == "object":
+                    df[col] = df[col].astype(str).replace("nan", None)
+                elif pd.api.types.is_integer_dtype(df[col]) and df[col].isna().any():
+                    df[col] = df[col].astype(str)
+            df.to_parquet(new_file, index=False, engine="pyarrow")
+            return {
+                "from": file_path,
+                "to": new_file,
+                "to_files": [new_file],
+                "status": "success",
+            }
+        except Exception as e:
+            log_task_error(task_uid, f"convert file {file_path} error: {e}")
+            return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
     if file_path.lower().endswith((".xlsx", ".xls")):
         log_task_info(task_uid, f"Source file address：{file_path}")
         try:
@@ -157,6 +231,7 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
                         new_file = f"{base_name}.parquet"
                     else:
                         new_file = f"{base_name}_{safe_sheet_name}.parquet"
+                    new_file = _non_conflicting_output_path(new_file)
                     
                     # Save to parquet
                     df.to_parquet(new_file, index=False, engine="pyarrow")
@@ -209,6 +284,27 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
                 "error": str(e)
             }
     return None
+
+
+def convert_csv_to_excel(file_path: str, task_uid) -> Optional[Dict[str, str]]:
+    if not file_path.lower().endswith(".csv"):
+        return None
+
+    log_task_info(task_uid, f"Source file address: {file_path}")
+    try:
+        new_file = _non_conflicting_output_path(
+            f"{os.path.splitext(file_path)[0]}.xlsx"
+        )
+        _read_csv(file_path).to_excel(new_file, index=False, engine="openpyxl")
+        return {
+            "from": file_path,
+            "to": new_file,
+            "to_files": [new_file],
+            "status": "success",
+        }
+    except Exception as e:
+        log_task_error(task_uid, f"convert file {file_path} error: {e}")
+        return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
 
 
 def fix_email_links_in_html(html_content: str) -> str:
@@ -453,7 +549,9 @@ def search_files(folder_path: str, types: List[int]) -> Tuple[bool, List[str]]:
     type_map: Dict[int, List[str]] = {
         0: [".ppt", ".pptx"],
         1: [".doc", ".docx"],
-        3: [".xls", ".xlsx"],
+        # Excel tasks also accept CSV files in mixed datasets.
+        3: [".xls", ".xlsx", ".csv"],
+        5: [".csv"],
         7: [".pdf"],
         8: [".txt"],
         9: [".html", ".htm"],
