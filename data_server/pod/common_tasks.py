@@ -34,6 +34,7 @@ from data_server.pod.job_progress import (
 )
 from data_server.pod.pod_logger import log_task_error, log_task_info
 from data_server.pod.formatify_helpers import (
+    convert_csv_to_excel,
     convert_excel_to_csv,
     convert_excel_to_json,
     convert_excel_to_parquet,
@@ -900,6 +901,10 @@ def _select_convert_func(from_type, to_type):
         (DataFormatTypeEnum.Excel.value, DataFormatTypeEnum.Csv.value): convert_excel_to_csv,
         (DataFormatTypeEnum.Excel.value, DataFormatTypeEnum.Json.value): convert_excel_to_json,
         (DataFormatTypeEnum.Excel.value, DataFormatTypeEnum.Parquet.value): convert_excel_to_parquet,
+        (DataFormatTypeEnum.Csv.value, DataFormatTypeEnum.Excel.value): convert_csv_to_excel,
+        (DataFormatTypeEnum.Csv.value, DataFormatTypeEnum.Json.value): convert_excel_to_json,
+        (DataFormatTypeEnum.Csv.value, DataFormatTypeEnum.Csv.value): convert_excel_to_csv,
+        (DataFormatTypeEnum.Csv.value, DataFormatTypeEnum.Parquet.value): convert_excel_to_parquet,
         (DataFormatTypeEnum.Word.value, DataFormatTypeEnum.Markdown.value): convert_word_to_markdown,
         (DataFormatTypeEnum.PPT.value, DataFormatTypeEnum.Markdown.value): convert_ppt_to_markdown,
         (DataFormatTypeEnum.PDF.value, DataFormatTypeEnum.Markdown.value): convert_pdf_to_markdown,

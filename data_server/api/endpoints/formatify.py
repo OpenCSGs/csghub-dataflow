@@ -103,6 +103,16 @@ async def get_format_type_list():
                 {"value": DataFormatTypeEnum.Markdown.value, "label": DataFormatTypeEnum.Markdown.name},
             ]
         },
+        "data_format_3": {
+            "from_format_types": [
+                {"value": DataFormatTypeEnum.Csv.value, "label": DataFormatTypeEnum.Csv.name},
+            ],
+            "to_format_types": [
+                {"value": DataFormatTypeEnum.Excel.value, "label": DataFormatTypeEnum.Excel.name},
+                {"value": DataFormatTypeEnum.Json.value, "label": DataFormatTypeEnum.Json.name},
+                {"value": DataFormatTypeEnum.Parquet.value, "label": DataFormatTypeEnum.Parquet.name},
+            ]
+        },
     }
     return response_success(data=data_format_types)
 
