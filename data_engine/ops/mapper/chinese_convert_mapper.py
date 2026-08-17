@@ -26,8 +26,10 @@ def prepare_converter(mode):
 class ChineseConvertMapper(Mapper):
     """Mapper to convert Chinese between Traditional Chinese, Simplified Chinese
     and Japanese Kanji."""
+    _supports_streaming = True
 
     def __init__(self, mode: str = 's2t', *args, **kwargs):
+        
         """
         Initialization method.
 
