@@ -32,6 +32,8 @@ with AvailabilityChecking(['sentencepiece'], OP_NAME):
 class FlaggedWordFilter(Filter):
     """Filter to keep samples with flagged-word ratio less than a specific max
     value."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  lang: str = 'en',

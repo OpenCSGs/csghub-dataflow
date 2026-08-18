@@ -19,6 +19,8 @@ with AvailabilityChecking(['fasttext-wheel'], OP_NAME):
 class LanguageIDScoreFilter(Filter):
     """Filter to keep samples in a specific language with confidence score
     larger than a specific min value."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  lang: Union[str, List[str], Tuple[str]] = '',

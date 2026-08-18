@@ -68,7 +68,23 @@ class LocalFormatter(BaseFormatter):
 
         :param num_proc: number of processes when loading the dataset
         :param global_cfg: global cfg used in consequent processes,
-        :return: formatted dataset
+        :return: formatted dataset (NestedDataset or StreamingDataset)
+        """
+        # Check if streaming mode is enabled
+        use_streaming = getattr(global_cfg, 'use_streaming', False)
+
+        if use_streaming:
+            return self._load_dataset_streaming(global_cfg)
+        else:
+            return self._load_dataset_normal(num_proc, global_cfg)
+
+    def _load_dataset_normal(self, num_proc: int = 1, global_cfg=None) -> Dataset:
+        """
+        Load dataset in normal mode (original implementation).
+
+        :param num_proc: number of processes when loading the dataset
+        :param global_cfg: global cfg used in consequent processes
+        :return: NestedDataset
         """
         from datasets.exceptions import DatasetGenerationError
         
@@ -999,6 +1015,213 @@ class LocalFormatter(BaseFormatter):
             from datasets import Dataset
             return Dataset.from_list(data_list, features=features)
 
+    def _load_dataset_streaming(self, global_cfg=None):
+        """
+        Load dataset in streaming mode for low memory usage.
+
+        :param global_cfg: global cfg used in consequent processes
+        :return: StreamingDataset
+        """
+        from data_engine.core.streaming_data import StreamingDataset
+        from datasets import interleave_datasets
+
+        logger.info('Loading dataset in STREAMING mode (low memory)...')
+
+        # First, find data files
+        self.data_files = find_files_with_suffix(self.dataset_path, self.suffixes)
+
+        # Streaming mode: Fixed configuration
+        # - Always pre-scan sample count (for progress bar)
+        # - Fixed batch_size=100 (memory-efficient batch processing)
+        estimated_total_samples = None
+        batch_size = 1000  # Fixed batch size for streaming mode (balances memory and performance)
+
+        if global_cfg and global_cfg.use_streaming:
+            # Pre-scan sample count (mandatory in streaming mode)
+            estimated_total_samples = self._prescan_sample_count()
+
+        # Escape glob special characters in file paths
+        escaped_data_files = {
+            key: [escape_glob_chars(f) for f in files]
+            for key, files in self.data_files.items()
+        }
+
+        # Load with streaming=True
+        datasets = load_dataset(
+            self.type,
+            data_files={
+                key.strip('.'): escaped_data_files[key]
+                for key in escaped_data_files
+            },
+            streaming=True,  # Key parameter for streaming mode
+            # Note: num_proc is not supported in streaming mode
+            **self.kwargs
+        )
+
+        # Merge multiple splits using interleave_datasets
+        dataset_list = [ds for _, ds in datasets.items()]
+        if len(dataset_list) > 1:
+            logger.info(f'Merging {len(dataset_list)} dataset splits in streaming mode...')
+            ds = interleave_datasets(dataset_list)
+        else:
+            ds = dataset_list[0]
+
+        # Apply format unification in streaming mode
+        ds = self._unify_format_streaming(ds, global_cfg)
+
+        # Handle add_suffix in streaming mode
+        if self.add_suffix:
+            logger.info('Adding suffix info to streaming dataset...')
+
+            def add_suffix_field(sample):
+                if Fields.suffix not in sample:
+                    # Add suffix based on file type
+                    sample[Fields.suffix] = f'.{self.type}'
+                return sample
+
+            ds = ds.map(add_suffix_field)
+
+        logger.info(f'Dataset loaded successfully in streaming mode (batch_size={batch_size})')
+
+        # Create StreamingDataset with total_samples for progress bar support
+        streaming_dataset = StreamingDataset(
+            ds,
+            batch_size=batch_size,
+            total_samples=estimated_total_samples  # Pass to constructor for progress bar
+        )
+
+        return streaming_dataset
+
+    def _unify_format_streaming(self, dataset, global_cfg):
+        """
+        Unify dataset format in streaming mode.
+        Simplified version without multi-process support.
+
+        :param dataset: IterableDataset
+        :param global_cfg: global config
+        :return: formatted IterableDataset
+        """
+        # Get text_keys from config
+        text_keys = self.text_keys if self.text_keys else ['text']
+        if isinstance(text_keys, str):
+            text_keys = [text_keys]
+
+        # Define format unification function
+        def unify_sample(sample):
+            # Ensure text field exists
+            if text_keys[0] not in sample:
+                # Try to find alternative text field
+                for key in text_keys:
+                    if key in sample:
+                        sample[text_keys[0]] = sample[key]
+                        break
+                else:
+                    # No text field found, set to empty string
+                    sample[text_keys[0]] = ""
+
+            return sample
+
+        # Apply unification
+        dataset = dataset.map(unify_sample)
+
+        # Filter out samples with empty or None text (same as normal mode)
+        logger.info('Filtering empty text samples in streaming mode...')
+
+        def non_empty_text(sample):
+            """Filter function to remove samples with None text fields"""
+            for target_key in text_keys:
+                if target_key in sample and sample[target_key] is None:
+                    # Filter out samples with None in any text column
+                    return False
+            return True
+
+        # Apply filter
+        dataset = dataset.filter(non_empty_text)
+        logger.info('Empty text filtering applied (streaming mode)')
+
+        return dataset
+
+    def _prescan_sample_count(self):
+        """
+        Pre-scan data files to count total samples (low memory, O(1) complexity).
+
+        Uses fast line counting (binary read, no parsing) with minimal memory (~9KB).
+        Supports line-based formats: JSONL, CSV, TXT.
+
+        :return: Total sample count or None if failed
+        """
+        logger.info('Pre-scanning sample count (fast line counting)...')
+
+        total_samples = 0
+        file_count = 0
+
+        try:
+            # Collect all data files
+            all_files = []
+            for suffix, files in self.data_files.items():
+                all_files.extend(files)
+
+            if not all_files:
+                logger.warning('No data files found for pre-scanning')
+                return None
+
+            # Count samples in each file
+            for file_path in all_files:
+                try:
+                    # Check if file format supports line counting
+                    if not self._is_line_based_format(file_path):
+                        logger.warning(
+                            f'Skipping {file_path}: Not a line-based format (only JSONL, CSV, TXT supported)')
+                        continue
+
+                    # Fast line counting (binary read, O(1) memory)
+                    file_samples = self._count_lines_fast(file_path)
+                    total_samples += file_samples
+                    file_count += 1
+
+                    # Log per-file count
+                    logger.info(f'  {os.path.basename(file_path)}: {file_samples:,} samples')
+
+                except Exception as e:
+                    logger.warning(f'Failed to count samples in {file_path}: {e}')
+                    continue
+
+            if file_count > 0:
+                logger.info(f'Pre-scan complete: {total_samples:,} total samples across {file_count} file(s)')
+                return total_samples
+            else:
+                logger.warning('No files were successfully scanned')
+                return None
+
+        except Exception as e:
+            logger.warning(f'Pre-scan failed: {e}')
+            return None
+
+    @staticmethod
+    def _count_lines_fast(file_path):
+        """
+        Fast line counting using binary read (minimal memory: ~9KB, O(1) complexity).
+
+        :param file_path: Path to file
+        :return: Number of lines
+        """
+        count = 0
+        with open(file_path, 'rb') as f:
+            for _ in f:  # Binary iteration, no decoding
+                count += 1
+        return count
+
+    @staticmethod
+    def _is_line_based_format(file_path):
+        """
+        Check if file format is line-based (supports fast line counting).
+
+        :param file_path: Path to file
+        :return: True if line-based format
+        """
+        ext = os.path.splitext(file_path)[1].lower()
+        line_based_formats = {'.jsonl', '.csv', '.txt', '.tsv'}
+        return ext in line_based_formats
 
 class RemoteFormatter(BaseFormatter):
     """The class is used to load a dataset from repository of huggingface

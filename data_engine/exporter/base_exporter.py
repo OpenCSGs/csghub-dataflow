@@ -52,7 +52,7 @@ class Exporter:
         """
         if Path(export_path).is_dir() and not path_is_dir:
             export_path = os.path.join(export_path, "x.jsonl")
-            
+
         self.export_path = export_path
         self.export_shard_size = export_shard_size
         self.export_in_parallel = export_in_parallel
@@ -125,7 +125,13 @@ class Exporter:
         :param export_stats: whether to export stats of dataset.
         :return:
         """
-        if Fields.stats in dataset.features and export_stats:
+        # 流式模式：不支持 features 属性和 select_columns 方法
+        from data_engine.core.streaming_data import StreamingDataset
+        from datasets import IterableDataset
+
+        is_streaming = isinstance(dataset, (StreamingDataset, IterableDataset))
+
+        if not is_streaming and Fields.stats in dataset.features and export_stats:
             # export stats of datasets into a single file.
             logger.info('Exporting computed stats into a single file...')
             ds_stats = dataset.select_columns(Fields.stats)
@@ -164,10 +170,21 @@ class Exporter:
                 HashKeys.is_duplicate,
                 HashKeys.similarity_hash,
             })
-            feature_fields = set(dataset.features.keys())
-            removed_fields = fields_to_remove.intersection(feature_fields)
-            if removed_fields:
-                dataset = dataset.remove_columns(removed_fields)
+            # 流式模式：使用 map 移除内部字段
+            if not is_streaming:
+                feature_fields = set(dataset.features.keys())
+                removed_fields = fields_to_remove.intersection(feature_fields)
+                if removed_fields:
+                    dataset = dataset.remove_columns(removed_fields)
+            else:
+                # 流式模式：通过 map 过滤字段
+                logger.info('Streaming mode: filtering internal fields before export...')
+
+                def remove_fields(sample):
+                    return {k: v for k, v in sample.items() if k not in fields_to_remove}
+
+                dataset = dataset.map(remove_fields)
+
             export_method = Exporter._router()[suffix]
 
             dirname = os.path.join(os.path.dirname(os.path.abspath(self.export_path)), "_data")
@@ -234,12 +251,148 @@ class Exporter:
     def export(self, dataset):
         """
         Export method for a dataset.
+        Supports both NestedDataset and StreamingDataset.
 
-        :param dataset: the dataset to export.
-        :return:
+        :param dataset: the dataset to export (NestedDataset or StreamingDataset)
+        :return: empty string or branch name if pushing to repo
         """
-        self._export_impl(dataset, self.export_path, self.suffix, self.export_stats)
+        from data_engine.core.streaming_data import is_streaming_dataset
+
+        if is_streaming_dataset(dataset):
+            return self._export_streaming(dataset)
+        else:
+            self._export_impl(dataset, self.export_path, self.suffix, self.export_stats)
+            return ""
+
+    def _export_streaming(self, dataset):
+        """
+        Export StreamingDataset to file(s) with low memory usage.
+
+        :param dataset: StreamingDataset to export
+        :return: empty string
+        """
+        import json
+        import tempfile
+        import shutil
+        from tqdm import tqdm
+
+        logger.info('Exporting dataset in STREAMING mode (low memory)...')
+
+        # Determine export directory and filename
+        export_dir = os.path.dirname(os.path.abspath(self.export_path))
+        basename = os.path.basename(self.export_path)
+
+        # Create directory for data files
+        data_dir = os.path.join(export_dir, "_data")
+        os.makedirs(data_dir, exist_ok=True)
+
+        output_file = os.path.join(data_dir, basename)
+
+        # Use temporary file to avoid overwriting input file during streaming
+        # (fixes issue where input and output paths are the same)
+        temp_fd, temp_file = tempfile.mkstemp(
+            suffix='.jsonl',
+            prefix='_df_tmp_',
+            dir=data_dir,
+            text=True
+        )
+
+        try:
+            # Write samples to temporary file iteratively
+            sample_count = 0
+            with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+                # Use tqdm for progress display (without total count)
+                pbar = tqdm(desc='Exporting samples', unit=' samples')
+
+                for sample in dataset:
+                    # Skip empty samples (error samples from exception handling)
+                    # Error samples have all values as empty lists: {key: []}
+                    if not sample:
+                        continue
+
+                    # Check if this is an error sample (all values are empty lists)
+                    is_error_sample = False
+                    if isinstance(sample, dict):
+                        # Get non-internal keys
+                        from data_engine.utils.constant import Fields
+                        data_keys = [k for k in sample.keys() if k not in [Fields.stats, Fields.source_file]]
+                        if data_keys:
+                            # Check if all data values are empty lists
+                            is_error_sample = all(
+                                isinstance(sample[key], list) and len(sample[key]) == 0
+                                for key in data_keys
+                            )
+
+                    if is_error_sample:
+                        continue
+
+                    # Remove internal fields before export
+                    sample = self._clean_sample_for_export(sample)
+
+                    # Write as JSON line
+                    f.write(json.dumps(sample, ensure_ascii=False) + '\n')
+                    sample_count += 1
+                    pbar.update(1)
+
+                pbar.close()
+
+            # Move temporary file to final location (atomic operation on same filesystem)
+            shutil.move(temp_file, output_file)
+            logger.info(f'Exported {sample_count} samples to {output_file} in streaming mode')
+
+        except Exception as e:
+            # Clean up temporary file on error
+            if os.path.exists(temp_file):
+                try:
+                    os.remove(temp_file)
+                except OSError:
+                    pass
+            raise e
+
         return ""
+
+    def _clean_sample_for_export(self, sample):
+        """
+        Remove internal fields from sample before export.
+
+        :param sample: sample dict
+        :return: cleaned sample dict
+        """
+        # Fields to remove
+        fields_to_remove = set()
+
+        if not self.keep_stats_in_res_ds:
+            fields_to_remove.add(Fields.stats)
+
+        if not self.keep_hashes_in_res_ds:
+            fields_to_remove.update({
+                HashKeys.hash,
+                HashKeys.minhash,
+                HashKeys.simhash,
+                HashKeys.imagehash,
+                HashKeys.videohash,
+            })
+
+        # Other internal fields
+        fields_to_remove.update({
+            Fields.suffix,
+            Fields.context,
+            Fields.meta,
+            Fields.source_file,
+            Fields.video_frame_tags,
+            Fields.video_audio_tags,
+            Fields.multimodal_data_output_dir,
+            HashKeys.is_duplicate,
+            HashKeys.similarity_hash,
+        })
+
+        # Remove fields that exist in sample
+        cleaned_sample = {
+            k: v for k, v in sample.items()
+            if k not in fields_to_remove
+        }
+
+        return cleaned_sample
 
     def export_compute_stats(self, dataset, export_path):
         """

@@ -8,6 +8,9 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 @OPERATORS.register_module('remove_specific_chars_mapper')
 class RemoveSpecificCharsMapper(Mapper):
     """Mapper to clean specific chars in text samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  chars_to_remove: Union[str, List[str]] = '◆●■►▼▲▴∆▻▷❖♡□',

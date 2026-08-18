@@ -227,6 +227,7 @@ class OP:
         pass
 
 class Mapper(OP):
+    _supports_streaming = False  # Default: does not support streaming
 
     def __init__(self, *args, **kwargs):
         """
@@ -261,6 +262,30 @@ class Mapper(OP):
         raise NotImplementedError
 
     def run(self, dataset, *, exporter=None, tracer=None):
+        """
+        Run mapper on dataset, supporting both normal and streaming modes.
+
+        :param dataset: NestedDataset or StreamingDataset
+        :param exporter: exporter instance
+        :param tracer: tracer instance
+        :return: processed dataset
+        """
+        from data_engine.core.streaming_data import is_streaming_dataset
+
+        if is_streaming_dataset(dataset):
+            # Streaming mode
+            if not self._supports_streaming:
+                raise ValueError(
+                    f"Mapper [{self._name}] does not support streaming mode. "
+                    f"Please either remove this operator or use normal mode."
+                )
+            return self.run_streaming(dataset, exporter=exporter)
+        else:
+            # Normal mode (original implementation)
+            return self._run_normal(dataset, exporter=exporter, tracer=tracer)
+
+    def _run_normal(self, dataset, *, exporter=None, tracer=None):
+        """Original run implementation for normal mode."""
         insert_pipline_job_run_task_log_info(self.job_uid, f"starting mapper job", operator_name=self._name,
                                              operator_index=self.pipline_index)
         set_pipline_job_operator_status(self.job_uid,OperatorStatusEnum.Processing,self._name,self.pipline_index)
@@ -286,8 +311,127 @@ class Mapper(OP):
         finally:
             insert_pipline_job_run_task_log_info(self.job_uid,"ending mapper job",operator_name=self._name,operator_index=self.pipline_index)
 
+    def run_streaming(self, dataset, *, exporter=None):
+        """
+        Run mapper in streaming mode (low memory).
+
+        :param dataset: StreamingDataset
+        :param exporter: exporter instance
+        :return: processed StreamingDataset
+        """
+        insert_pipline_job_run_task_log_info(
+            self.job_uid,
+            f"Starting mapper job in STREAMING mode",
+            operator_name=self._name,
+            operator_index=self.pipline_index
+        )
+        set_pipline_job_operator_status(
+            self.job_uid,
+            OperatorStatusEnum.Processing,
+            self._name,
+            self.pipline_index
+        )
+
+        try:
+            # Get batch_size from dataset
+            batch_size = getattr(dataset, 'batch_size', 1)
+            use_batched = batch_size > 1
+
+            if use_batched:
+                logger.info(f'Processing {self._name} in streaming mode (batched with batch_size={batch_size})...')
+            else:
+                logger.info(f'Processing {self._name} in streaming mode (single-process)...')
+
+            # Import streaming exception handler
+            from data_engine.core.streaming_data import catch_streaming_exception, filter_empty_samples
+
+            if use_batched:
+                # Define batched processing function
+                def safe_process_batched(batch):
+                    """Process batch with exception handling"""
+                    # Get batch size
+                    first_key = next(iter(batch.keys()))
+                    current_batch_size = len(batch[first_key])
+
+                    # Initialize result batch
+                    result_batch = {key: [] for key in batch.keys()}
+
+                    # Process each sample in batch
+                    for i in range(current_batch_size):
+                        try:
+                            # Extract single sample from batch
+                            sample = {key: batch[key][i] for key in batch.keys()}
+
+                            # Process sample
+                            processed_sample = self.process(sample)
+
+                            # Add to result batch
+                            for key in processed_sample.keys():
+                                if key not in result_batch:
+                                    result_batch[key] = []
+                                result_batch[key].append(processed_sample[key])
+                        except Exception as e:
+                            logger.error(
+                                f'An error occurred in mapper {self._name} when processing sample {i}: {e}'
+                            )
+                            import traceback
+                            traceback.print_exc()
+                            # Return empty dict for error samples
+                            for key in batch.keys():
+                                if key not in result_batch:
+                                    result_batch[key] = []
+                                result_batch[key].append({})
+
+                    return result_batch
+
+                # Apply batched processing
+                new_dataset = dataset.map(
+                    safe_process_batched,
+                    batched=True,
+                    batch_size=batch_size,
+                    desc=self._name + '_process'
+                )
+            else:
+                # Wrap process method with exception handler (similar to normal mode)
+                safe_process = catch_streaming_exception(self.process)
+
+                # Apply safe process in single-sample mode
+                new_dataset = dataset.map(safe_process, desc=self._name + '_process')
+
+            # Filter out empty dict samples that resulted from exceptions
+            new_dataset = filter_empty_samples(new_dataset)
+
+            set_pipline_job_operator_status(
+                self.job_uid,
+                OperatorStatusEnum.SUCCESS,
+                self._name,
+                self.pipline_index
+            )
+            return new_dataset
+        except Exception as e:
+            set_pipline_job_operator_status(
+                self.job_uid,
+                OperatorStatusEnum.ERROR,
+                self._name,
+                self.pipline_index
+            )
+            insert_pipline_job_run_task_log_error(
+                self.job_uid,
+                f"An error occurred during streaming data mapping: {e}",
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )
+            raise
+        finally:
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                "Ending mapper job (streaming mode)",
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )
 
 class Filter(OP):
+    _supports_streaming = False  # Default: does not support streaming
 
     def __init__(self, *args, **kwargs):
         """
@@ -334,6 +478,30 @@ class Filter(OP):
         raise NotImplementedError
 
     def run(self, dataset, *, exporter=None, tracer=None):
+        """
+        Run filter on dataset, supporting both normal and streaming modes.
+
+        :param dataset: NestedDataset or StreamingDataset
+        :param exporter: exporter instance
+        :param tracer: tracer instance
+        :return: filtered dataset
+        """
+        from data_engine.core.streaming_data import is_streaming_dataset
+
+        if is_streaming_dataset(dataset):
+            # Streaming mode
+            if not self._supports_streaming:
+                raise ValueError(
+                    f"Filter [{self._name}] does not support streaming mode. "
+                    f"Please either remove this operator or use normal mode."
+                )
+            return self.run_streaming(dataset, exporter=exporter)
+        else:
+            # Normal mode (original implementation)
+            return self._run_normal(dataset, exporter=exporter, tracer=tracer)
+
+    def _run_normal(self, dataset, *, exporter=None, tracer=None):
+        """Original run implementation for normal mode (3-stage processing)."""
         insert_pipline_job_run_task_log_info(self.job_uid, f"starting filter job", operator_name=self._name,
                                              operator_index=self.pipline_index)
         set_pipline_job_operator_status(self.job_uid, OperatorStatusEnum.Processing, self._name, self.pipline_index)
@@ -375,6 +543,132 @@ class Filter(OP):
         finally:
             insert_pipline_job_run_task_log_info(self.job_uid, "ending filter job", operator_name=self._name,
                                                  operator_index=self.pipline_index)
+
+    def run_streaming(self, dataset, *, exporter=None):
+        """
+        Run filter in streaming mode (low memory).
+        Combines compute_stats and process into single-pass filtering.
+
+        :param dataset: StreamingDataset
+        :param exporter: exporter instance
+        :return: filtered StreamingDataset
+        """
+        insert_pipline_job_run_task_log_info(
+            self.job_uid,
+            f"Starting filter job in STREAMING mode",
+            operator_name=self._name,
+            operator_index=self.pipline_index
+        )
+        set_pipline_job_operator_status(
+            self.job_uid,
+            OperatorStatusEnum.Processing,
+            self._name,
+            self.pipline_index
+        )
+
+        try:
+            # Get batch_size from dataset
+            batch_size = getattr(dataset, 'batch_size', 1)
+            use_batched = batch_size > 1
+
+            if use_batched:
+                logger.info(
+                    f'Processing {self._name} in streaming mode (batched filtering with batch_size={batch_size})...')
+            else:
+                logger.info(f'Processing {self._name} in streaming mode (single-pass filtering)...')
+
+            # Define combined filter function with exception handling
+            if use_batched:
+                def safe_combined_filter_batched(batch):
+                    """Compute stats and filter in batch mode with exception handling"""
+                    results = []
+
+                    # Get batch size
+                    first_key = next(iter(batch.keys()))
+                    current_batch_size = len(batch[first_key])
+
+                    # Process each sample in batch
+                    for i in range(current_batch_size):
+                        try:
+                            # Extract single sample from batch
+                            sample = {key: batch[key][i] for key in batch.keys()}
+
+                            # Compute stats (compute_stats is wrapped with exception handler)
+                            sample = self.compute_stats(sample)
+
+                            # Apply filter
+                            keep = self.process(sample)
+                            results.append(keep)
+                        except Exception as e:
+                            logger.error(
+                                f'An error occurred in filter {self._name} when processing sample {i}: {e}'
+                            )
+                            import traceback
+                            traceback.print_exc()
+                            # Return False to filter out error samples
+                            results.append(False)
+
+                    return results
+
+                # Apply combined filter in batched mode
+                new_dataset = dataset.filter(
+                    safe_combined_filter_batched,
+                    batched=True,
+                    batch_size=batch_size,
+                    desc=self._name + '_process'
+                )
+            else:
+                def safe_combined_filter(sample):
+                    """Compute stats and filter in single pass with exception handling"""
+                    try:
+                        # Compute stats (compute_stats is wrapped with exception handler)
+                        sample = self.compute_stats(sample)
+
+                        # Apply filter
+                        return self.process(sample)
+                    except Exception as e:
+                        logger.error(
+                            f'An error occurred in filter {self._name} when processing sample: {e}'
+                        )
+                        import traceback
+                        traceback.print_exc()
+                        # Return False to filter out error samples
+                        return False
+
+                # Apply combined filter in single-sample mode
+                new_dataset = dataset.filter(
+                    safe_combined_filter,
+                    desc=self._name + '_process'
+                )
+
+            set_pipline_job_operator_status(
+                self.job_uid,
+                OperatorStatusEnum.SUCCESS,
+                self._name,
+                self.pipline_index
+            )
+            return new_dataset
+        except Exception as e:
+            set_pipline_job_operator_status(
+                self.job_uid,
+                OperatorStatusEnum.ERROR,
+                self._name,
+                self.pipline_index
+            )
+            insert_pipline_job_run_task_log_error(
+                self.job_uid,
+                f"An error occurred during streaming data filter: {e}",
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )
+            raise
+        finally:
+            insert_pipline_job_run_task_log_info(
+                self.job_uid,
+                "Ending filter job (streaming mode)",
+                operator_name=self._name,
+                operator_index=self.pipline_index
+            )
 
     def _log_filter_details(self, original_dataset, filtered_dataset):
         """

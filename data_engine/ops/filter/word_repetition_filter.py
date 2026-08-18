@@ -24,6 +24,8 @@ with AvailabilityChecking(['sentencepiece'], OP_NAME):
 class WordRepetitionFilter(Filter):
     """Filter to keep samples with word-level n-gram repetition ratio within a
     specific range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  lang: str = 'en',

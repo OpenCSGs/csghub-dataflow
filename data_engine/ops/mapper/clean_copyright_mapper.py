@@ -14,6 +14,8 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 @OPERATORS.register_module('clean_copyright_mapper')
 class CleanCopyrightMapper(Mapper):
     """Remove copyright notices from documents (PDF->MD->JSONL)."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  matching_rules: Union[str, List[str], Tuple[str]] = [],

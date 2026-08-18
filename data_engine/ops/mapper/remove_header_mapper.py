@@ -11,6 +11,9 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 class RemoveHeaderMapper(Mapper):
     """Mapper to remove headers at the beginning of documents in Latex
     samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self, drop_no_head: bool = True, *args, **kwargs):
         """

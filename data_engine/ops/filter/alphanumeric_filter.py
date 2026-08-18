@@ -19,6 +19,8 @@ with AvailabilityChecking(['transformers'], OP_NAME):
 class AlphanumericFilter(Filter):
     """Filter to keep samples with alphabet/numeric ratio within a specific
     range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  tokenization: bool = False,

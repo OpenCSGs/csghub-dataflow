@@ -14,6 +14,9 @@ def split_sentence(text):
 @OPERATORS.register_module('remove_repeat_sentences_mapper')
 class RemoveRepeatSentencesMapper(Mapper):
     """Mapper to remove repeat sentences in text samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  lowercase: bool = False,

@@ -25,6 +25,8 @@ with AvailabilityChecking(['sentencepiece'], OP_NAME):
 class StopWordsFilter(Filter):
     """Filter to keep samples with stopword ratio larger than a specific min
     value."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  lang: str = 'en',

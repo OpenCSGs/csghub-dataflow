@@ -13,6 +13,8 @@ from ..op_fusion import INTER_LINES
 class MaximumLineLengthFilter(Filter):
     """Filter to keep samples with maximum line length within a specific
     range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  min_len: PositiveInt = 10,

@@ -136,10 +136,22 @@ class ExporterCSGHUB(Exporter):
     def export(self, dataset):
         """
         Export method for a dataset.
+        Supports both NestedDataset and StreamingDataset.
 
         :param dataset: the dataset to export.
-        :return:
+        :return: branch name if pushing to repo, empty string otherwise
         """
+        from data_engine.core.streaming_data import is_streaming_dataset
+
+        # Export dataset (streaming or normal mode)
+        if is_streaming_dataset(dataset):
+            # Call parent's streaming export method
+            super()._export_streaming(dataset)
+        else:
+            # Call parent's normal export method
+            self._export_impl(dataset, self.export_path, self.suffix, self.export_stats)
+
+        # After export, push to repo if repo_id is configured
         self._export_impl(dataset, self.export_path, self.suffix, self.export_stats)
         self.upload_path = os.path.join(self.work_dir, "_data")
         self.repo_work_dir = os.path.join(self.work_dir, "_git")

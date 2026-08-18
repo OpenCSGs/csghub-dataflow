@@ -15,6 +15,8 @@ class WhitespaceNormalizationMapper(Mapper):
     Different kinds of whitespaces can be found here:
     https://en.wikipedia.org/wiki/Whitespace_character
     """
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self, *args, **kwargs):
         """

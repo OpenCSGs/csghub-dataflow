@@ -11,6 +11,9 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 class ExpandMacroMapper(Mapper):
     """Mapper to expand macro definitions in the document body of Latex
     samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self, *args, **kwargs):
         """

@@ -485,15 +485,102 @@ def run_operator_execute(task_params: dict):
             except OSError:
                 logger.warning("Failed to remove temp operator config {}", temp_path)
 
-    formatter = load_formatter(
-        recipe.dataset_path,
-        cfg.generated_dataset_config,
-        cfg.text_keys,
-        cfg.suffixes,
-        cfg.add_suffix,
-    )
-    dataset = formatter.load_dataset(cfg.np, cfg)
+    # Load operators first to check streaming compatibility
     ops = load_ops(cfg.process, cfg.op_fusion, job_uid=str(task_params.get("job_id") or ""))
+
+    # Smart formatter selection based on streaming mode and dataset requirements
+    use_streaming = getattr(cfg, 'use_streaming', False)
+
+    if use_streaming:
+        # Check if dataset path contains weights or requires mixing
+        dataset_path_tokens = recipe.dataset_path.split()
+        has_weights = False
+
+        for token in dataset_path_tokens:
+            try:
+                float(token)
+                has_weights = True
+                break
+            except ValueError:
+                continue
+
+        needs_mixture = has_weights or (hasattr(cfg, 'max_samples') and cfg.max_samples is not None)
+
+        if needs_mixture:
+            # Dataset requires MixtureFormatter (weights/sampling), must use normal mode
+            logger.warning("Dataset path contains weights or max_samples - MixtureFormatter required")
+            logger.warning("Automatically switching to NORMAL mode")
+            cfg.use_streaming = False
+
+            formatter = load_formatter(
+                recipe.dataset_path,
+                cfg.generated_dataset_config,
+                cfg.text_keys,
+                cfg.suffixes,
+                cfg.add_suffix,
+            )
+
+            job_uid = str(task_params.get("job_id") or "")
+            if job_uid:
+                from data_server.pod.pod_logger import log_task_info
+                log_task_info(job_uid, "⚠️  MixtureFormatter required, streaming disabled")
+        else:
+            # Simple dataset path, check if operators support streaming
+            unsupported_ops = []
+            for op in ops:
+                if not getattr(op, '_supports_streaming', False):
+                    unsupported_ops.append(op._name)
+
+            if unsupported_ops:
+                # Operators don't support streaming, fallback to normal mode with MixtureFormatter
+                logger.warning(f"Operators [{', '.join(unsupported_ops)}] not compatible with streaming")
+                logger.warning("Automatically switching to NORMAL mode")
+                cfg.use_streaming = False
+
+                formatter = load_formatter(
+                    recipe.dataset_path,
+                    cfg.generated_dataset_config,
+                    cfg.text_keys,
+                    cfg.suffixes,
+                    cfg.add_suffix,
+                )
+
+                job_uid = str(task_params.get("job_id") or "")
+                if job_uid:
+                    from data_server.pod.pod_logger import log_task_info
+                    log_task_info(job_uid,
+                                  f"⚠️  Streaming disabled: operators [{', '.join(unsupported_ops)}] not compatible")
+            else:
+                # All operators support streaming, use smart formatter
+                from data_engine.format.formatter import load_formatter as smart_load_formatter
+                formatter = smart_load_formatter(
+                    dataset_path=recipe.dataset_path,
+                    text_keys=cfg.text_keys,
+                    suffixes=cfg.suffixes,
+                    add_suffix=cfg.add_suffix,
+                )
+
+                logger.info(f"✓ Streaming mode enabled: using {formatter.__class__.__name__}")
+                logger.info(f"✓ All {len(ops)} operator(s) support streaming mode")
+
+                job_uid = str(task_params.get("job_id") or "")
+                if job_uid:
+                    from data_server.pod.pod_logger import log_task_info
+                    log_task_info(job_uid, f"✓ Streaming mode: {formatter.__class__.__name__} + {len(ops)} operator(s)")
+    else:
+        # Normal mode: use MixtureFormatter (existing behavior)
+        formatter = load_formatter(
+            recipe.dataset_path,
+            cfg.generated_dataset_config,
+            cfg.text_keys,
+            cfg.suffixes,
+            cfg.add_suffix,
+        )
+        logger.info(f"Normal mode: using {formatter.__class__.__name__}")
+
+    # Load dataset with appropriate mode
+    dataset = formatter.load_dataset(cfg.np, cfg)
+
     exporter = load_exporter(
         recipe.export_path,
         cfg.export_shard_size,

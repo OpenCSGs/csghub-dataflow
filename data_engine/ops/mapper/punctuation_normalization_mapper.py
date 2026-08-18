@@ -9,6 +9,9 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 class PunctuationNormalizationMapper(Mapper):
     """Mapper to normalize unicode punctuations to English punctuations in text
     samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self, *args, **kwargs):
         """

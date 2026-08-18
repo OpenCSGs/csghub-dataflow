@@ -22,6 +22,8 @@ with AvailabilityChecking(['sentencepiece'], OP_NAME):
 class WordsNumFilter(Filter):
     """Filter to keep samples with total words number within a specific
     range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  lang: str = 'en',

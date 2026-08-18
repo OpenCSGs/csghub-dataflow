@@ -6,6 +6,9 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 @OPERATORS.register_module('clean_ip_mapper')
 class CleanIpMapper(Mapper):
     """Mapper to clean ipv4 and ipv6 address in text samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self, pattern: str = None, repl: str = '', *args, **kwargs):
         """

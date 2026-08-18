@@ -7,6 +7,8 @@ OP_NAME = 'text_high_score_filter'
 @OPERATORS.register_module('text_high_score_filter')
 class TextHighScoreFilter(Filter):
 
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
     def __init__(self,
                  score_field: str = 'text_score',
                  min_score: float = 0.0,
