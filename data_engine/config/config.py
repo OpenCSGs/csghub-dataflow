@@ -144,6 +144,17 @@ def init_configs(args=None,redirect=True):
                         default=4,
                         help='Number of processes to process dataset.')
     parser.add_argument(
+        '--use_streaming',
+        type=bool,
+        default=True,
+        help='Whether to use streaming mode for dataset loading and processing. '
+             'Streaming mode significantly reduces memory usage by processing '
+             'data iteratively without loading the entire dataset into memory. '
+             'However, it disables caching, checkpointing, and multi-process '
+             'parallelism. Only simple mappers and filters support streaming mode. '
+             'Recommended for datasets larger than available memory (>10GB). '
+             'When enabled, automatically sets batch_size=100 and enables sample counting.')
+    parser.add_argument(
         '--text_keys',
         type=Union[str, List[str]],
         default='text',
