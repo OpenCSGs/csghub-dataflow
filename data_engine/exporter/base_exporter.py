@@ -147,43 +147,11 @@ class Exporter:
         if self.export_ds:
             # Collect all internal fields to remove before export.
             # intersection() ensures only existing columns are removed, no error if absent.
-            fields_to_remove = set()
-            if not self.keep_stats_in_res_ds:
-                fields_to_remove.add(Fields.stats)
-            if not self.keep_hashes_in_res_ds:
-                fields_to_remove.update({
-                    HashKeys.hash,
-                    HashKeys.minhash,
-                    HashKeys.simhash,
-                    HashKeys.imagehash,
-                    HashKeys.videohash,
-                })
-            # Other internal __dj__ fields that should not appear in export
-            fields_to_remove.update({
-                Fields.suffix,
-                Fields.context,
-                Fields.meta,
-                Fields.source_file,
-                Fields.video_frame_tags,
-                Fields.video_audio_tags,
-                Fields.multimodal_data_output_dir,
-                HashKeys.is_duplicate,
-                HashKeys.similarity_hash,
-            })
-            # 流式模式：使用 map 移除内部字段
-            if not is_streaming:
-                feature_fields = set(dataset.features.keys())
-                removed_fields = fields_to_remove.intersection(feature_fields)
-                if removed_fields:
-                    dataset = dataset.remove_columns(removed_fields)
-            else:
-                # 流式模式：通过 map 过滤字段
-                logger.info('Streaming mode: filtering internal fields before export...')
-
-                def remove_fields(sample):
-                    return {k: v for k, v in sample.items() if k not in fields_to_remove}
-
-                dataset = dataset.map(remove_fields)
+            fields_to_remove = self._get_fields_to_remove()
+            feature_fields = set(dataset.features.keys())
+            removed_fields = fields_to_remove.intersection(feature_fields)
+            if removed_fields:
+                dataset = dataset.remove_columns(removed_fields)
 
             export_method = Exporter._router()[suffix]
 
@@ -248,6 +216,42 @@ class Exporter:
     def export_large_folder(self):
         pass
 
+    def _get_fields_to_remove(self):
+        """
+        Get set of internal fields to remove before export.
+        Shared by both normal and streaming modes.
+
+        :return: set of field names to remove
+        """
+        fields_to_remove = set()
+
+        if not self.keep_stats_in_res_ds:
+            fields_to_remove.add(Fields.stats)
+
+        if not self.keep_hashes_in_res_ds:
+            fields_to_remove.update({
+                HashKeys.hash,
+                HashKeys.minhash,
+                HashKeys.simhash,
+                HashKeys.imagehash,
+                HashKeys.videohash,
+            })
+
+        # Other internal fields
+        fields_to_remove.update({
+            Fields.suffix,
+            Fields.context,
+            Fields.meta,
+            Fields.source_file,
+            Fields.video_frame_tags,
+            Fields.video_audio_tags,
+            Fields.multimodal_data_output_dir,
+            HashKeys.is_duplicate,
+            HashKeys.similarity_hash,
+        })
+
+        return fields_to_remove
+
     def export(self, dataset):
         """
         Export method for a dataset.
@@ -275,8 +279,12 @@ class Exporter:
         import tempfile
         import shutil
         from tqdm import tqdm
+        from data_engine.core.streaming_data import filter_empty_samples
 
         logger.info('Exporting dataset in STREAMING mode (low memory)...')
+
+        # Filter out error samples before export (reuse streaming_data.py logic)
+        dataset = filter_empty_samples(dataset)
 
         # Determine export directory and filename
         export_dir = os.path.dirname(os.path.abspath(self.export_path))
@@ -305,28 +313,7 @@ class Exporter:
                 pbar = tqdm(desc='Exporting samples', unit=' samples')
 
                 for sample in dataset:
-                    # Skip empty samples (error samples from exception handling)
-                    # Error samples have all values as empty lists: {key: []}
-                    if not sample:
-                        continue
-
-                    # Check if this is an error sample (all values are empty lists)
-                    is_error_sample = False
-                    if isinstance(sample, dict):
-                        # Get non-internal keys
-                        from data_engine.utils.constant import Fields
-                        data_keys = [k for k in sample.keys() if k not in [Fields.stats, Fields.source_file]]
-                        if data_keys:
-                            # Check if all data values are empty lists
-                            is_error_sample = all(
-                                isinstance(sample[key], list) and len(sample[key]) == 0
-                                for key in data_keys
-                            )
-
-                    if is_error_sample:
-                        continue
-
-                    # Remove internal fields before export
+                    # Remove internal fields before export (reuse shared method)
                     sample = self._clean_sample_for_export(sample)
 
                     # Write as JSON line
@@ -354,45 +341,13 @@ class Exporter:
     def _clean_sample_for_export(self, sample):
         """
         Remove internal fields from sample before export.
+        Reuses the shared field list from _get_fields_to_remove().
 
         :param sample: sample dict
         :return: cleaned sample dict
         """
-        # Fields to remove
-        fields_to_remove = set()
-
-        if not self.keep_stats_in_res_ds:
-            fields_to_remove.add(Fields.stats)
-
-        if not self.keep_hashes_in_res_ds:
-            fields_to_remove.update({
-                HashKeys.hash,
-                HashKeys.minhash,
-                HashKeys.simhash,
-                HashKeys.imagehash,
-                HashKeys.videohash,
-            })
-
-        # Other internal fields
-        fields_to_remove.update({
-            Fields.suffix,
-            Fields.context,
-            Fields.meta,
-            Fields.source_file,
-            Fields.video_frame_tags,
-            Fields.video_audio_tags,
-            Fields.multimodal_data_output_dir,
-            HashKeys.is_duplicate,
-            HashKeys.similarity_hash,
-        })
-
-        # Remove fields that exist in sample
-        cleaned_sample = {
-            k: v for k, v in sample.items()
-            if k not in fields_to_remove
-        }
-
-        return cleaned_sample
+        fields_to_remove = self._get_fields_to_remove()
+        return {k: v for k, v in sample.items() if k not in fields_to_remove}
 
     def export_compute_stats(self, dataset, export_path):
         """

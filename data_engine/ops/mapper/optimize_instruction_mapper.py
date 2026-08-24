@@ -28,6 +28,8 @@ OP_NAME = 'optimize_instruction_mapper'
 
 @OPERATORS.register_module(OP_NAME)
 class OptimizeInstructionMapper(Mapper):
+
+    _supports_streaming = True  # Supports streaming mode for low memory usage
     _accelerator = 'cpu'
 
     def __init__(self,

@@ -21,6 +21,9 @@ with AvailabilityChecking(['openai', 'scikit-learn'], OP_NAME):
 @OPERATORS.register_module(OP_NAME)
 @LOADED_AUDIOS.register_module(OP_NAME)
 class AnnotateEduTrainBertScorer(Mapper):
+
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
     def __init__(self,
          auth_token: str = "",
          model_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1",

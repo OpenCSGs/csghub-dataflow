@@ -40,6 +40,7 @@ class ExtractQAMapper(Mapper):
     Supports OpenAI-compatible API formats including Qwen, DeepSeek, GPT, etc.
     """
 
+    _supports_streaming = True  # Supports streaming mode for low memory usage
     _accelerator = 'cpu'
 
     def __init__(self,

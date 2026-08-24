@@ -335,68 +335,57 @@ class Mapper(OP):
         try:
             # Get batch_size from dataset
             batch_size = getattr(dataset, 'batch_size', 1)
-            use_batched = batch_size > 1
 
-            if use_batched:
-                logger.info(f'Processing {self._name} in streaming mode (batched with batch_size={batch_size})...')
-            else:
-                logger.info(f'Processing {self._name} in streaming mode (single-process)...')
+            logger.info(f'Processing {self._name} in streaming mode (batch_size={batch_size})...')
 
             # Import streaming exception handler
-            from data_engine.core.streaming_data import catch_streaming_exception, filter_empty_samples
+            from data_engine.core.streaming_data import filter_empty_samples
 
-            if use_batched:
-                # Define batched processing function
-                def safe_process_batched(batch):
-                    """Process batch with exception handling"""
-                    # Get batch size
-                    first_key = next(iter(batch.keys()))
-                    current_batch_size = len(batch[first_key])
+            # Batched processing function (supports any batch_size including 1)
+            def safe_process_batched(batch):
+                """Process batch with exception handling"""
+                # Get batch size
+                first_key = next(iter(batch.keys()))
+                current_batch_size = len(batch[first_key])
 
-                    # Initialize result batch
-                    result_batch = {key: [] for key in batch.keys()}
+                # Initialize result batch
+                result_batch = {key: [] for key in batch.keys()}
 
-                    # Process each sample in batch
-                    for i in range(current_batch_size):
-                        try:
-                            # Extract single sample from batch
-                            sample = {key: batch[key][i] for key in batch.keys()}
+                # Process each sample in batch
+                for i in range(current_batch_size):
+                    try:
+                        # Extract single sample from batch
+                        sample = {key: batch[key][i] for key in batch.keys()}
 
-                            # Process sample
-                            processed_sample = self.process(sample)
+                        # Process sample
+                        processed_sample = self.process(sample)
 
-                            # Add to result batch
-                            for key in processed_sample.keys():
-                                if key not in result_batch:
-                                    result_batch[key] = []
-                                result_batch[key].append(processed_sample[key])
-                        except Exception as e:
-                            logger.error(
-                                f'An error occurred in mapper {self._name} when processing sample {i}: {e}'
-                            )
-                            import traceback
-                            traceback.print_exc()
-                            # Return empty dict for error samples
-                            for key in batch.keys():
-                                if key not in result_batch:
-                                    result_batch[key] = []
-                                result_batch[key].append({})
+                        # Add to result batch
+                        for key in processed_sample.keys():
+                            if key not in result_batch:
+                                result_batch[key] = []
+                            result_batch[key].append(processed_sample[key])
+                    except Exception as e:
+                        logger.error(
+                            f'An error occurred in mapper {self._name} when processing sample {i}: {e}'
+                        )
+                        import traceback
+                        traceback.print_exc()
+                        # Mark error sample: add empty list (will be filtered by filter_empty_samples)
+                        for key in batch.keys():
+                            if key not in result_batch:
+                                result_batch[key] = []
+                            result_batch[key].append([])
 
-                    return result_batch
+                return result_batch
 
-                # Apply batched processing
-                new_dataset = dataset.map(
-                    safe_process_batched,
-                    batched=True,
-                    batch_size=batch_size,
-                    desc=self._name + '_process'
-                )
-            else:
-                # Wrap process method with exception handler (similar to normal mode)
-                safe_process = catch_streaming_exception(self.process)
-
-                # Apply safe process in single-sample mode
-                new_dataset = dataset.map(safe_process, desc=self._name + '_process')
+            # Apply batched processing
+            new_dataset = dataset.map(
+                safe_process_batched,
+                batched=True,
+                batch_size=batch_size,
+                desc=self._name + '_process'
+            )
 
             # Filter out empty dict samples that resulted from exceptions
             new_dataset = filter_empty_samples(new_dataset)
@@ -569,77 +558,52 @@ class Filter(OP):
         try:
             # Get batch_size from dataset
             batch_size = getattr(dataset, 'batch_size', 1)
-            use_batched = batch_size > 1
 
-            if use_batched:
-                logger.info(
-                    f'Processing {self._name} in streaming mode (batched filtering with batch_size={batch_size})...')
-            else:
-                logger.info(f'Processing {self._name} in streaming mode (single-pass filtering)...')
+            logger.info(f'Processing {self._name} in streaming mode (batch_size={batch_size})...')
 
-            # Define combined filter function with exception handling
-            if use_batched:
-                def safe_combined_filter_batched(batch):
-                    """Compute stats and filter in batch mode with exception handling"""
-                    results = []
+            # Batched filter function (supports any batch_size including 1)
+            def safe_combined_filter_batched(batch):
+                """Compute stats and filter in batch mode with exception handling"""
+                results = []
 
-                    # Get batch size
-                    first_key = next(iter(batch.keys()))
-                    current_batch_size = len(batch[first_key])
+                # Get batch size
+                first_key = next(iter(batch.keys()))
+                current_batch_size = len(batch[first_key])
 
-                    # Process each sample in batch
-                    for i in range(current_batch_size):
-                        try:
-                            # Extract single sample from batch
-                            sample = {key: batch[key][i] for key in batch.keys()}
-
-                            # Compute stats (compute_stats is wrapped with exception handler)
-                            sample = self.compute_stats(sample)
-
-                            # Apply filter
-                            keep = self.process(sample)
-                            results.append(keep)
-                        except Exception as e:
-                            logger.error(
-                                f'An error occurred in filter {self._name} when processing sample {i}: {e}'
-                            )
-                            import traceback
-                            traceback.print_exc()
-                            # Return False to filter out error samples
-                            results.append(False)
-
-                    return results
-
-                # Apply combined filter in batched mode
-                new_dataset = dataset.filter(
-                    safe_combined_filter_batched,
-                    batched=True,
-                    batch_size=batch_size,
-                    desc=self._name + '_process'
-                )
-            else:
-                def safe_combined_filter(sample):
-                    """Compute stats and filter in single pass with exception handling"""
+                # Process each sample in batch
+                for i in range(current_batch_size):
                     try:
+                        # Extract single sample from batch
+                        sample = {key: batch[key][i] for key in batch.keys()}
+
+                        # 🔧 FIX: Ensure Fields.stats exists and is a dict (not None)
+                        if Fields.stats not in sample or sample[Fields.stats] is None:
+                            sample[Fields.stats] = {}
+
                         # Compute stats (compute_stats is wrapped with exception handler)
                         sample = self.compute_stats(sample)
 
                         # Apply filter
-                        return self.process(sample)
+                        keep = self.process(sample)
+                        results.append(keep)
                     except Exception as e:
                         logger.error(
-                            f'An error occurred in filter {self._name} when processing sample: {e}'
+                            f'An error occurred in filter {self._name} when processing sample {i}: {e}'
                         )
                         import traceback
                         traceback.print_exc()
                         # Return False to filter out error samples
-                        return False
+                        results.append(False)
 
-                # Apply combined filter in single-sample mode
-                new_dataset = dataset.filter(
-                    safe_combined_filter,
-                    desc=self._name + '_process'
-                )
+                return results
+
+            # Apply batched filter
+            new_dataset = dataset.filter(
+                safe_combined_filter_batched,
+                batched=True,
+                batch_size=batch_size,
+                desc=self._name + '_process'
+            )
 
             set_pipline_job_operator_status(
                 self.job_uid,

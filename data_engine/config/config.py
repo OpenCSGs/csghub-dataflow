@@ -155,6 +155,16 @@ def init_configs(args=None,redirect=True):
              'Recommended for datasets larger than available memory (>10GB). '
              'When enabled, automatically sets batch_size=100 and enables sample counting.')
     parser.add_argument(
+        '--streaming_batch_size',
+        type=PositiveInt,
+        default=100,
+        help='Batch size for streaming mode processing. Larger values improve '
+             'processing efficiency but consume more memory. This parameter '
+             'controls how many samples are processed together in each batch. '
+             'Recommended range: 100-5000. For text data: 1000-2000;for simple operators: '
+             '2000-5000; for complex operators (LLM inference): 50-200. '
+             'Default: 100. Only effective when use_streaming=True.')
+    parser.add_argument(
         '--text_keys',
         type=Union[str, List[str]],
         default='text',

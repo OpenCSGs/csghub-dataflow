@@ -41,6 +41,7 @@ class PerplexityFilter(Filter):
     """Filter to keep samples with perplexity score less than a specific max
     value. Uses LLM API to evaluate text quality."""
 
+    _supports_streaming = True  # Supports streaming mode for low memory usage
     _accelerator = 'cpu'
 
     def __init__(self,

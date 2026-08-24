@@ -44,6 +44,7 @@ class TextEntityDependencyFilter(Filter):
     Uses remote LLM API to detect entity dependencies.
     """
 
+    _supports_streaming = True  # Supports streaming mode for low memory usage
     _accelerator = 'cpu'
 
     def __init__(self,

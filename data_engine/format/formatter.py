@@ -1030,11 +1030,10 @@ class LocalFormatter(BaseFormatter):
         # First, find data files
         self.data_files = find_files_with_suffix(self.dataset_path, self.suffixes)
 
-        # Streaming mode: Fixed configuration
         # - Always pre-scan sample count (for progress bar)
-        # - Fixed batch_size=100 (memory-efficient batch processing)
         estimated_total_samples = None
-        batch_size = 1000  # Fixed batch size for streaming mode (balances memory and performance)
+        # Get batch_size from config (user-controllable)
+        batch_size = getattr(global_cfg, 'streaming_batch_size', 100) if global_cfg else 100
 
         if global_cfg and global_cfg.use_streaming:
             # Pre-scan sample count (mandatory in streaming mode)
