@@ -146,7 +146,7 @@ def init_configs(args=None,redirect=True):
     parser.add_argument(
         '--use_streaming',
         type=bool,
-        default=True,
+        default=False,
         help='Whether to use streaming mode for dataset loading and processing. '
              'Streaming mode significantly reduces memory usage by processing '
              'data iteratively without loading the entire dataset into memory. '

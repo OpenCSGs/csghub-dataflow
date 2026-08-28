@@ -152,7 +152,6 @@ class ExporterCSGHUB(Exporter):
             self._export_impl(dataset, self.export_path, self.suffix, self.export_stats)
 
         # After export, push to repo if repo_id is configured
-        self._export_impl(dataset, self.export_path, self.suffix, self.export_stats)
         self.upload_path = os.path.join(self.work_dir, "_data")
         self.repo_work_dir = os.path.join(self.work_dir, "_git")
         self._export_common()

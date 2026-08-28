@@ -20,8 +20,6 @@ class TokenNumFilter(Filter):
     """Filter to keep samples with total token number within a specific
     range."""
 
-    _supports_streaming = True  # Supports streaming mode for low memory usage
-
     def __init__(self,
                  hf_tokenizer: str = 'EleutherAI/pythia-6.9b-deduped',
                  min_num: PositiveInt = 10,

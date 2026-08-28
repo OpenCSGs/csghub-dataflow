@@ -161,6 +161,11 @@ class Recipe(BaseModelExtended):
     keep_stats_in_res_ds: bool = False
     keep_hashes_in_res_ds: bool = False
 
+    # streaming mode control
+    use_streaming: bool = False
+    # Batch size for streaming mode processing
+    streaming_batch_size: Optional[int] = 100
+
     # for distributed processing
     executor_type: Union[Literal["default"], Literal["ray"]] = "default"
     ray_address: str = "auto"

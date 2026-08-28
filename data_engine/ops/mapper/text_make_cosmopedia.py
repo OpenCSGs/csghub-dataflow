@@ -11,7 +11,6 @@ OP_NAME = 'make_cosmopedia_mapper'
 class MakeCosmopediaMapper(Mapper):
     """Mapper to generate synthetic tutorial data from seed text samples."""
 
-    _supports_streaming = True  # Supports streaming mode for low memory usage
     # _batched_op = False
 
     def __init__(self, *args, **kwargs):

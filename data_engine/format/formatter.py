@@ -1145,14 +1145,14 @@ class LocalFormatter(BaseFormatter):
         Pre-scan data files to count total samples (low memory, O(1) complexity).
 
         Uses fast line counting (binary read, no parsing) with minimal memory (~9KB).
-        Supports line-based formats: JSONL, CSV, TXT.
-
+        Supports line-based formats: JSONL, CSV, TSV, TXT.
         :return: Total sample count or None if failed
         """
         logger.info('Pre-scanning sample count (fast line counting)...')
 
         total_samples = 0
         file_count = 0
+        skipped_files = []
 
         try:
             # Collect all data files
@@ -1168,13 +1168,25 @@ class LocalFormatter(BaseFormatter):
             for file_path in all_files:
                 try:
                     # Check if file format supports line counting
-                    if not self._is_line_based_format(file_path):
-                        logger.warning(
-                            f'Skipping {file_path}: Not a line-based format (only JSONL, CSV, TXT supported)')
+                    format_info = self._is_line_based_format(file_path)
+                    if format_info is None:
+                        skipped_files.append((file_path, 'not line-based format'))
+                        continue
+
+                    is_supported, has_header = format_info
+                    if not is_supported:
+                        skipped_files.append((file_path, 'not line-based format'))
                         continue
 
                     # Fast line counting (binary read, O(1) memory)
-                    file_samples = self._count_lines_fast(file_path)
+                    line_count = self._count_lines_fast(file_path)
+
+                    # Adjust for header row if present (CSV/TSV)
+                    if has_header and line_count > 0:
+                        file_samples = line_count - 1
+                    else:
+                        file_samples = line_count
+
                     total_samples += file_samples
                     file_count += 1
 
@@ -1183,7 +1195,14 @@ class LocalFormatter(BaseFormatter):
 
                 except Exception as e:
                     logger.warning(f'Failed to count samples in {file_path}: {e}')
+                    skipped_files.append((file_path, str(e)))
                     continue
+
+            # Log skipped files with reasons
+            if skipped_files:
+                logger.warning(f'Skipped {len(skipped_files)} file(s) during pre-scan:')
+                for file_path, reason in skipped_files:
+                    logger.warning(f'  - {os.path.basename(file_path)}: {reason}')
 
             if file_count > 0:
                 logger.info(f'Pre-scan complete: {total_samples:,} total samples across {file_count} file(s)')
@@ -1216,11 +1235,23 @@ class LocalFormatter(BaseFormatter):
         Check if file format is line-based (supports fast line counting).
 
         :param file_path: Path to file
-        :return: True if line-based format
+        :return: Tuple (is_supported, has_header) or None if not supported
+                 - is_supported: True if line-based format
+                 - has_header: True if format has header row (CSV/TSV)
         """
         ext = os.path.splitext(file_path)[1].lower()
-        line_based_formats = {'.jsonl', '.csv', '.txt', '.tsv'}
-        return ext in line_based_formats
+
+        # Line-based formats without header
+        no_header_formats = {'.jsonl', '.txt'}
+        # Line-based formats with header row
+        header_formats = {'.csv', '.tsv'}
+
+        if ext in no_header_formats:
+            return (True, False)  # Supported, no header
+        elif ext in header_formats:
+            return (True, True)  # Supported, has header
+        else:
+            return None  # Not supported
 
 class RemoteFormatter(BaseFormatter):
     """The class is used to load a dataset from repository of huggingface
