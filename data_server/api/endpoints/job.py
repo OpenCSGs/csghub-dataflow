@@ -600,6 +600,28 @@ async def run_pipline_job(
             space_resource_id=data.get("space_resource_id"),
             storage_size=data.get("storage_size"),
         )
+
+        # Update streaming parameters in yaml_config
+        use_streaming = data.get("use_streaming")
+        streaming_batch_size = data.get("streaming_batch_size")
+
+        if use_streaming is not None or streaming_batch_size is not None:
+            try:
+                yaml_config_dict = yaml.safe_load(job.yaml_config) if job.yaml_config else {}
+
+                if use_streaming is not None:
+                    yaml_config_dict["use_streaming"] = use_streaming
+
+                if use_streaming and streaming_batch_size is not None:
+                    yaml_config_dict["streaming_batch_size"] = streaming_batch_size
+                elif use_streaming is False:
+                    yaml_config_dict.pop("streaming_batch_size", None)
+
+                job.yaml_config = yaml.dump(yaml_config_dict, sort_keys=False, default_flow_style=False, indent=2,
+                                            width=float("inf"))
+            except Exception as e:
+                logger.warning(f"Failed to update streaming parameters: {e}")
+
         session.commit()
 
         ok, msg = execute_job(
