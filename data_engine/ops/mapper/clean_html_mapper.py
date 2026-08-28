@@ -15,6 +15,8 @@ with AvailabilityChecking(['selectolax'], OP_NAME):
 @OPERATORS.register_module(OP_NAME)
 class CleanHtmlMapper(Mapper):
     """Mapper to clean html code in text samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self, *args, **kwargs):
         """

@@ -10,6 +10,8 @@ class ReplaceContentMapper(Mapper):
     """Mapper to replace all content in the text that matches
     a specific regular expression pattern with a designated
     replacement string."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  pattern: Union[str, List[str]] = None,

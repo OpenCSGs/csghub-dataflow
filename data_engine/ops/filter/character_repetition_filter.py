@@ -14,6 +14,9 @@ from ..base_op import OPERATORS, Filter, Sample, Param, DataType
 class CharacterRepetitionFilter(Filter):
     """Filter to keep samples with char-level n-gram repetition ratio within a
     specific range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  rep_len: PositiveInt = 10,

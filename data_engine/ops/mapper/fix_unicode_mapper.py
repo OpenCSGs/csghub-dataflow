@@ -11,6 +11,8 @@ with AvailabilityChecking(['ftfy'], OP_NAME):
 @OPERATORS.register_module(OP_NAME)
 class FixUnicodeMapper(Mapper):
     """Mapper to fix unicode errors in text samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self, normalization: str = None, *args, **kwargs):
         """

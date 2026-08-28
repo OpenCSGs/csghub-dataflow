@@ -31,6 +31,7 @@ class TextActionFilter(Filter):
     Uses remote LLM API to detect actions.
     """
 
+    _supports_streaming = True  # Supports streaming mode for low memory usage
     _accelerator = 'cpu'
 
     def __init__(self,

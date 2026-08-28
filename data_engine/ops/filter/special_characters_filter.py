@@ -14,6 +14,9 @@ from ..common import SPECIAL_CHARACTERS
 class SpecialCharactersFilter(Filter):
     """Filter to keep samples with special-char ratio within a specific
     range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  min_ratio: ClosedUnitInterval = 0.0,

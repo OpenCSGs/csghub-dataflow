@@ -6,6 +6,9 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 @OPERATORS.register_module('remove_non_chinese_character_mapper')
 class RemoveNonChineseCharacterlMapper(Mapper):
     """Mapper to remove non chinese Character in text samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  keep_alphabet: bool = True,

@@ -21,6 +21,9 @@ class SpecifiedNumericFieldFilter(Filter):
     If the specified numeric information in the sample is not within the
     specified range, the sample will be filtered.
     """
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  field_key: str = '',

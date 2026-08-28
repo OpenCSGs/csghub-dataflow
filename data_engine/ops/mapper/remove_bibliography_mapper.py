@@ -11,6 +11,9 @@ from ..base_op import OPERATORS, Mapper, Sample, Param, DataType
 class RemoveBibliographyMapper(Mapper):
     """Mapper to remove bibliography at the end of documents in Latex
     samples."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self, *args, **kwargs):
         """

@@ -16,6 +16,9 @@ class RemoveCommentsMapper(Mapper):
 
     Only support 'tex' for now.
     """
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  doc_type: Union[str, List[str]] = 'tex',

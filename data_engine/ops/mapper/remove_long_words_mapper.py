@@ -14,6 +14,9 @@ from ..common import (SPECIAL_CHARACTERS, merge_on_whitespace_tab_newline,
 @OPERATORS.register_module('remove_long_words_mapper')
 class RemoveLongWordsMapper(Mapper):
     """Mapper to remove long words within a specific range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  min_len: PositiveInt = 1,

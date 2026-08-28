@@ -15,6 +15,9 @@ class RemoveTableTextMapper(Mapper):
     Regular expression is used to remove tables in the range of column
     number of tables.
     """
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  min_col: from_2_to_20 = 2,

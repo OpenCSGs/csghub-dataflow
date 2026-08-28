@@ -15,6 +15,9 @@ from ..base_op import OPERATORS, Filter, Sample, Param, DataType
 @OPERATORS.register_module('suffix_filter')
 class SuffixFilter(Filter):
     """Filter to keep samples with specified suffix."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  suffixes: Union[str, List[str], Tuple[str]] = [],

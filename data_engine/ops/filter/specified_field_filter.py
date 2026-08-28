@@ -11,6 +11,9 @@ class SpecifiedFieldFilter(Filter):
     If the specified field information in the sample is not within the
     specified target value, the sample will be filtered.
     """
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
+
 
     def __init__(self,
                  field_key: str = '',

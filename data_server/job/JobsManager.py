@@ -934,6 +934,15 @@ def parse_yaml_config(yaml_string: str,config):
         "trace_num": '1',
     }
 
+    # Add streaming mode configuration if provided
+    if hasattr(config, 'use_streaming'):
+        fields_to_insert["use_streaming"] = config.use_streaming
+
+    # Add streaming_batch_size only if streaming mode is enabled
+    if hasattr(config, 'use_streaming') and config.use_streaming:
+        if hasattr(config, 'streaming_batch_size') and config.streaming_batch_size is not None:
+            fields_to_insert["streaming_batch_size"] = config.streaming_batch_size
+
     dsl_data = yaml.safe_load(yaml_string)
 
     dsl_data.update(fields_to_insert)

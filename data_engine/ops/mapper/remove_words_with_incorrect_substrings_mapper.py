@@ -17,6 +17,8 @@ with AvailabilityChecking(['sentencepiece'], OP_NAME):
 @OPERATORS.register_module(OP_NAME)
 class RemoveWordsWithIncorrectSubstringsMapper(Mapper):
     """Mapper to remove words with incorrect substrings."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  lang: str = 'en',

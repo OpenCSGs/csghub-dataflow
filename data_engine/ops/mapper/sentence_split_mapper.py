@@ -13,6 +13,8 @@ with AvailabilityChecking(['nltk'], OP_NAME):
 @OPERATORS.register_module(OP_NAME)
 class SentenceSplitMapper(Mapper):
     """Mapper to split text samples to sentences."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self, lang: str = 'en', *args, **kwargs):
         """

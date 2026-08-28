@@ -10,6 +10,8 @@ OP_NAME = 'multi_keyword_filter'
 @OPERATORS.register_module(OP_NAME)
 class MultiKeywordFilter(Filter):
     """Filter to remove samples that contain any of the specified keywords."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  keywords: Union[str, List[str], Tuple[str]] = [],

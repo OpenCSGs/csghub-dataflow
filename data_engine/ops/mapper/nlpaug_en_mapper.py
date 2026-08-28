@@ -20,6 +20,7 @@ class NlpaugEnMapper(Mapper):
     """Mapper to simply augment samples in English based on nlpaug library."""
 
     _batched_op = True
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  sequential: bool = False,

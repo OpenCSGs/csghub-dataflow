@@ -11,6 +11,8 @@ from ..base_op import OPERATORS, Filter, Sample, Param, DataType
 class TextLengthFilter(Filter):
     """Filter to keep samples with total text length within a specific
     range."""
+    
+    _supports_streaming = True  # Supports streaming mode for low memory usage
 
     def __init__(self,
                  min_len: PositiveInt = 10,
