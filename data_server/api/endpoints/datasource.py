@@ -366,6 +366,13 @@ async def test_datasource_connection(datasource: DataSourceBase):
         # Run the synchronized test_connection method in the thread pool to avoid blocking the event loop
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, connector.test_connection)
+        if not result or not result.get("success", False):
+            message = (
+                result.get("message", "数据源连接失败")
+                if isinstance(result, dict)
+                else "数据源连接失败"
+            )
+            return response_fail(msg=message)
         return response_success(data=result)
     except Exception as e:
         logger.error(f"test_datasource_connection: {str(e)}")
