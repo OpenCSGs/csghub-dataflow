@@ -1002,6 +1002,14 @@ def _select_convert_func(from_type, to_type):
 
 
 def _run_convert_func(convert_func, file_path: str, task_uid: str, task_params: dict):
+    """
+    Run conversion function with appropriate parameters.
+    
+    Supports streaming mode for Excel/CSV conversions:
+    - use_streaming: bool (default: False)
+    - chunk_size: int (default: 50000)
+    """
+    # PDF to Markdown has special parameters
     if convert_func is convert_pdf_to_markdown:
         return convert_func(
             file_path,
@@ -1009,6 +1017,43 @@ def _run_convert_func(convert_func, file_path: str, task_uid: str, task_params: 
             task_params.get("mineru_api_url"),
             task_params.get("mineru_backend"),
         )
+    
+    # Check if conversion function supports streaming mode
+    # (Excel/CSV conversions support use_streaming and chunk_size parameters)
+    streaming_supported_funcs = (
+        convert_excel_to_csv,
+        convert_excel_to_json,
+        convert_excel_to_parquet,
+        convert_csv_to_excel,
+    )
+    
+    if convert_func in streaming_supported_funcs:
+        # Extract streaming parameters from task_params
+        # Default: use_streaming=True (streaming mode enabled by default for better memory efficiency)
+        use_streaming = task_params.get("use_streaming", False)
+        chunk_size = task_params.get("chunk_size", 50000)
+        
+        # Convert to appropriate types
+        if isinstance(use_streaming, str):
+            use_streaming = use_streaming.lower() in ("true", "1", "yes")
+        use_streaming = bool(use_streaming)
+        
+        if isinstance(chunk_size, str):
+            try:
+                chunk_size = int(chunk_size)
+            except (ValueError, TypeError):
+                chunk_size = 50000
+        chunk_size = int(chunk_size) if chunk_size else 50000
+        
+        # Call with streaming parameters
+        return convert_func(
+            file_path,
+            task_uid,
+            use_streaming=use_streaming,
+            chunk_size=chunk_size
+        )
+    
+    # Other conversion functions (Word/PPT/TXT/HTML to Markdown)
     return convert_func(file_path, task_uid)
 
 
