@@ -28,6 +28,8 @@ OPERATOR_RUNTIME_KEYS = (
     "percentiles",
     "export_original_dataset",
     "save_stats_in_one_file",
+    "use_streaming",
+    "streaming_batch_size",
 )
 
 
