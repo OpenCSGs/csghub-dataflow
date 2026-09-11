@@ -63,6 +63,8 @@ def _submit_formatify_task_to_csghub(
     namespace: str,
     user_name: str | None = None,
     task_run_time: str | None = None,
+    use_streaming: bool | None = None,
+    chunk_size: int | None = None,
 ):
     flow_id = build_job_flow_id("formatify", formatify_task.id)
     formatify_task.flow_id = flow_id
@@ -73,6 +75,12 @@ def _submit_formatify_task_to_csghub(
     task_params["flow_id"] = flow_id
     if task_run_time:
         task_params["execute_time"] = task_run_time
+    
+    # Add streaming mode parameters (not stored in database, passed via task_params)
+    if use_streaming is not None:
+        task_params["use_streaming"] = use_streaming
+    if chunk_size is not None:
+        task_params["chunk_size"] = chunk_size
     dag_tasks = build_formatify_dag(flow_id, task_params)
     payload = build_csghub_payload(
         job_id=flow_id,
@@ -124,6 +132,10 @@ def create_formatify_task(
     # Prepare skip_meta value (use provided value or default to False)
     skip_meta_value = dataFormatTask.skip_meta if dataFormatTask.skip_meta is not None else False
     
+    # Extract streaming mode parameters (not stored in database)
+    use_streaming = dataFormatTask.use_streaming
+    chunk_size = dataFormatTask.chunk_size
+    
     data_format_task_db = DataFormatTask(name=dataFormatTask.name,
                                          des=dataFormatTask.des,
                                          from_csg_hub_dataset_name=dataFormatTask.from_csg_hub_dataset_name,
@@ -163,6 +175,8 @@ def create_formatify_task(
             user_token,
             nu,
             user_name=user_name,
+            use_streaming=use_streaming,
+            chunk_size=chunk_size,
         )
         data_format_task_db.task_status = DataFormatTaskStatusEnum.WAITING.value
     except Exception as e:
@@ -409,6 +423,8 @@ def execute_formatify_task(
     user_name: str,
     user_token: str,
     task_run_time: str | None = None,
+    use_streaming: bool | None = None,
+    chunk_size: int | None = None,
 ):
     """Waiting and not yet submitted to CSGHub: first submit this record."""
     try:
@@ -425,6 +441,8 @@ def execute_formatify_task(
             nu,
             user_name=user_name,
             task_run_time=task_run_time,
+            use_streaming=use_streaming,
+            chunk_size=chunk_size,
         )
         formatify_task.task_status = DataFormatTaskStatusEnum.WAITING.value
         db_session.commit()
@@ -442,6 +460,8 @@ def execute_new_formatify_task(
     user_name: str,
     user_token: str,
     task_run_time: str | None = None,
+    use_streaming: bool | None = None,
+    chunk_size: int | None = None,
 ):
     """List "Execute": copy new task and submit to CSGHub; do not re-run old record."""
     try:
@@ -462,6 +482,8 @@ def execute_new_formatify_task(
                 nu,
                 user_name=user_name,
                 task_run_time=task_run_time,
+                use_streaming=use_streaming,
+                chunk_size=chunk_size,
             )
             new_task.task_status = DataFormatTaskStatusEnum.WAITING.value
             db_session.commit()

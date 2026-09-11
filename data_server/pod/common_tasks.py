@@ -38,6 +38,9 @@ from data_server.pod.formatify_helpers import (
     convert_excel_to_csv,
     convert_excel_to_json,
     convert_excel_to_parquet,
+    convert_csv_to_json_streaming,
+    convert_csv_to_parquet_streaming,
+    convert_csv_to_excel_streaming,
     convert_word_to_markdown,
     convert_txt_to_markdown,
     convert_html_to_markdown,
@@ -828,7 +831,17 @@ def run_format_conversion(task_params: dict):
     if not found:
         raise ValueError("No source files found for format conversion")
 
-    convert_func = _select_convert_func(task_params.get("from_data_type"), task_params.get("to_data_type"))
+    # Extract streaming mode parameters
+    use_streaming = task_params.get("use_streaming", False)
+    if isinstance(use_streaming, str):
+        use_streaming = use_streaming.lower() in ("true", "1", "yes")
+    use_streaming = bool(use_streaming)
+
+    convert_func = _select_convert_func(
+        task_params.get("from_data_type"), 
+        task_params.get("to_data_type"),
+        use_streaming=use_streaming
+    )
     if convert_func is None:
         raise ValueError("Unsupported format conversion")
 
@@ -983,7 +996,30 @@ def run_format_conversion(task_params: dict):
     }
 
 
-def _select_convert_func(from_type, to_type):
+def _select_convert_func(from_type, to_type, use_streaming=False):
+    """
+    Select conversion function based on format types and mode.
+    
+    Args:
+        from_type: Source format type
+        to_type: Target format type
+        use_streaming: If True, use streaming mode for CSV conversions (when available)
+    
+    Returns:
+        Conversion function or None
+    """
+    # For CSV source with streaming mode enabled, use streaming functions
+    if use_streaming and from_type == DataFormatTypeEnum.Csv.value:
+        streaming_mapping = {
+            DataFormatTypeEnum.Excel.value: convert_csv_to_excel_streaming,
+            DataFormatTypeEnum.Json.value: convert_csv_to_json_streaming,
+            DataFormatTypeEnum.Parquet.value: convert_csv_to_parquet_streaming,
+        }
+        streaming_func = streaming_mapping.get(to_type)
+        if streaming_func:
+            return streaming_func
+    
+    # Standard (non-streaming) mode mapping
     mapping = {
         (DataFormatTypeEnum.Excel.value, DataFormatTypeEnum.Csv.value): convert_excel_to_csv,
         (DataFormatTypeEnum.Excel.value, DataFormatTypeEnum.Json.value): convert_excel_to_json,
@@ -1002,6 +1038,8 @@ def _select_convert_func(from_type, to_type):
 
 
 def _run_convert_func(convert_func, file_path: str, task_uid: str, task_params: dict):
+
+    # PDF to Markdown has special parameters
     if convert_func is convert_pdf_to_markdown:
         return convert_func(
             file_path,
@@ -1009,6 +1047,24 @@ def _run_convert_func(convert_func, file_path: str, task_uid: str, task_params: 
             task_params.get("mineru_api_url"),
             task_params.get("mineru_backend"),
         )
+    
+    # Streaming conversion functions require chunk_size
+    streaming_funcs = (
+        convert_csv_to_json_streaming,
+        convert_csv_to_parquet_streaming,
+        convert_csv_to_excel_streaming,
+    )
+    
+    if convert_func in streaming_funcs:
+        chunk_size = task_params.get("chunk_size", 50000)
+        try:
+            chunk_size = int(chunk_size)
+        except (ValueError, TypeError):
+            chunk_size = 50000
+        
+        return convert_func(file_path, task_uid, chunk_size=chunk_size)
+    
+    # Standard conversion functions
     return convert_func(file_path, task_uid)
 
 

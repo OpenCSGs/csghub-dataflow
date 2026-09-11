@@ -1,3 +1,4 @@
+import gc
 import json
 import os
 import re
@@ -26,6 +27,26 @@ def _read_csv(file_path: str) -> pd.DataFrame:
     if last_error is not None:
         raise last_error
     return pd.read_csv(file_path, sep=None, engine="python")
+
+
+def _read_csv_chunked(file_path: str, chunk_size: int):
+    """Read CSV in chunks with proper encoding detection."""
+    last_error = None
+    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            return pd.read_csv(
+                file_path, 
+                encoding=encoding, 
+                sep=None, 
+                engine="python",
+                chunksize=chunk_size,
+                iterator=True
+            )
+        except UnicodeDecodeError as error:
+            last_error = error
+    if last_error is not None:
+        raise last_error
+    return pd.read_csv(file_path, sep=None, engine="python", chunksize=chunk_size, iterator=True)
 
 
 def _non_conflicting_output_path(file_path: str) -> str:
@@ -73,7 +94,7 @@ def convert_excel_to_csv(file_path: str, task_uid) -> Optional[Dict[str, str]]:
                     else:
                         new_file = f"{base_name}_{safe_sheet_name}.csv"
                     new_file = _non_conflicting_output_path(new_file)
-                    
+
                     # Use utf-8-sig encoding to ensure Excel can open the CSV correctly
                     df.to_csv(new_file, index=False, encoding='utf-8-sig')
                     result_files.append(new_file)
@@ -206,7 +227,7 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
             for idx, sheet_name in enumerate(sheet_names, 1):
                 try:
                     log_task_info(task_uid, f"Processing sheet {idx}/{sheet_count}: '{sheet_name}'")
-                    
+
                     # Read the sheet
                     df = pd.read_excel(file_path, sheet_name=sheet_name)
                     
@@ -221,18 +242,18 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
                         elif pd.api.types.is_float_dtype(df[col]):
                             if df[col].isna().any():
                                 pass
-                    
+
                     # Generate output file name
                     # Clean sheet name to remove invalid file system characters
                     safe_sheet_name = re.sub(r'[<>:"/\\|?*]', '_', sheet_name)
-                    
+
                     # If only one sheet, use simple naming; otherwise include sheet name
                     if sheet_count == 1:
                         new_file = f"{base_name}.parquet"
                     else:
                         new_file = f"{base_name}_{safe_sheet_name}.parquet"
                     new_file = _non_conflicting_output_path(new_file)
-                    
+
                     # Save to parquet
                     df.to_parquet(new_file, index=False, engine="pyarrow")
                     result_files.append(new_file)
@@ -242,7 +263,7 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
                         f"Sheet '{sheet_name}' converted successfully: {new_file} "
                         f"({len(df)} rows, {len(df.columns)} columns)"
                     )
-                    
+
                 except Exception as sheet_error:
                     log_task_error(task_uid, f"Failed to convert sheet '{sheet_name}': {sheet_error}")
                     # Continue processing other sheets even if one fails
@@ -274,7 +295,7 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
                 "status": "success",
                 "sheets_count": len(result_files)
             }
-            
+
         except Exception as e:
             log_task_error(task_uid, f"convert file {file_path} error: {e}")
             return {
@@ -284,7 +305,6 @@ def convert_excel_to_parquet(file_path: str, task_uid) -> Optional[Dict[str, str
                 "error": str(e)
             }
     return None
-
 
 def convert_csv_to_excel(file_path: str, task_uid) -> Optional[Dict[str, str]]:
     if not file_path.lower().endswith(".csv"):
@@ -304,6 +324,226 @@ def convert_csv_to_excel(file_path: str, task_uid) -> Optional[Dict[str, str]]:
         }
     except Exception as e:
         log_task_error(task_uid, f"convert file {file_path} error: {e}")
+        return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
+
+def convert_csv_to_json_streaming(file_path: str, task_uid, chunk_size: int = 50000) -> Optional[Dict[str, str]]:
+    """
+    Convert CSV to JSON using streaming mode (low memory footprint).
+    
+    Args:
+        file_path: CSV file path
+        task_uid: Task identifier for logging
+        chunk_size: Number of rows per chunk (default: 50000)
+    
+    Returns:
+        Conversion result dictionary
+    """
+    if not file_path.lower().endswith(".csv"):
+        return None
+    
+    log_task_info(task_uid, f"[Streaming Mode] Source file address: {file_path}")
+    log_task_info(task_uid, f"[Streaming Mode] Chunk size: {chunk_size:,} rows")
+    
+    new_file = None
+    try:
+        new_file = f"{os.path.splitext(file_path)[0]}.json"
+        
+        first_row = True
+        
+        with open(new_file, 'w', encoding='utf-8') as json_file:
+            json_file.write('[')
+            
+            for chunk in _read_csv_chunked(file_path, chunk_size):
+                columns = chunk.columns.tolist()
+                
+                # Use itertuples for better performance (faster than iloc)
+                for row in chunk.itertuples(index=False, name=None):
+                    if not first_row:
+                        json_file.write(',')
+                    first_row = False
+                    
+                    # Build dict for single row
+                    row_dict = {}
+                    for col, value in zip(columns, row):
+                        row_dict[col] = None if pd.isna(value) else value
+                    
+                    json_file.write(json.dumps(row_dict, ensure_ascii=False))
+                
+                del chunk
+                gc.collect()
+            
+            json_file.write(']')
+        
+        return {
+            "from": file_path,
+            "to": new_file,
+            "to_files": [new_file],
+            "status": "success",
+        }
+    except Exception as e:
+        log_task_error(task_uid, f"convert file {file_path} error: {e}")
+        if new_file and os.path.exists(new_file):
+            try:
+                os.remove(new_file)
+            except Exception:
+                pass
+        return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
+
+
+def convert_csv_to_parquet_streaming(file_path: str, task_uid, chunk_size: int = 50000) -> Optional[Dict[str, str]]:
+    """
+    Convert CSV to Parquet using streaming mode (low memory footprint).
+    
+    Args:
+        file_path: CSV file path
+        task_uid: Task identifier for logging
+        chunk_size: Number of rows per chunk (default: 50000)
+    
+    Returns:
+        Conversion result dictionary
+    
+    Note:
+        Data type processing is consistent with convert_excel_to_parquet()
+    """
+    if not file_path.lower().endswith(".csv"):
+        return None
+    
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError:
+        log_task_error(task_uid, "PyArrow is required for streaming Parquet conversion")
+        return {"from": file_path, "to": None, "status": "failure", "error": "PyArrow not installed"}
+    
+    log_task_info(task_uid, f"[Streaming Mode] Source file address: {file_path}")
+    log_task_info(task_uid, f"[Streaming Mode] Chunk size: {chunk_size:,} rows")
+    
+    new_file = None
+    try:
+        new_file = f"{os.path.splitext(file_path)[0]}.parquet"
+        
+        writer = None
+        
+        for chunk in _read_csv_chunked(file_path, chunk_size):
+            # Data type processing (consistent with original logic)
+            for col in chunk.columns:
+                col_dtype = chunk[col].dtype
+                if col_dtype == "object":
+                    # Convert to string and replace "nan" with None (consistent with original)
+                    chunk[col] = chunk[col].astype(str).replace("nan", None)
+                elif pd.api.types.is_integer_dtype(col_dtype) and chunk[col].isna().any():
+                    chunk[col] = chunk[col].astype(str)
+            
+            table = pa.Table.from_pandas(chunk, preserve_index=False)
+            
+            if writer is None:
+                writer = pq.ParquetWriter(new_file, table.schema)
+            writer.write_table(table)
+            
+            del chunk
+            del table
+            gc.collect()
+        
+        if writer:
+            writer.close()
+        
+        return {
+            "from": file_path,
+            "to": new_file,
+            "to_files": [new_file],
+            "status": "success",
+        }
+    except Exception as e:
+        log_task_error(task_uid, f"convert file {file_path} error: {e}")
+        if new_file and os.path.exists(new_file):
+            try:
+                os.remove(new_file)
+            except Exception:
+                pass
+        return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
+
+
+def convert_csv_to_excel_streaming(file_path: str, task_uid, chunk_size: int = 50000) -> Optional[Dict[str, str]]:
+    """
+    Convert CSV to Excel using streaming mode (constant memory).
+    
+    Args:
+        file_path: CSV file path
+        task_uid: Task identifier for logging
+        chunk_size: Number of rows per chunk (default: 50000)
+    
+    Returns:
+        Conversion result dictionary
+    """
+    if not file_path.lower().endswith(".csv"):
+        return None
+    
+    try:
+        import xlsxwriter
+    except ImportError:
+        log_task_error(task_uid, "xlsxwriter is required for streaming Excel conversion")
+        return {"from": file_path, "to": None, "status": "failure", "error": "xlsxwriter not installed"}
+    
+    log_task_info(task_uid, f"[Streaming Mode] Source file address: {file_path}")
+    log_task_info(task_uid, f"[Streaming Mode] Chunk size: {chunk_size:,} rows")
+    
+    new_file = None
+    try:
+        new_file = f"{os.path.splitext(file_path)[0]}.xlsx"
+        
+        workbook = xlsxwriter.Workbook(new_file, {
+            'constant_memory': True,
+            'use_zip64': True,
+            'strings_to_numbers': False,
+            'strings_to_urls': False
+        })
+        worksheet = workbook.add_worksheet()
+        
+        current_row = 0
+        header_written = False
+        rows_processed = 0
+        
+        for chunk in _read_csv_chunked(file_path, chunk_size):
+            if not header_written:
+                for col_idx, col_name in enumerate(chunk.columns):
+                    worksheet.write(0, col_idx, col_name)
+                current_row = 1
+                header_written = True
+            
+            chunk_values = chunk.values
+            for row_idx in range(len(chunk_values)):
+                for col_idx in range(len(chunk_values[row_idx])):
+                    value = chunk_values[row_idx][col_idx]
+                    if pd.isna(value):
+                        worksheet.write_blank(current_row, col_idx, None)
+                    else:
+                        worksheet.write(current_row, col_idx, value)
+                current_row += 1
+            
+            rows_processed += len(chunk)
+            
+            del chunk
+            del chunk_values
+            
+            if rows_processed % (chunk_size * 5) == 0:
+                gc.collect()
+        
+        log_task_info(task_uid, "Finalizing Excel file...")
+        workbook.close()
+        
+        return {
+            "from": file_path,
+            "to": new_file,
+            "to_files": [new_file],
+            "status": "success",
+        }
+    except Exception as e:
+        log_task_error(task_uid, f"convert file {file_path} error: {e}")
+        if new_file and os.path.exists(new_file):
+            try:
+                os.remove(new_file)
+            except Exception:
+                pass
         return {"from": file_path, "to": None, "status": "failure", "error": str(e)}
 
 

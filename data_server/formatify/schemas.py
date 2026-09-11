@@ -26,6 +26,10 @@ class DataFormatTaskRequest(BaseModel):
     storage_size: Optional[str] = None
     namespace_uuid: Optional[str] = None
     namespace_type: str = "personal"
+    
+    # Streaming mode parameters (not stored in database, only passed to conversion tasks)
+    use_streaming: Optional[bool] = None
+    chunk_size: Optional[int] = None
 
     @field_validator("storage_size", mode="before")
     @classmethod
