@@ -20,6 +20,8 @@ class ReformatCSVNAN(TOOL):
         Initialization method.
 
         :param suffixes: files with suffixes to be loaded, default None
+        :param processing_mode: processing mode, 'legacy' or 'streaming'. Default is 'legacy'.
+        :param batch_size: batch size for streaming mode. Default is 100.
         """
         super().__init__(tool_defination, params)
         self.suffixes = next(
@@ -28,10 +30,20 @@ class ReformatCSVNAN(TOOL):
             (item.value for item in self.tool_def.params if item.name == "is_tsv"), False)
         self.keep_default_na = next(
             (item.value for item in self.tool_def.params if item.name == "keep_default_na"), False)
+        self.processing_mode = next(
+            (item.value for item in self.tool_def.params if item.name == "processing_mode"), 'legacy')
+        self.batch_size = next(
+            (item.value for item in self.tool_def.params if item.name == "batch_size"), 100)
 
     def process(self):
-        target_path = legacy.main(src_dir=self.tool_def.dataset_path, target_dir=self.tool_def.export_path,
-                                  suffixes=self.suffixes, is_tsv=self.is_tsv, keep_default_na=self.keep_default_na, num_proc=self.tool_def.np)
+        target_path = legacy.main(src_dir=self.tool_def.dataset_path, 
+                                  target_dir=self.tool_def.export_path,
+                                  suffixes=self.suffixes, 
+                                  is_tsv=self.is_tsv, 
+                                  keep_default_na=self.keep_default_na, 
+                                  num_proc=self.tool_def.np,
+                                  processing_mode=self.processing_mode,
+                                  batch_size=int(self.batch_size))
 
         return Path(target_path) if target_path else Path(self.tool_def.export_path)
 
@@ -49,4 +61,6 @@ class ReformatCSVNAN(TOOL):
             Param("suffixes", DataType.LIST, None, ['.csv']),
             Param("is_tsv", DataType.BOOLEAN, None, False),
             Param("keep_default_na", DataType.BOOLEAN, None, False),
+            Param("processing_mode", DataType.STRING, None, 'legacy'),
+            Param("batch_size", DataType.INTEGER, None, 100),
         ]
