@@ -15,6 +15,54 @@ services:
     networks:
       - csg-network
 
+  dataflow_label_llm:
+    container_name: ml-backend
+    image: opencsg-registry.cn-beijing.cr.aliyuncs.com/opencsghq/label-studio:llm-20260914
+    restart: unless-stopped
+    environment:
+      # specify these parameters if you want to use basic auth for the model server
+      - BASIC_AUTH_USER=${BASIC_AUTH_USER:-}
+      - BASIC_AUTH_PASS=${BASIC_AUTH_PASS:-}
+      # set the log level for the model server
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # specify the number of workers and threads for the model server
+      - WORKERS=${WORKERS:-1}
+      - THREADS=${THREADS:-8}
+      # specify the model directory (likely you don't need to change this)
+      - MODEL_DIR=${MODEL_DIR:-/data/models}
+      # specify device
+      - DEVICE=${DEVICE:-cuda}
+      # SAM2 model config
+      - MODEL_CONFIG=${MODEL_CONFIG:-configs/sam2.1/sam2.1_hiera_l.yaml}
+      # SAM2 checkpoint
+      - MODEL_CHECKPOINT=${MODEL_CHECKPOINT:-sam2.1_hiera_large.pt}
+
+      # Global model switch for every supported template. false keeps dedicated models.
+      - USE_THIRD_PARTY_MODELS=${USE_THIRD_PARTY_MODELS:-true}
+      - VOLCENGINE_ENTITY_SEGMENT_MODEL=${VOLCENGINE_ENTITY_SEGMENT_MODEL:-entity_seg}
+      - VOLCENGINE_ENTITY_SEGMENT_MAX_ENTITY=${VOLCENGINE_ENTITY_SEGMENT_MAX_ENTITY:-10}
+      - VOLCENGINE_ENTITY_SEGMENT_REFINE_MASK=${VOLCENGINE_ENTITY_SEGMENT_REFINE_MASK:-1}
+      - VOLCENGINE_ENTITY_SEGMENT_RETURN_FORMAT=${VOLCENGINE_ENTITY_SEGMENT_RETURN_FORMAT:-3}
+      - DOUBAO_MODEL=${DOUBAO_MODEL:-doubao-seed-2-1-turbo-260628}
+      - ARK_BASE_URL=${ARK_BASE_URL:-https://ark.cn-beijing.volces.com/api/v3}
+      - DOUBAO_TIMEOUT=${DOUBAO_TIMEOUT:-360}
+      - DOUBAO_MAX_IMAGE_SIZE=${DOUBAO_MAX_IMAGE_SIZE:-640}
+
+      # Label Studio URL and the current user's JWT are supplied per request.
+    ports:
+      - "${ML_BACKEND_PORT:-9090}:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - "/dataflow_data/llmback/data/segment_anything_2_image:/data"
+      - "/dataflow_data/llmback/data/media:/label-studio-media:ro"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9090/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
   dataflow_label_studio:
     stdin_open: true
     tty: true
