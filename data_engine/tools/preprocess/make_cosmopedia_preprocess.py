@@ -35,6 +35,10 @@ class makeCosmopediaPreprocessInternal(TOOL):
 教程中需要包括对每个步骤的深入解释以及它如何帮助实现预期结果。你可以自由补充其他相关知识。
 确保清晰性和实用性，让读者能够轻松遵循教程完成任务。内容中不应包含广告或涉及隐私的信息。
 不要使用图像。请直接开始撰写教程。''')
+        self.processing_mode = next(
+            (item.value for item in self.tool_def.params if item.name == "processing_mode"), 'legacy')
+        self.batch_size = next(
+            (item.value for item in self.tool_def.params if item.name == "batch_size"), 100)
 
     def process(self):
         legacy.main(
@@ -45,7 +49,9 @@ class makeCosmopediaPreprocessInternal(TOOL):
             model_url = self.model_url,
             model = self.model,
             auth_token = self.auth_token,
-            content = self.content
+            content = self.content,
+            processing_mode = self.processing_mode,
+            batch_size = self.batch_size
         )
 
         return Path(self.tool_def.export_path)
@@ -56,6 +62,7 @@ class makeCosmopediaPreprocessInternal(TOOL):
         return """
         A detailed tutorial on converting raw text to WikiHow style using the MakeCosmopediaMapper operator.
         This tool invokes large language models to generate structured tutorial content based on the input seed text.
+        Supports both legacy mode (full dataset in memory) and streaming mode (batch processing with lower memory usage).
         """
 
     @classmethod
@@ -69,5 +76,7 @@ class makeCosmopediaPreprocessInternal(TOOL):
 以 WikiHow 的风格写一篇长而非常详细的教程，教程与此网页摘录有相关性。
 教程中需要包括对每个步骤的深入解释以及它如何帮助实现预期结果。你可以自由补充其他相关知识。
 确保清晰性和实用性，让读者能够轻松遵循教程完成任务。内容中不应包含广告或涉及隐私的信息。
-不要使用图像。请直接开始撰写教程。''')
+不要使用图像。请直接开始撰写教程。'''),
+            Param("processing_mode", DataType.STRING, None, 'legacy'),
+            Param("batch_size", DataType.INTEGER, None, 100)
         ]
