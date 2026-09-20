@@ -40,7 +40,14 @@ def main(src_dir, target_dir, suffixes=[], num_proc=1,
     op.auth_token = auth_token
     op.content = content
     
+    # Validate processing_mode
+    if processing_mode not in ['legacy', 'streaming']:
+        raise ValueError(f"Invalid processing_mode='{processing_mode}'. Must be 'legacy' or 'streaming'.")
+    
     if processing_mode == 'streaming':
+        # Validate batch_size for streaming mode
+        if batch_size <= 0:
+            raise ValueError(f'Invalid batch_size={batch_size}. batch_size must be a positive integer (>= 1).')
         return _process_streaming(formatter, op, target_dir, batch_size, src_dir, suffixes)
     else:
         return _process_legacy(formatter, op, target_dir, num_proc)
@@ -61,19 +68,76 @@ def _process_legacy(formatter, op, target_dir, num_proc):
 def _process_streaming(formatter, op, target_dir, batch_size, src_dir, suffixes):
     """Streaming processing mode - processes samples in batches without loading all into memory"""
     
-    # Helper function to iterate through all JSONL files in batches
-    def iterate_jsonl_files_batched(src_dir, suffixes, batch_size):
-        """Iterate through all JSONL files and yield batches of samples"""
+    # Helper function to iterate through all files in batches (supports multiple formats)
+    def iterate_files_batched(src_dir, suffixes, batch_size):
+        """Iterate through all data files and yield batches of samples
+        
+        Supports: .jsonl, .json, .parquet, .csv, .txt, .tsv
+        """
+        import json
+        import csv
+        
         batch = []
+        
         for suffix in suffixes:
             for file_path in pathlib.Path(src_dir).glob(f'*{suffix}'):
                 logger.info(f'Reading file: {file_path}')
-                with jsonlines.open(file_path, 'r') as reader:
-                    for sample in reader:
-                        batch.append(sample)
-                        if len(batch) >= batch_size:
-                            yield batch
-                            batch = []
+                file_ext = ''.join(file_path.suffixes).lower()  # Handle .jsonl.zst
+                
+                try:
+                    # JSONL/JSON formats
+                    if file_ext in ['.jsonl', '.jsonl.zst', '.json']:
+                        with jsonlines.open(file_path, 'r') as reader:
+                            for sample in reader:
+                                batch.append(sample)
+                                if len(batch) >= batch_size:
+                                    yield batch
+                                    batch = []
+                    
+                    # Parquet format
+                    elif file_ext == '.parquet':
+                        import pyarrow.parquet as pq
+                        parquet_file = pq.ParquetFile(file_path)
+                        for batch_data in parquet_file.iter_batches(batch_size=batch_size):
+                            df = batch_data.to_pandas()
+                            for _, row in df.iterrows():
+                                sample = row.to_dict()
+                                batch.append(sample)
+                                if len(batch) >= batch_size:
+                                    yield batch
+                                    batch = []
+                    
+                    # CSV/TSV formats
+                    elif file_ext in ['.csv', '.tsv']:
+                        delimiter = '\t' if file_ext == '.tsv' else ','
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            reader = csv.DictReader(f, delimiter=delimiter)
+                            for row in reader:
+                                batch.append(dict(row))
+                                if len(batch) >= batch_size:
+                                    yield batch
+                                    batch = []
+                    
+                    # Plain text format (each line is a sample with text field)
+                    elif file_ext == '.txt':
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            for line in f:
+                                line = line.strip()
+                                if line:  # Skip empty lines
+                                    sample = {'text': line}
+                                    batch.append(sample)
+                                    if len(batch) >= batch_size:
+                                        yield batch
+                                        batch = []
+                    
+                    else:
+                        logger.warning(f'Unsupported file format: {file_ext} for {file_path}')
+                        continue
+                
+                except Exception as e:
+                    logger.error(f'Error reading file {file_path}: {e}')
+                    continue
+        
         # Yield remaining samples
         if batch:
             yield batch
@@ -90,7 +154,7 @@ def _process_streaming(formatter, op, target_dir, batch_size, src_dir, suffixes)
     # Open output file for writing
     with jsonlines.open(output_file, 'w') as writer:
         # Process in batches
-        for batch in tqdm(iterate_jsonl_files_batched(src_dir, suffixes, batch_size), 
+        for batch in tqdm(iterate_files_batched(src_dir, suffixes, batch_size), 
                          desc="Processing batches", unit="batch"):
             processed_batch = []
             

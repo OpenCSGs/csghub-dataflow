@@ -121,7 +121,14 @@ def main(src_dir,
     if isinstance(suffixes, str):
         suffixes = [suffixes]
 
+    # Validate processing_mode
+    if processing_mode not in ['legacy', 'streaming']:
+        raise ValueError(f"Invalid processing_mode='{processing_mode}'. Must be 'legacy' or 'streaming'.")
+
     if processing_mode == 'streaming':
+        # Validate batch_size for streaming mode
+        if batch_size <= 0:
+            raise ValueError(f'Invalid batch_size={batch_size}. batch_size must be a positive integer (>= 1).')
         # Streaming mode: single process, batch processing
         print(f"Using streaming mode with batch_size={batch_size}")
         for suffix in suffixes:

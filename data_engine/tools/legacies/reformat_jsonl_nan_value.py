@@ -83,10 +83,6 @@ def reformat_jsonl_streaming(fp, jsonl_fp, features, batch_size=100):
     :param features: reference feature to use for dataset.
     :param batch_size: number of samples to process in each batch
     """
-    import datasets
-
-    # Disable Dataset.to_json internal progress bar to avoid confusion
-    datasets.disable_progress_bar()
 
     # First pass: count total lines for accurate progress bar
     print(f"Counting samples in {os.path.basename(fp)}...")
@@ -97,50 +93,39 @@ def reformat_jsonl_streaming(fp, jsonl_fp, features, batch_size=100):
     print(f"Processing {total_lines:,} samples in {total_batches} batches (batch_size={batch_size})")
     
     batch = []
-    is_first_batch = True
     processed = 0
     
-    # Progress bar for batch processing
-    with tqdm(total=total_lines, desc="Streaming processing", unit="sample") as pbar:
-        with jsonlines.open(fp, 'r') as reader:
-            for obj in reader:
-                # Replace NaN values with None
-                cleaned_obj = replace_nan_with_none(obj)
-                batch.append(cleaned_obj)
-                
-                # Process batch when it reaches batch_size
-                if len(batch) >= batch_size:
-                    ds = Dataset.from_list(batch, features=features)
-                    # First batch overwrites file, subsequent batches append
-                    if is_first_batch:
-                        ds.to_json(jsonl_fp, force_ascii=False)
-                        is_first_batch = False
-                    else:
-                        # Append to existing file using jsonlines
-                        with jsonlines.open(jsonl_fp, 'a') as writer:
-                            for item in ds:
-                                writer.write(dict(item))
+    # Use a single jsonlines writer for consistent serialization
+    with jsonlines.open(jsonl_fp, 'w') as writer:
+        # Progress bar for batch processing
+        with tqdm(total=total_lines, desc="Streaming processing", unit="sample") as pbar:
+            with jsonlines.open(fp, 'r') as reader:
+                for obj in reader:
+                    # Replace NaN values with None
+                    cleaned_obj = replace_nan_with_none(obj)
+                    batch.append(cleaned_obj)
                     
-                    processed += len(batch)
-                    pbar.update(len(batch))
-                    batch = []
-            
-            # Process remaining samples in the last batch
-            if batch:
-                ds = Dataset.from_list(batch, features=features)
-                if is_first_batch:
-                    ds.to_json(jsonl_fp, force_ascii=False)
-                else:
-                    with jsonlines.open(jsonl_fp, 'a') as writer:
+                    # Process batch when it reaches batch_size
+                    if len(batch) >= batch_size:
+                        # Convert to Dataset to apply features schema, then write
+                        ds = Dataset.from_list(batch, features=features)
                         for item in ds:
                             writer.write(dict(item))
-                processed += len(batch)
-                pbar.update(len(batch))
+                        
+                        processed += len(batch)
+                        pbar.update(len(batch))
+                        batch = []
+                
+                # Process remaining samples in the last batch
+                if batch:
+                    ds = Dataset.from_list(batch, features=features)
+                    for item in ds:
+                        writer.write(dict(item))
+                    processed += len(batch)
+                    pbar.update(len(batch))
     
     print(f"✓ Completed: {processed:,} samples processed")
 
-    # Re-enable progress bar for other operations
-    datasets.enable_progress_bar()
 
 
 def fp_iter(src_dir):
@@ -175,7 +160,14 @@ def main(src_dir, target_dir, num_proc=1, processing_mode='legacy', batch_size=1
     # Get reference features from first non-NaN sample
     features = get_non_nan_features(src_dir)
     
+    # Validate processing_mode
+    if processing_mode not in ['legacy', 'streaming']:
+        raise ValueError(f"Invalid processing_mode='{processing_mode}'. Must be 'legacy' or 'streaming'.")
+    
     if processing_mode == 'streaming':
+        # Validate batch_size for streaming mode
+        if batch_size <= 0:
+            raise ValueError(f'Invalid batch_size={batch_size}. batch_size must be a positive integer (>= 1).')
         # Streaming mode: single process, batch processing
         print(f"Using streaming mode with batch_size={batch_size}")
         for fp in fp_iter(src_dir):
