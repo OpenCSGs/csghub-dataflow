@@ -1,5 +1,6 @@
 from data_server.logic.config import build_templates_with_filepath
 import yaml
+import json
 from data_server.algo_templates.utils.parse_algo_dslText import convert_raw_to_processed
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
@@ -601,11 +602,73 @@ async def run_pipline_job(
             storage_size=data.get("storage_size"),
         )
 
-        # Update streaming parameters in yaml_config
+        processing_mode = data.get("processing_mode")
+        batch_size = data.get("batch_size")
         use_streaming = data.get("use_streaming")
         streaming_batch_size = data.get("streaming_batch_size")
-
-        if use_streaming is not None or streaming_batch_size is not None:
+        
+        if job.job_source == "tool" and (processing_mode is not None or batch_size is not None):
+            try:
+                logger.info(f"[Tool Task {job_id}] Original yaml_config: {job.yaml_config[:200] if job.yaml_config else 'None'}...")
+                config_dict = json.loads(job.yaml_config) if job.yaml_config else {}
+                
+                if "params" in config_dict and isinstance(config_dict["params"], list):
+                    logger.info(f"[Tool Task {job_id}] Found {len(config_dict['params'])} params")
+                    
+                    # Update processing_mode parameter
+                    if processing_mode is not None:
+                        processing_mode_found = False
+                        
+                        for param in config_dict["params"]:
+                            if param.get("name") == "processing_mode":
+                                old_value = param["value"]
+                                param["value"] = processing_mode
+                                processing_mode_found = True
+                                logger.info(f"[Tool Task {job_id}] Updated processing_mode: {old_value} -> {processing_mode}")
+                                break
+                        
+                        # If processing_mode parameter doesn't exist, add it
+                        if not processing_mode_found:
+                            config_dict["params"].append({
+                                "name": "processing_mode",
+                                "type": None,
+                                "option_values": None,
+                                "value": processing_mode,
+                                "tempVal": None
+                            })
+                            logger.info(f"[Tool Task {job_id}] Added processing_mode parameter: {processing_mode}")
+                    
+                    # Update batch_size parameter
+                    if batch_size is not None:
+                        batch_size_found = False
+                        
+                        for param in config_dict["params"]:
+                            if param.get("name") == "batch_size":
+                                old_value = param["value"]
+                                param["value"] = batch_size
+                                batch_size_found = True
+                                logger.info(f"[Tool Task {job_id}] Updated batch_size: {old_value} -> {batch_size}")
+                                break
+                        
+                        # If batch_size parameter doesn't exist, add it
+                        if not batch_size_found:
+                            config_dict["params"].append({
+                                "name": "batch_size",
+                                "type": None,
+                                "option_values": None,
+                                "value": batch_size,
+                                "tempVal": None
+                            })
+                            logger.info(f"[Tool Task {job_id}] Added batch_size parameter: {batch_size}")
+                
+                job.yaml_config = json.dumps(config_dict, ensure_ascii=False)
+                logger.info(f"[Tool Task {job_id}] Updated yaml_config: {job.yaml_config[:200]}...")
+                
+            except Exception as e:
+                logger.error(f"[Execute Job {job_id}] Failed to update tool parameters: {e}")
+                logger.exception(e)
+        
+        elif job.job_source == "pipeline" and (use_streaming is not None or streaming_batch_size is not None):
             try:
                 yaml_config_dict = yaml.safe_load(job.yaml_config) if job.yaml_config else {}
 
