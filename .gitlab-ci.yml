@@ -14,7 +14,10 @@ include:
       tags: ["docker"]
       images:
         - "registry.opencsg.com/opencsghq/dataflow:${CI_COMMIT_TAG}-api"
+        - "docker.io/opencsghq/dataflow:${CI_COMMIT_TAG}-api"
       platforms: "linux/amd64,linux/arm64"
+      proxy: http://172.21.1.212:7897
+      no_proxy: "localhost,127.0.0.1,docker,${CI_REGISTRY},${CI_SERVER_HOST},registry.opencsg.com"
       build_args:
         - "BUILD_CN=true"
         - "PYTHON_IMAGE=registry.opencsg.com/opencsg_public/python:3.10.14"
@@ -27,8 +30,11 @@ include:
       tags: ["docker"]
       images:
         - "registry.opencsg.com/opencsghq/dataflow:${CI_COMMIT_TAG}-argo"
+        - "docker.io/opencsghq/dataflow:${CI_COMMIT_TAG}-argo"
       dockerfile: Dockerfile-argo
       platforms: "linux/amd64,linux/arm64"
+      proxy: http://172.21.1.212:7897
+      no_proxy: "localhost,127.0.0.1,docker,${CI_REGISTRY},${CI_SERVER_HOST},registry.opencsg.com"
       build_args:
         - "BUILD_CN=true"
         - "PYTHON_IMAGE=registry.opencsg.com/opencsg_public/python:3.10.14"
