@@ -924,6 +924,13 @@ def stop_pipline_task(
 
 
 def parse_yaml_config(yaml_string: str,config):
+    # Guard against None/empty input: yaml.safe_load(None) raises a confusing
+    # AttributeError ('NoneType' object has no attribute 'read'), so fail fast
+    # with a clear, actionable error instead.
+    if not yaml_string or not str(yaml_string).strip():
+        raise ValueError(
+            "dslText is required and must be a non-empty YAML string"
+        )
     fields_to_insert = {
         "project_name": config.project_name,
         "repo_id": config.repo_id,

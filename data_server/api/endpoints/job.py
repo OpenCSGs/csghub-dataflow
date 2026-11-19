@@ -6,6 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from typing import Annotated, Union, List, Optional
 from fastapi import APIRouter, HTTPException, status, Header, Depends, Query, Body
+from fastapi.responses import JSONResponse
 
 from data_server.database.session import get_sync_session
 from data_server.database.bean.work import Worker
@@ -13,7 +14,7 @@ from data_server.logic.models import Recipe, Tool,OperatorIdentifier
 from data_server.schemas import responses
 from data_server.schemas.responses import (
     JobsResponse, JobListResponse, JOB_STATUS,
-    response_success, response_fail
+    response_success, response_fail, response_fail400
 )
 from data_server.datasource.DatasourceManager import apply_cluster_resource_fields
 from data_server.job.JobsManager import (
@@ -513,9 +514,24 @@ def create_pipline_job(
 ):
     try:
         if config.job_source == "tool":
-            return response_fail(msg="tool can't run pipline")
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content=response_fail400(msg="tool can't run pipeline"),
+            )
 
-        yaml_config = parse_yaml_config(config.dslText,config)
+        # dslText is mandatory for pipeline jobs; reject early with a clear
+        # 4xx error instead of a misleading exception deep in yaml parsing.
+        dsl_text = getattr(config, "dslText", None)
+        if not dsl_text or not str(dsl_text).strip():
+            return JSONResponse(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                content={
+                    "msg": "Invalid parameter: 'dslText' is required for pipeline jobs and must be a non-empty YAML string",
+                    "code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+                },
+            )
+
+        yaml_config = parse_yaml_config(dsl_text, config)
         parse_namespace_fields(
             namespace_uuid=config.namespace_uuid,
             namespace_type=config.namespace_type,
@@ -526,8 +542,13 @@ def create_pipline_job(
             owner_org_id=owner_org_id, owner_org_name=owner_org_name)
         return response_success(data=result)
     except Exception as e:
-        logger.error(f"Failed to create pipline  job: {str(e)}")
-        return response_fail(msg=f"Failed to create pipline  job: {str(e)}")
+        logger.exception("Failed to create pipeline job")
+        # Return a real HTTP 500 (not HTTP 200 with an error body) so that
+        # clients judging success by status code do not misread the result.
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=response_fail(msg=f"Failed to create pipeline job: {str(e)}"),
+        )
 
 
 @router.post("/stop_pipline_job", response_model=dict, description="stop the dataflow job")
