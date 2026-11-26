@@ -41,7 +41,14 @@ class IngesterCSGHUB(Ingester):
             logger.info(f'model_id:{self.repo_id}')
             endpoint = get_endpoint(endpoint=GetHubEndpoint())
             logger.info(f'endpoint:{endpoint}')
-            logger.info(f'args: repo_id:{self.repo_id}, repo_type:{REPO_TYPE_DATASET}, revision:{self.branch}, cache_dir:{self._src_path}, endpoint:{endpoint}, token:{self.user_token}')
+            # Never log the download token itself: task logs are retained and
+            # readable by others. Keep the non-sensitive arguments for
+            # troubleshooting (issue #244).
+            logger.info(
+                f'args: repo_id:{self.repo_id}, '
+                f'repo_type:{REPO_TYPE_DATASET}, revision:{self.branch}, '
+                f'cache_dir:{self._src_path}, endpoint:{endpoint}, '
+                f'token:{"xxxxxx" if self.user_token else None}')
             result = snapshot_download(
                 repo_id=self.repo_id,
                 repo_type=REPO_TYPE_DATASET,
